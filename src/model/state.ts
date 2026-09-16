@@ -4,15 +4,15 @@
 // and `--resume` restores a run by replaying it.
 
 import {
-  STEPS,
-  STEP_LABELS,
-  isActive,
   type AskOption,
   type Event,
   type FailureKind,
   type HostState,
+  isActive,
   type Level,
   type RunInfo,
+  STEP_LABELS,
+  STEPS,
   type StepId,
 } from "./events.ts";
 

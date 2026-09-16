@@ -3,9 +3,9 @@
 // Emits a recorded stream with its original pacing, so the interface is built
 // against the real contract and not against a live deployment.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseEvent, type Event } from "../model/events.ts";
+import { type Event, parseEvent, type RunControl } from "../model/events.ts";
 
 const SCENARIO_DIR = fileURLToPath(new URL("../../mock/scenarios/", import.meta.url));
 
@@ -28,23 +28,13 @@ export function loadScenario(name: string): Event[] {
     .map(parseEvent);
 }
 
-export interface Replay {
-  /** Answers the pending question and resumes the stream. */
-  respond: (value: string) => void;
-  stop: () => void;
-}
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Plays `name` into `emit`. Stops on every `ask` until `respond` is called:
  * the mockup must exercise the interactive path, not fake it.
  */
-export function startReplay(
-  name: string,
-  speed: number,
-  emit: (event: Event) => void,
-): Replay {
+export function startReplay(name: string, speed: number, emit: (event: Event) => void): RunControl {
   const events = loadScenario(name);
   let stopped = false;
   let resume: ((value: string) => void) | null = null;

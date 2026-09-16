@@ -219,11 +219,17 @@ Computing* for the panel rules. `--no-ui` covers everything else.
 ## Development
 
 ```bash
+nix develop                     # Bun, just, git-cliff
+just install                    # dependencies + git hooks (commit-msg, pre-commit)
+
 just mock <scenario>            # replay a scenario in the real interface
 just capture <scenario> [ms]    # exact cells of a frame, no terminal
 just capture-colors <scenario>  # one line per span: fg, bg, attributes
-just check                      # typecheck
-just test                       # folds every scenario, asserts the end state
+
+just check                      # lint + typecheck + tests: the pre-commit gate
+just fix                        # apply formatting and safe lint fixes
+just test [filter]              # unit and integration tests
+just coverage                   # tests with a coverage report
 ```
 
 Never judge the interface from a pty dump: unchanged cells are not repainted,
@@ -231,16 +237,33 @@ neighbouring text looks glued and colours are lost. Use the capture harness.
 
 | Path | Role |
 |---|---|
-| `src/model/` | event contract (`events.ts`), state fold (`state.ts`), theme — pure, no I/O |
-| `src/engine/` | engine side; today the scenario player |
+| `src/model/` | event contract (`events.ts`), state fold (`state.ts`), exit codes, theme — pure, no I/O |
+| `src/engine/` | engine side: side-effect ports (`ports.ts`), today the scenario player |
 | `src/ui/` | OpenTUI components, presentation only |
-| `src/testing/` | deterministic frame capture |
+| `src/testing/` | deterministic frame capture, fakes of the engine ports |
+| `src/main.tsx` | composition root: binds a run source to the interface |
+| `tests/` | integration tests: entry point as a process, commit gate |
 | `mock/scenarios/` | recorded event streams (JSONL) |
 
 The interface never calls the engine: both meet on the event stream of
-`src/model/events.ts`, which also feeds `state.json` and `--no-ui`.
+`src/model/events.ts`, which also feeds `state.json` and `--no-ui`. Biome
+enforces these boundaries at lint time.
 
 Runtime: Bun — OpenTUI reaches its Zig core through Bun's FFI.
+
+### Releases
+
+Conventional commits, one line, closed type list — checked by the `commit-msg`
+hook and by CI. From the DNF co-development workspace:
+
+```bash
+just changelog                  # preview the next CHANGELOG entry
+just release [auto|patch|minor|major|X.Y.Z]
+```
+
+`just release` runs the CI gate, bumps `package.json`, writes the CHANGELOG
+entry, tags and pushes; the tag workflow checks it and publishes the GitHub
+release with that entry as notes.
 
 ## License
 

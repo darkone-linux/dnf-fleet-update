@@ -1,12 +1,12 @@
 // Main screen: feed and active region on the left, steps and hosts on the right,
 // dialog and footer at the bottom.
 
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
-import type { Event } from "../model/events.ts";
-import { initialState, reduce, visibleHosts, type Ask } from "../model/state.ts";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import type { Event, RunControl, RunSource } from "../model/events.ts";
+import { ExitCode } from "../model/exit-codes.ts";
+import { type Ask, initialState, reduce, visibleHosts } from "../model/state.ts";
 import { color } from "../model/theme.ts";
-import { startReplay, type Replay } from "../engine/replay.ts";
 import {
   AccentBlock,
   Active,
@@ -36,24 +36,16 @@ const ABORT_ASK: Ask = {
 type View = "main" | "logs";
 
 export interface AppProps {
-  scenario: string;
-  speed: number;
+  /** Live run, bound by `main.tsx`. Absent: a still frame, for the capture harness. */
+  source?: RunSource;
 
-  // Capture harness: fold these events first, and skip the live replay.
+  // Capture harness: fold these events first.
   preload?: Event[];
-  live?: boolean;
   initialView?: View;
   initialSelected?: number;
 }
 
-export function App({
-  scenario,
-  speed,
-  preload,
-  live = true,
-  initialView = "main",
-  initialSelected = 0,
-}: AppProps) {
+export function App({ source, preload, initialView = "main", initialSelected = 0 }: AppProps) {
   const renderer = useRenderer();
   const { width, height } = useTerminalDimensions();
   const [state, dispatch] = useReducer(reduce, undefined, () =>
@@ -67,14 +59,14 @@ export function App({
   const [choice, setChoice] = useState(0);
   const [aiPrompt, setAiPrompt] = useState(false);
   const [help, setHelp] = useState(false);
-  const replay = useRef<Replay | null>(null);
+  const control = useRef<RunControl | null>(null);
   const spinner = useSpinners();
 
   useEffect(() => {
-    if (!live) return;
-    replay.current = startReplay(scenario, speed, (event: Event) => dispatch(event));
-    return () => replay.current?.stop();
-  }, [scenario, speed, live]);
+    if (!source) return;
+    control.current = source((event: Event) => dispatch(event));
+    return () => control.current?.stop();
+  }, [source]);
 
   const hosts = visibleHosts(state);
   const host = hosts[Math.min(selected, Math.max(0, hosts.length - 1))];
@@ -83,17 +75,18 @@ export function App({
   const ask = state.ask ?? localAsk;
 
   // A new question always starts on its first button.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `ask.id` is the trigger, not an input.
   useEffect(() => setChoice(0), [ask?.id]);
 
   const quit = () => {
-    replay.current?.stop();
+    control.current?.stop();
     renderer.destroy();
     process.exit(state.end?.exitCode ?? 0);
   };
 
   const answer = (value: string) => {
     if (state.ask) {
-      replay.current?.respond(value);
+      control.current?.respond(value);
       return;
     }
     if (localAsk?.id === "abort") {
@@ -105,8 +98,8 @@ export function App({
           level: "warn",
           message: value === "now" ? "aborting now" : "aborting after current wave",
         });
-        dispatch({ t: Date.now(), kind: "run.end", status: "aborted", exitCode: 5 });
-        replay.current?.stop();
+        dispatch({ t: Date.now(), kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
+        control.current?.stop();
       }
       return;
     }
@@ -204,7 +197,9 @@ export function App({
   if (width < MIN_WIDTH || height < MIN_HEIGHT) {
     return (
       <box padding={1} backgroundColor={color.bg}>
-        <text fg={color.warn}>{`terminal too small — need ${MIN_WIDTH}x${MIN_HEIGHT}, got ${width}x${height}`}</text>
+        <text
+          fg={color.warn}
+        >{`terminal too small — need ${MIN_WIDTH}x${MIN_HEIGHT}, got ${width}x${height}`}</text>
       </box>
     );
   }

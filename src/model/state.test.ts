@@ -6,7 +6,7 @@
 import { expect, test } from "bun:test";
 import { listScenarios, loadScenario } from "../engine/replay.ts";
 import { STEPS } from "./events.ts";
-import { excludedCount, initialState, reduce, visibleHosts, type RunState } from "./state.ts";
+import { excludedCount, initialState, type RunState, reduce, visibleHosts } from "./state.ts";
 
 function fold(name: string): RunState {
   return loadScenario(name).reduce(reduce, initialState());

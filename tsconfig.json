@@ -9,11 +9,13 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["bun"]
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

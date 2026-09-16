@@ -1,0 +1,9 @@
+# Bun configuration: test runner.
+
+[test]
+
+# Test support is not product code: kept out of the coverage figures.
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = ["src/testing/**", "tests/**"]
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"

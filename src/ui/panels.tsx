@@ -1,27 +1,27 @@
 // Panels of the main screen. Presentation only: everything comes from RunState.
 
-import { useEffect, useState, type ReactNode } from "react";
 import { TextAttributes } from "@opentui/core";
-import { STEP_LABELS, STEPS, type HostState } from "../model/events.ts";
+import { type ReactNode, useEffect, useState } from "react";
+import { type HostState, STEP_LABELS, STEPS } from "../model/events.ts";
 import {
   activeHosts,
   excludedCount,
-  visibleHosts,
   type FeedItem,
   type HostRow,
   type RunState,
+  visibleHosts,
 } from "../model/state.ts";
 import {
-  HOST_SPINNER,
-  SPINNER_INTERVAL_MS,
-  STEP_SPINNER,
   clock,
   color,
+  HOST_SPINNER,
   hostGlyph,
   hostStateColor,
   levelColor,
   padGlyph,
   progressBar,
+  SPINNER_INTERVAL_MS,
+  STEP_SPINNER,
   serviceFailureGlyph,
   stepColor,
   stepGlyph,
@@ -166,6 +166,7 @@ function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
         </text>
       </box>
       {shown.map((line, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: stateless text rows, position is their identity.
         <text key={index} fg={color.text} bg={color.block}>
           {`${AI_INDENT}${line}`}
         </text>
@@ -259,6 +260,7 @@ export function HostLogs({ host }: { host: HostRow }) {
           </box>
         ) : (
           host.logs.map((entry, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: stateless text rows, position is their identity.
             <box key={index} paddingLeft={GUTTER} paddingRight={GUTTER}>
               <text>
                 <span fg={color.dim}>{`${entry.phase.padEnd(11)}`}</span>
@@ -481,6 +483,7 @@ export function Footer({ state }: { state: RunState }) {
       paddingRight={GUTTER}
     >
       {segments.map((segment, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: fixed status segments, position is their identity.
         <box key={index} flexDirection="row">
           {/* Separators stay grey whatever the segment they precede. */}
           {index > 0 ? <text fg={color.dim}>{" · "}</text> : null}

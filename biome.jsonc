@@ -1,0 +1,153 @@
+// Biome: formatter, linter and import sorting, one tool for local runs and CI.
+//
+// Layer boundaries (AGENTS.md § Architecture) are enforced in `overrides`:
+// a forbidden import fails `just check`, not a code review. Tests are exempt:
+// a test may reach any layer to set up its case.
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+
+  // `.jsonl` scenarios are recorded streams, not source: never reformatted.
+  "files": { "includes": ["**", "!**/*.jsonl"] },
+
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always"
+    }
+  },
+
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+
+      // Type-inferred async rules: the engine is promise-heavy, and a lost
+      // rejection means a host silently left half-deployed.
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useExhaustiveSwitchCases": "error"
+      },
+      "suspicious": {
+        "noImportCycles": "error",
+        "noConsole": "error"
+      },
+
+      // `noUncheckedIndexedAccess` makes `!` the explicit, reviewed escape
+      // after a check the compiler cannot follow.
+      "style": {
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+
+  "overrides": [
+    {
+      // Pure contract: no I/O, no runtime, no interface.
+      "includes": ["src/model/**", "!**/*.test.ts", "!**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "correctness": { "noNodejsModules": "error" },
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "bun": "model/ is pure: no runtime API.",
+                  "react": "model/ is pure: no interface.",
+                  "@opentui/core": "model/ is pure: no interface.",
+                  "@opentui/react": "model/ is pure: no interface."
+                },
+                "patterns": [
+                  {
+                    "group": ["../**"],
+                    "message": "model/ imports nothing outside model/."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // Presentation only: state comes from the fold, answers go back through
+      // `RunControl`. The interface never reaches the engine.
+      "includes": ["src/ui/**", "src/output/**", "!**/*.test.ts", "!**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/engine/**", "**/adapters/**", "**/ai/**", "**/cli/**"],
+                    "message": "Interface imports model/ only; main.tsx wires the source."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // Engine side: speaks in events, never renders.
+      "includes": [
+        "src/engine/**",
+        "src/adapters/**",
+        "src/ai/**",
+        "!**/*.test.ts",
+        "!**/*.test.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "react": "Engine side never renders: emit events.",
+                  "@opentui/core": "Engine side never renders: emit events.",
+                  "@opentui/react": "Engine side never renders: emit events."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/ui/**", "**/output/**", "**/cli/**"],
+                    "message": "Engine side never imports a consumer."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // Entry points, argument handling, text output and test tooling own the
+      // terminal; everything else goes through events.
+      "includes": [
+        "src/main.tsx",
+        "src/cli/**",
+        "src/output/**",
+        "src/testing/**",
+        "tests/**",
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    }
+  ]
+}

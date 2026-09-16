@@ -1,46 +1,154 @@
 # AGENTS.md
 
-Telegraph style. Local rules for `dnf-fleet-update`. The specification
-(`.specs/dnf/outils-de-deploiement-du-parc.md` in the consumer workspace) is the
-authority on behaviour; this file carries only what is specific to this repo.
+Telegraph style. Rules for `dnf-fleet-update` (`fleet-update`), fleet update
+tool of the Darkone NixOS Framework. The spec
+(`.specs/dnf/outils-de-deploiement-du-parc.md`, consumer workspace) owns
+behaviour; this file owns code policy and routing.
 
 ## Overview
 
-- TypeScript on Bun, OpenTUI (`@opentui/react`) for the interface.
-- Interface validated against recorded scenarios. The engine — native Nix
-  commands, no colmena — is not written yet.
+- TypeScript (strict) on Bun; interface on OpenTUI (`@opentui/react`).
+- Interface validated on recorded scenarios. Engine (native Nix commands, no
+  colmena) not written: contracts only (`src/engine/ports.ts`).
+- Published by tag (GitHub release); packaged by the framework
+  (`dnf/pkgs/fleet-update/package.nix`), not here.
 
 ## Rules
 
 - 95% confidence before edits; else ask follow-ups.
-- Code and interface strings in **English**. French belongs to the consumer spec
-  and to the framework documentation.
-- Comments: why not what, 3 lines, 6 max, clauses not sentences, blank line
-  before every comment block.
-- Commit message: one line, 80 chars max, `<type>(<scope>): <message>`, closed
-  type list (`feat fix perf refactor docs test build ci chore security revert`).
-  Never reference the AI used.
-- Prefer robust and maintained over clever. Verify an API against the shipped
-  `.d.ts` in `node_modules` before using it — this project has already been
-  bitten by prop types that differ from the published docs.
+- Behaviour comes from the spec. Missing or ambiguous → ask; never invent an
+  option, a default, a threshold, an exit code or an event.
+- Prefer robust, simple, maintained over clever. Built-ins first: `Bun.spawn`,
+  `node:util` `parseArgs`, `bun:test`.
+- Verify an API against the shipped `.d.ts` in `node_modules` before use:
+  OpenTUI prop types already differed from its published docs.
+- English: code, comments, interface strings, commits. French: spec and
+  framework documentation only.
+- After editing: `just fix`, then `just check` green before committing. Never
+  `--no-verify`; never weaken a rule, a type or a test to get green.
+- Lint suppression: local `biome-ignore <rule>: <reason>`, reason mandatory.
+- Commit message: one line, 80 chars max, english, `<type>(<scope>): <message>`
+  (ex: `feat(engine): plan waves by profile`).
+  - Never include references to the AI used (Claude session, etc.)!
+  - Closed type list, enforced by the `commit-msg` hook and CI, consumed by
+    `git-cliff`: `feat fix perf refactor docs test build ci chore security revert`.
+    A scope is never a type: `feat(ui): …`, never `ui(feed): …`.
+  - Scope: the layer or area touched — `model`, `engine`, `adapters`, `ai`,
+    `cli`, `ui`, `output`, `testing`, `deps`, `ci`, `release`.
+  - Breaking change: `!` after the scope, subject naming the broken surface
+    (option, exit code, event field, `var/deployments/` layout, `just` recipe).
+    No `BREAKING CHANGE:` footer (single-line rule). Drives the MINOR bump in 0.x.
+    Ex: `feat(model)!: rename host.output phase to step`.
+  - Changelog sections: `feat`→Added, `fix`→Fixed, `security`→Security,
+    `perf`/`refactor`/`revert`→Changed, `docs`→Documentation, a `drop`/`remove`
+    subject→Removed. `chore ci test build` are not published.
 
-## Layout
+### Comments
 
-- `src/model/` — `events.ts` (contract), `state.ts` (fold), `theme.ts`
-  (palette, glyphs, spinners). Pure: no I/O, no interface, no timers.
-- `src/engine/` — engine side. Today `replay.ts`, the scenario player.
-- `src/ui/` — `App.tsx` (screen, keys, views) and `panels.tsx` (components).
-  Presentation only: everything comes from `RunState`.
-- `src/testing/capture.tsx` — deterministic frame capture, no terminal.
-- `mock/scenarios/*.jsonl` — recorded event streams.
+The reader is SCANNING code, not reading an essay. A comment that has to be
+read twice has failed, however accurate it is.
 
-## Boundary
+- Explain **why**, not what: intent, constraint, non-obvious decision.
+- Never restate what the code or its types already express.
+- **Length budget: 3 lines. 6 is the hard ceiling** for one block. Past that,
+  the explanation belongs in the spec — leave a pointer (`spec § Verrou`).
+- **One idea per comment.**
+- **Telegraph style: clauses, not sentences.** No narration, no retelling of
+  the incident behind the code.
+- Naming a mechanism beats describing it: `O_CLOEXEC`, `systemd-run --wait`,
+  `noUncheckedIndexedAccess`.
+- Blank line before every comment. Exceptions: file header, first line of a
+  block (the formatter removes that blank line).
+- File header: what the module is, then its role or constraint.
+- JSDoc (`/** */`) on exports whose contract the name and type do not carry:
+  unit, range, when it rejects.
 
-The interface never calls the engine. Both sides meet on the event stream of
-`src/model/events.ts`, which will also feed `state.json` and `--no-ui`. Adding a
-field there means updating the fold, the scenarios and the tests together.
+```ts
+// NO — narrative
+// Commands used to go through a shell, but a host named `a;rm -rf /` would
+// then have run arbitrary code, so we now pass an argv array instead.
 
-## Verifying the interface
+// YES
+// argv, no shell: a host name cannot inject.
+```
+
+## TypeScript
+
+- `strict`, `noUncheckedIndexedAccess`, `noImplicitReturns`,
+  `noImplicitOverride`: never loosened.
+- No `any`. Outside data (nix JSON, `state.json`, scenario lines) is `unknown`
+  until validated; `as` only on validated data; `!` only after a check the
+  compiler cannot follow.
+- `import type` for types (`verbatimModuleSyntax`); relative imports keep
+  their `.ts` / `.tsx` extension.
+- Discriminated unions on `kind`; exhaustive `switch`
+  (`useExhaustiveSwitchCases`). Constants: `as const` object + derived type
+  (`ExitCode`), no `enum`.
+- Expected failures are data — non-zero exit, host `failed`, `log` event —
+  not exceptions. Throw for programmer errors and "cannot continue" only.
+- Async: no floating promise (`noFloatingPromises`); every wait and command
+  takes an `AbortSignal`; every external command has a timeout.
+- External commands: `argv` arrays through `CommandRunner`, never a shell string.
+- No `console.*` outside `src/main.tsx`, `src/cli/`, `src/output/`,
+  `src/testing/` and tests: the engine speaks in events.
+- No module-level side effect outside entry points (`main.tsx`,
+  `testing/capture.tsx`).
+- Functions and plain data first; classes for stateful port implementations.
+
+## Architecture
+
+Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
+
+| Path | Role | May import |
+|---|---|---|
+| `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `state.ts` (fold), `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
+| `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `replay.ts` (scenario source) | model |
+| `src/engine/steps/` | *planned* — one module per step, receives `EngineContext` | model, ports |
+| `src/adapters/` | *planned* — real ports: process, nix, ssh, git, flock, store (`var/deployments/`), Matrix | model, ports |
+| `src/ai/` | *planned* — providers (Claude Agent SDK, opencode), guarded tools | model, engine |
+| `src/cli/` | *planned* — argv → options, validation (exit `2`) | model, engine |
+| `src/ui/` | TUI: `App.tsx` (screen, keys, views), `panels.tsx` (components); presentation only | model |
+| `src/output/` | *planned* — `--no-ui` text output | model |
+| `src/testing/` | capture harness, port fakes | anything |
+| `src/main.tsx` | composition root: binds a run source to a consumer | anything |
+| `tests/` | integration tests; fixtures in `tests/fixtures/` | anything |
+| `mock/scenarios/` | recorded streams (`.jsonl`) | — |
+
+- Planned directories appear with their first file; no empty placeholders.
+- Pure decisions (`--on` selection, waves, host transitions): plain functions
+  without ports, unit-tested; steps only orchestrate them.
+- New side effect → port in `ports.ts`, fake in `testing/fakes.ts`, then adapter.
+
+## Event stream
+
+- Only coupling between the engine and its consumers: TUI, `--no-ui`,
+  `state.json` (fold). The interface never imports the engine; `main.tsx`
+  binds a `RunSource`.
+- Adding or changing a field: fold, scenarios and tests in the same commit.
+- Unknown `kind` ignored by the fold: a newer engine never breaks an older
+  interface. Removing or renaming a field is breaking (`!`).
+- `t`: milliseconds since run start, from `Clock`; never `Date.now()` in the engine.
+
+## Tests
+
+- Runner: `bun test` (`bun:test`), nothing else.
+- Unit tests colocated: `src/**/<name>.test.ts(x)`, next to the module.
+- Integration tests: `tests/` — entry point spawned as a process, scripts,
+  steps on fakes.
+- Required: pure code ships with its tests; a bug fix ships with a regression
+  test that failed first.
+- Engine: `fakeContext()` (`src/testing/fakes.ts`) — commands scripted by argv
+  prefix, manual clock, recorded events, scripted answers. Unscripted command
+  or unanswered question = failure.
+- Never in tests: real nix, ssh, network, remote host, wall-clock sleep.
+  Adapters: temp dirs and local programs only.
+- Scenarios are contract fixtures, folded by `src/model/state.test.ts`. New
+  event kind → a scenario exercising it.
+- Assert outcomes (state, events, exit code), not internal calls — unless the
+  command is the contract (argv of `nix copy`).
+- Coverage: `just coverage`; `src/testing/` and `tests/` excluded.
+
+### Verifying the interface
 
 Never judge the interface from a pty dump: OpenTUI repaints only changed cells
 and moves the cursor for the rest, so stripping ANSI glues neighbouring text and
@@ -52,9 +160,71 @@ loses every colour. Three false alarms came from exactly that.
 - Emoji occupy two cells for one code point, so `captureSpans` splits colour
   runs oddly around them. Put a band on a host whose glyph is the one-column
   spinner before concluding anything is wrong.
+- Refactor touching `src/ui/`: compare captures of every scenario before/after.
+
+## Dependencies
+
+- Bun only: `bun add` / `bun remove` / `bun update`. `bun.lock` committed, never
+  hand-edited; CI installs with `--frozen-lockfile`. No npm, yarn or pnpm lockfile.
+- New dependency: maintained, typed, needed; built-ins first. Ask before adding
+  a runtime dependency.
+- `0.x` packages pinned exactly (OpenTUI breaks in minors).
+- Biome pinned exactly: its formatting changes between patches. On Linux the
+  Justfile selects its static musl binary (`BIOME_BINARY`): NixOS cannot start
+  the glibc one.
+- Planned, added with their first importing code: `zod` (validation of outside
+  JSON, Agent SDK tool schemas), `@anthropic-ai/claude-agent-sdk` (AI v1).
+- `just audit` in CI: a high-severity advisory blocks merge and release.
+
+## Hooks and CI
+
+- `just install`: dependencies, then hooks (symlinks in `.git/hooks`).
+  - `commit-msg` → `scripts/check-commit-msg.sh`: mirror of dnf's gate, body
+    identical; drift fails `tests/commit-msg.test.ts` in the workspace.
+  - `pre-commit` → `scripts/pre-commit.sh`: `just check`. Refuses without `bun`
+    or `just` on PATH: enter `nix develop`, also before `just commit` from the
+    workspace.
+- CI (`.github/workflows/ci.yml`, push to `main` and PRs): commit messages,
+  lint, typecheck, tests with coverage, audit. Toolchain from `nix develop`.
+- Every CI step is a `just` recipe: change the recipe, not the workflow.
+
+## Release
+
+- Version: `package.json` only, written by `just bump`.
+- SemVer. `0.x`: MINOR = breaking (options, exit codes, event stream,
+  `var/deployments/` layout); PATCH = everything else.
+- Shared with the ecosystem, co-development workspace required:
+  `dnf/just/scripts/bump.sh` and `cliff.toml`.
+- `just changelog`: preview, writes nothing.
+- `just bump [auto|patch|minor|major|X.Y.Z]`: version, CHANGELOG entry,
+  `chore(release): vX.Y.Z` commit, annotated tag. No push.
+- `just release [level]`: `just ci`, bump, push branch and tag.
+- Tag `v*` → `release.yml`: guards (tag = `package.json`, CHANGELOG entry), CI
+  replay, GitHub release with the CHANGELOG section as notes.
+- Released CHANGELOG sections are history, never rewritten. Hand-written notes
+  go under `## [Unreleased]`.
+
+## Protected files
+
+- `bun.lock`: bun commands only.
+- `package.json` `version`, released `CHANGELOG.md` sections: `just bump` only.
+- `scripts/check-commit-msg.sh` body: change `dnf/scripts/check-commit-msg.sh`
+  first, then mirror.
+- `mock/scenarios/*.jsonl`: contract fixtures, edited with fold and tests.
+- Other workspace repositories (`dnf/`, `doc/`, `src/*`): their own AGENTS.md
+  and `.git`.
 
 ## Commands
 
-- `just mock <scenario>` — replay in the real interface.
-- `just capture` / `just capture-colors` — see above.
-- `just check` — typecheck. `just test` — unit tests.
+| Recipe | Does |
+|---|---|
+| `just install` | dependencies and git hooks |
+| `just check` | lint, typecheck, tests: the pre-commit gate |
+| `just fix` | formatting, safe lint fixes, import order |
+| `just lint` / `just typecheck` / `just test [filter]` | one gate each |
+| `just coverage` | tests with coverage report |
+| `just audit` | dependency advisories, high and above |
+| `just ci` | what CI runs, from a frozen install |
+| `just mock <scenario>` | replay in the real interface |
+| `just capture` / `just capture-colors` | exact frame / colour spans |
+| `just changelog` / `just bump` / `just release` | § Release |

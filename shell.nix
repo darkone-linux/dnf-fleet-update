@@ -9,6 +9,10 @@ pkgs.mkShell {
   buildInputs = [
     pkgs.bun
     pkgs.just
+
+    # Release recipes: `just bump` renders the CHANGELOG with git-cliff.
+    pkgs.git-cliff
+    pkgs.jq
   ];
 
   shellHook = ''

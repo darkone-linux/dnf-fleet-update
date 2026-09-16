@@ -4,6 +4,8 @@
 // output of `--no-ui` and `state.json` (a fold of the stream), so it is the
 // only coupling point between engine and interface.
 
+import type { ExitCode } from "./exit-codes.ts";
+
 /** The 7 steps of the procedure, in order. */
 export const STEPS = ["update", "select", "probe", "build", "test", "switch", "report"] as const;
 
@@ -91,7 +93,7 @@ export type Event =
   | (Base & {
       kind: "run.end";
       status: "done" | "failed" | "aborted";
-      exitCode: number;
+      exitCode: ExitCode;
       report?: string[];
     });
 
@@ -117,3 +119,16 @@ export function parseEvent(line: string): Event {
   }
   return value;
 }
+
+/**
+ * Interface end of a run. A consumer answers through it and never imports the
+ * engine: `main.tsx` binds the source, the replayer today, the engine next.
+ */
+export interface RunControl {
+  /** Answers the pending `ask`: one at a time, it blocks the stream. */
+  respond: (value: string) => void;
+  stop: () => void;
+}
+
+/** Starts a run that delivers its events, in order, to `emit`. */
+export type RunSource = (emit: (event: Event) => void) => RunControl;

@@ -1,0 +1,102 @@
+name: CI
+
+# `workflow_call`: release.yml replays the exact same gates on a tag instead of
+# duplicating them and letting the two drift.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+# A new push to a PR supersedes its running checks. `main` keeps one run per
+# commit: commits land there directly, rarely through a PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Conventional commits are what `git-cliff` turns into the CHANGELOG: a single
+  # off-vocabulary type silently drops out of the release notes.
+  commits:
+    name: Commit messages
+
+    # Skipped when release.yml replays CI on a tag: nothing new to check.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Same gate as the local `commit-msg` hook: scripts/check-commit-msg.sh.
+      - name: Validate messages
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = pull_request ]; then
+
+            # PR head, not the synthetic `refs/pull/N/merge` checkout.
+            range="$PR_BASE..$PR_HEAD"
+          elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$AFTER"
+          else
+
+            # Force push or first push: `before` is absent from the clone.
+            # Fall back to the last release tag, else the pushed commit alone.
+            tag=$(git describe --tags --abbrev=0 --match 'v*' "$AFTER" 2>/dev/null || true)
+            if [ -n "$tag" ]; then range="$tag..$AFTER"; else range="$AFTER^!"; fi
+          fi
+          scripts/check-commit-msg.sh --commits "$range"
+
+  # Every step calls the `just` recipe a developer runs: CI and the pre-commit
+  # hook cannot disagree on what "green" means.
+  checks:
+    name: Lint, typecheck, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Toolchain from the flake's dev shell: the Bun and just pinned by
+      # flake.lock, the same as `nix develop` locally.
+      - uses: cachix/install-nix-action@v31
+
+      - name: Install dependencies
+        run: nix develop --command bun install --frozen-lockfile
+
+      - name: Lint and format (Biome)
+        run: nix develop --command just lint --reporter=github
+
+      - name: Typecheck
+        run: nix develop --command just typecheck
+
+      - name: Tests and coverage
+        run: nix develop --command just coverage
+
+  # A deployment tool runs with the keys to the whole fleet: a known high
+  # severity advisory in its dependency tree blocks the merge and the release.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: bun audit
+        run: nix develop --command just audit

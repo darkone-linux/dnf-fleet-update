@@ -9,6 +9,7 @@ process.env.FLEET_CAPTURE = "1";
 
 import { testRender } from "@opentui/react/test-utils";
 import { listScenarios, loadScenario } from "../engine/replay.ts";
+import { ExitCode } from "../model/exit-codes.ts";
 import { App } from "../ui/App.tsx";
 
 interface Options {
@@ -41,7 +42,7 @@ const options = parse(process.argv.slice(2));
 if (!listScenarios().includes(options.scenario)) {
   console.error(`unknown scenario: ${options.scenario}`);
   console.error(`available: ${listScenarios().join(", ")}`);
-  process.exit(2);
+  process.exit(ExitCode.InvalidOptions);
 }
 
 // Everything up to `at` is folded synchronously: no timers, no flake.
@@ -57,14 +58,7 @@ console.error = (...args: unknown[]) => {
 };
 
 const setup = await testRender(
-  <App
-    scenario={options.scenario}
-    speed={1}
-    preload={events}
-    live={false}
-    initialView={options.view}
-    initialSelected={options.selected}
-  />,
+  <App preload={events} initialView={options.view} initialSelected={options.selected} />,
   { width: options.cols, height: options.rows },
 );
 
@@ -86,7 +80,7 @@ if (options.spans) {
 }
 
 setup.renderer.destroy();
-process.exit(0);
+process.exit(ExitCode.Ok);
 
 /** `toInts` is the documented 0..255 accessor; the getters are normalised floats. */
 function hex(color: { toInts: () => [number, number, number, number] } | undefined): string {
