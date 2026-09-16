@@ -7,7 +7,16 @@ import type { Event } from "../model/events.ts";
 import { initialState, reduce, visibleHosts, type Ask } from "../model/state.ts";
 import { color } from "../model/theme.ts";
 import { startReplay, type Replay } from "../engine/replay.ts";
-import { AccentBlock, Active, Feed, Footer, HelpCallout, Sidebar, useSpinners } from "./panels.tsx";
+import {
+  AccentBlock,
+  Active,
+  Feed,
+  Footer,
+  HelpCallout,
+  HostLogs,
+  Sidebar,
+  useSpinners,
+} from "./panels.tsx";
 
 /** Below this the two columns stop making sense (§ Rendu). */
 const MIN_WIDTH = 100;
@@ -26,13 +35,33 @@ const ABORT_ASK: Ask = {
 
 type View = "main" | "logs";
 
-export function App({ scenario, speed }: { scenario: string; speed: number }) {
+export interface AppProps {
+  scenario: string;
+  speed: number;
+
+  // Capture harness: fold these events first, and skip the live replay.
+  preload?: Event[];
+  live?: boolean;
+  initialView?: View;
+  initialSelected?: number;
+}
+
+export function App({
+  scenario,
+  speed,
+  preload,
+  live = true,
+  initialView = "main",
+  initialSelected = 0,
+}: AppProps) {
   const renderer = useRenderer();
   const { width, height } = useTerminalDimensions();
-  const [state, dispatch] = useReducer(reduce, undefined, initialState);
-  const [view, setView] = useState<View>("main");
+  const [state, dispatch] = useReducer(reduce, undefined, () =>
+    (preload ?? []).reduce(reduce, initialState()),
+  );
+  const [view, setView] = useState<View>(initialView);
   const [focus, setFocus] = useState<"feed" | "hosts">("feed");
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(initialSelected);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [localAsk, setLocalAsk] = useState<Ask | null>(null);
   const [choice, setChoice] = useState(0);
@@ -42,9 +71,10 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
   const spinner = useSpinners();
 
   useEffect(() => {
+    if (!live) return;
     replay.current = startReplay(scenario, speed, (event: Event) => dispatch(event));
     return () => replay.current?.stop();
-  }, [scenario, speed]);
+  }, [scenario, speed, live]);
 
   const hosts = visibleHosts(state);
   const host = hosts[Math.min(selected, Math.max(0, hosts.length - 1))];
@@ -127,6 +157,14 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
       return;
     }
 
+    // Log view: arrows walk the host list, both keys leave.
+    if (view === "logs") {
+      if (key.name === "escape" || key.name === "q") setView("main");
+      else if (key.name === "up") setSelected((value) => Math.max(0, value - 1));
+      else if (key.name === "down") setSelected((value) => Math.min(hosts.length - 1, value + 1));
+      return;
+    }
+
     if (key.ctrl && key.name === "c") {
       setLocalAsk(ABORT_ASK);
       return;
@@ -139,8 +177,7 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
 
     switch (key.name) {
       case "q":
-        if (view === "main") quit();
-        else setView("main");
+        quit();
         return;
       case "tab":
         setFocus((current) => (current === "feed" ? "hosts" : "feed"));
@@ -172,44 +209,21 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
     );
   }
 
-  if (view === "logs" && host) {
-    return (
-      <box flexDirection="column" width="100%" height="100%" backgroundColor={color.bg}>
-        <box marginTop={1} marginLeft={2}>
-          <text fg={color.white}>{`${host.name} — logs`}</text>
-        </box>
-        <scrollbox
-          flexGrow={1}
-          minHeight={0}
-          focused
-          paddingLeft={2}
-          backgroundColor={color.bg}
-          contentOptions={{ backgroundColor: color.bg }}
-          scrollbarOptions={{ visible: false }}
-        >
-          {host.logs.length === 0 ? (
-            <text fg={color.dim}>no output yet</text>
-          ) : (
-            host.logs.map((entry, index) => (
-              <text key={index}>
-                <span fg={color.dim}>{`${entry.phase.padEnd(11)}`}</span>
-                <span fg={color.text}>{entry.line}</span>
-              </text>
-            ))
-          )}
-        </scrollbox>
-        <Footer state={state} />
-      </box>
-    );
-  }
+  const logView = view === "logs" && host !== undefined;
 
   return (
     <box flexDirection="row" width="100%" height="100%" backgroundColor={color.bg}>
       <box flexDirection="column" flexGrow={1} minHeight={0} backgroundColor={color.bg}>
-        <Feed state={state} focused={focus === "feed"} expanded={expanded} />
-        <Active state={state} spinner={spinner.host} />
+        {logView ? (
+          <HostLogs host={host} />
+        ) : (
+          <>
+            <Feed state={state} focused={focus === "feed"} expanded={expanded} />
+            <Active state={state} spinner={spinner.host} />
+          </>
+        )}
 
-        {ask ? (
+        {ask && !logView ? (
           <AccentBlock accent={color.accentBlue}>
             <text fg={color.white} bg={color.block}>
               {ask.question}
@@ -285,6 +299,7 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
         spinners={spinner}
         selected={selected}
         focused={focus === "hosts"}
+        band={logView}
       />
     </box>
   );

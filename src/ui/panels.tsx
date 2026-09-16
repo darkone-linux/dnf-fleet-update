@@ -1,6 +1,7 @@
 // Panels of the main screen. Presentation only: everything comes from RunState.
 
 import { useEffect, useState, type ReactNode } from "react";
+import { TextAttributes } from "@opentui/core";
 import { STEP_LABELS, STEPS, type HostState } from "../model/events.ts";
 import {
   activeHosts,
@@ -26,18 +27,34 @@ import {
   stepGlyph,
 } from "../model/theme.ts";
 
-/** Single ticker: one interval drives every spinner on screen. */
+/** Text column: blocks reach it through border (1) + padding (2), lines through padding. */
+const GUTTER = 3;
+
+/**
+ * Single ticker for every spinner on screen. Frozen under capture, where a
+ * moving frame would never reach visual idle.
+ */
 export function useSpinners(): { step: string; host: string } {
+  const frozen = Boolean(process.env.FLEET_CAPTURE);
   const [frame, setFrame] = useState(0);
+
   useEffect(() => {
+    if (frozen) return;
     const timer = setInterval(() => setFrame((value) => value + 1), SPINNER_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, []);
+  }, [frozen]);
+
+  // Frozen captures land on a mid-cycle frame: `·` is the pulse at its faintest
+  // and reads as a bullet, not as a spinner.
+  const index = frozen ? FROZEN_FRAME : frame;
+
   return {
-    step: STEP_SPINNER[frame % STEP_SPINNER.length] ?? "⠋",
-    host: HOST_SPINNER[frame % HOST_SPINNER.length] ?? "✳",
+    step: STEP_SPINNER[index % STEP_SPINNER.length] ?? "⠋",
+    host: HOST_SPINNER[index % HOST_SPINNER.length] ?? "✳",
   };
 }
+
+const FROZEN_FRAME = 4;
 
 function hostCell(host: HostRow, spinner: string): string {
   if (hostGlyph[host.state] === "") return padGlyph(spinner, false);
@@ -53,8 +70,9 @@ const ACTIVE_LABEL: Partial<Record<HostState, string>> = {
 };
 
 /**
- * Grey callout with a thin accent rule on the left. Shared by the active
- * region, the AI answers, the questions and the help.
+ * Grey callout with a thin accent rule flush against the left edge. Shared by
+ * the active region, the AI answers, the questions and the help, so every
+ * block spans the same width.
  */
 export function AccentBlock({ accent, children }: { accent: string; children: ReactNode }) {
   return (
@@ -62,8 +80,7 @@ export function AccentBlock({ accent, children }: { accent: string; children: Re
       flexDirection="column"
       flexShrink={0}
       marginTop={1}
-      marginLeft={2}
-      marginRight={2}
+      marginBottom={1}
       paddingLeft={2}
       paddingRight={2}
       paddingTop={1}
@@ -103,12 +120,9 @@ function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
 
   return (
     <AccentBlock accent={color.step}>
-      <box flexDirection="row" marginBottom={1} backgroundColor={color.block}>
-        <text fg={color.step} bg={color.block}>
-          AI
-        </text>
-        <text fg={color.white} bg={color.block}>
-          {` ${item.message}`}
+      <box marginBottom={1} backgroundColor={color.block}>
+        <text fg={color.white} bg={color.block} attributes={TextAttributes.BOLD}>
+          {`AI ${item.message}`}
         </text>
       </box>
       {shown.map((line, index) => (
@@ -126,24 +140,26 @@ function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
 }
 
 function FeedLine({ item, expanded }: { item: FeedItem; expanded: boolean }) {
+  // Blocks span the full width: no gutter, the rule sits on the left edge.
   if (item.kind === "ai") return <AiBlock item={item} expanded={expanded} />;
 
-  // Step heading: violet, blank line before, marks the step boundary.
   if (item.kind === "step") {
     return (
-      <box marginTop={1} marginBottom={1}>
+      <box marginTop={1} marginBottom={1} paddingLeft={GUTTER}>
         <text fg={color.step}>{item.message}</text>
       </box>
     );
   }
 
   return (
-    <text>
-      <span fg={color.dim}>{`${clock(item.t)}  `}</span>
-      {item.host ? <span fg={color.host}>{item.host}</span> : null}
-      {item.host ? <span fg={color.white}>{" · "}</span> : null}
-      <span fg={levelColor[item.level]}>{item.message}</span>
-    </text>
+    <box paddingLeft={GUTTER} paddingRight={GUTTER}>
+      <text>
+        <span fg={color.dim}>{`${clock(item.t)}  `}</span>
+        {item.host ? <span fg={color.host}>{item.host}</span> : null}
+        {item.host ? <span fg={color.white}>{" · "}</span> : null}
+        <span fg={levelColor[item.level]}>{item.message}</span>
+      </text>
+    </box>
   );
 }
 
@@ -164,8 +180,6 @@ export function Feed({
       stickyScroll
       stickyStart="bottom"
       backgroundColor={color.bg}
-      paddingLeft={2}
-      paddingRight={2}
       contentOptions={{ backgroundColor: color.bg }}
       scrollbarOptions={{ visible: false }}
     >
@@ -173,6 +187,51 @@ export function Feed({
         <FeedLine key={item.id} item={item} expanded={expanded.has(item.id)} />
       ))}
     </scrollbox>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// HOST LOGS
+// -----------------------------------------------------------------------------
+
+/** Replaces the feed in place: the side column and the status bar never move. */
+export function HostLogs({ host }: { host: HostRow }) {
+  return (
+    <box flexDirection="column" flexGrow={1} minHeight={0} backgroundColor={color.bg}>
+      <box marginTop={1} marginBottom={1} paddingLeft={GUTTER}>
+        <text fg={color.white} attributes={TextAttributes.BOLD}>
+          {`${host.name} — logs`}
+        </text>
+      </box>
+      <scrollbox
+        flexGrow={1}
+        minHeight={0}
+        focused
+        stickyScroll
+        stickyStart="bottom"
+        backgroundColor={color.bg}
+        contentOptions={{ backgroundColor: color.bg }}
+        scrollbarOptions={{ visible: false }}
+      >
+        {host.logs.length === 0 ? (
+          <box paddingLeft={GUTTER}>
+            <text fg={color.dim}>no output yet</text>
+          </box>
+        ) : (
+          host.logs.map((entry, index) => (
+            <box key={index} paddingLeft={GUTTER} paddingRight={GUTTER}>
+              <text>
+                <span fg={color.dim}>{`${entry.phase.padEnd(11)}`}</span>
+                <span fg={color.text}>{entry.line}</span>
+              </text>
+            </box>
+          ))
+        )}
+      </scrollbox>
+      <box paddingLeft={GUTTER}>
+        <text fg={color.dim}>↑↓ host · esc back</text>
+      </box>
+    </box>
   );
 }
 
@@ -256,11 +315,15 @@ function HostRows({
   spinner,
   selected,
   focused,
+  band,
 }: {
   state: RunState;
   spinner: string;
   selected: number;
   focused: boolean;
+
+  /** Log view: the host being read wears a yellow band, not the grey selection. */
+  band: boolean;
 }) {
   const hosts = visibleHosts(state);
   const excluded = excludedCount(state);
@@ -268,22 +331,24 @@ function HostRows({
   return (
     <box flexDirection="column" flexGrow={1} minHeight={0} paddingLeft={2} paddingRight={2}>
       <box marginTop={1} marginBottom={1}>
-        <text fg={color.white} bg={color.panel}>
+        <text fg={color.white} bg={color.panel} attributes={TextAttributes.BOLD}>
           {`hosts (${hosts.length}${excluded > 0 ? `, ${excluded} excluded` : ""})`}
         </text>
       </box>
       {hosts.map((host, index) => {
-        const current = focused && index === selected;
-        const background = current ? color.selection : color.panel;
+        const current = (focused || band) && index === selected;
+        const background = current ? (band ? color.accentYellow : color.selection) : color.panel;
+        const nameColor = current ? (band ? color.bg : color.white) : color.host;
+        const stateColor = current && band ? color.bg : hostStateColor[host.state];
         const label = ACTIVE_LABEL[host.state] ?? host.state;
         return (
           <box key={host.name} flexDirection="row" backgroundColor={background}>
             <text bg={background}>{`${hostCell(host, spinner)} `}</text>
-            <text fg={current ? color.white : color.host} bg={background}>
+            <text fg={nameColor} bg={background}>
               {host.name}
             </text>
             <box flexGrow={1} backgroundColor={background} />
-            <text fg={hostStateColor[host.state]} bg={background}>
+            <text fg={stateColor} bg={background}>
               {label}
             </text>
           </box>
@@ -322,6 +387,7 @@ export function Sidebar({
   spinners,
   selected,
   focused,
+  band,
 }: {
   state: RunState;
 
@@ -329,12 +395,19 @@ export function Sidebar({
   spinners: { step: string; host: string };
   selected: number;
   focused: boolean;
+  band: boolean;
 }) {
   return (
     <box flexDirection="column" flexShrink={0} width={36} backgroundColor={color.panel}>
       <box marginTop={1} />
       <StepRows state={state} spinner={spinners.step} />
-      <HostRows state={state} spinner={spinners.host} selected={selected} focused={focused} />
+      <HostRows
+        state={state}
+        spinner={spinners.host}
+        selected={selected}
+        focused={focused}
+        band={band}
+      />
       <Signature version={state.run?.version ?? "0.0.0"} />
     </box>
   );
@@ -364,13 +437,15 @@ export function Footer({ state }: { state: RunState }) {
       flexShrink={0}
       marginTop={1}
       marginBottom={1}
-      paddingLeft={2}
-      paddingRight={2}
+      paddingLeft={GUTTER}
+      paddingRight={GUTTER}
     >
       {segments.map((segment, index) => (
-        <text key={index} fg={segment.strong ? color.white : color.dim}>
-          {`${index > 0 ? " · " : ""}${segment.text}`}
-        </text>
+        <box key={index} flexDirection="row">
+          {/* Separators stay grey whatever the segment they precede. */}
+          {index > 0 ? <text fg={color.dim}>{" · "}</text> : null}
+          <text fg={segment.strong ? color.white : color.dim}>{segment.text}</text>
+        </box>
       ))}
       <box flexGrow={1} />
       {state.end ? (
@@ -389,12 +464,12 @@ export function HelpCallout() {
   const keys: [string, string][] = [
     ["q", "close the current view, quit at the root"],
     ["⇥", "switch focus feed ↔ hosts"],
-    ["↑↓", "scroll the focused panel"],
+    ["↑↓", "scroll, or change host in the log view"],
     ["↵", "selected host → logs"],
     ["alt+↓↑", "expand / collapse the AI answer"],
     ["a", "AI dialog"],
     ["^C", "abort"],
-    ["esc", "close this callout"],
+    ["esc", "close this callout, leave the log view"],
   ];
 
   return (
