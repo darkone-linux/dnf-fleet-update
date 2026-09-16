@@ -70,27 +70,67 @@ const ACTIVE_LABEL: Partial<Record<HostState, string>> = {
 };
 
 /**
- * Grey callout with a thin accent rule flush against the left edge. Shared by
- * the active region, the AI answers, the questions and the help, so every
- * block spans the same width.
+ * Only `vertical` is ever drawn: the blocks carry a left border and nothing
+ * else. `🭵` is a one-eighth bar sitting at the RIGHT of its cell, so the
+ * colour lands flush against the grey surface; a left-hand bar such as `▎`
+ * leaves a whole cell of dead black between the two. Swap for `🭴` (U+1FB74)
+ * to move the bar one eighth further left.
+ */
+const RULE_CHARS = {
+  vertical: "🭵",
+  horizontal: " ",
+  topLeft: " ",
+  topRight: " ",
+  bottomLeft: " ",
+  bottomRight: " ",
+  topT: " ",
+  bottomT: " ",
+  leftT: " ",
+  rightT: " ",
+  cross: " ",
+};
+
+/**
+ * Grey callout with a thin accent rule on its own left edge, the block itself
+ * inset from the screen. Shared by the active region, the AI answers, the
+ * questions and the help, so every block spans the same width.
+ *
+ * Margin 1 + border 1 + padding 1 lands the text on GUTTER, aligned with the
+ * feed lines around it.
  */
 export function AccentBlock({ accent, children }: { accent: string; children: ReactNode }) {
   return (
     <box
-      flexDirection="column"
+      flexDirection="row"
       flexShrink={0}
       marginTop={1}
       marginBottom={1}
-      paddingLeft={2}
-      paddingRight={2}
-      paddingTop={1}
-      paddingBottom={1}
-      backgroundColor={color.block}
-      border={["left"]}
-      borderStyle="single"
-      borderColor={accent}
+      marginLeft={1}
+      marginRight={2}
     >
-      {children}
+      {/* A border inherits its own box background, so the rule gets a box of
+          its own to sit on the page black rather than on the grey surface.
+          The glyph carries the bar on its right edge, so the gap before the
+          text is the grey padding below, not dead black. */}
+      <box
+        width={1}
+        backgroundColor={color.bg}
+        border={["left"]}
+        borderColor={accent}
+        customBorderChars={RULE_CHARS}
+      />
+
+      <box
+        flexDirection="column"
+        flexGrow={1}
+        backgroundColor={color.block}
+        paddingLeft={2}
+        paddingRight={2}
+        paddingTop={1}
+        paddingBottom={1}
+      >
+        {children}
+      </box>
     </box>
   );
 }
@@ -322,7 +362,7 @@ function HostRows({
   selected: number;
   focused: boolean;
 
-  /** Log view: the host being read wears a yellow band, not the grey selection. */
+  /** Log view: the host being read wears a cyan band — yellow clashed with the weather glyphs. */
   band: boolean;
 }) {
   const hosts = visibleHosts(state);
@@ -337,7 +377,7 @@ function HostRows({
       </box>
       {hosts.map((host, index) => {
         const current = (focused || band) && index === selected;
-        const background = current ? (band ? color.accentYellow : color.selection) : color.panel;
+        const background = current ? (band ? color.host : color.selection) : color.panel;
         const nameColor = current ? (band ? color.bg : color.white) : color.host;
         const stateColor = current && band ? color.bg : hostStateColor[host.state];
         const label = ACTIVE_LABEL[host.state] ?? host.state;
