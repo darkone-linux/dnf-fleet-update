@@ -6,14 +6,16 @@
 {"t":1500,"kind":"log","level":"ok","message":"inputs updated, just clean ok"}
 {"t":1700,"kind":"step.end","step":"update","status":"ok"}
 {"t":1800,"kind":"step.start","step":"select"}
-{"t":2200,"kind":"step.end","step":"select","status":"ok"}
-{"t":2300,"kind":"step.start","step":"probe","total":3}
+{"t":2200,"kind":"log","level":"ok","message":"3 hosts selected, 2 waves"}
+{"t":2300,"kind":"step.end","step":"select","status":"ok"}
+{"t":2400,"kind":"step.start","step":"probe","total":3}
 {"t":2900,"kind":"step.progress","step":"probe","done":3,"total":3}
 {"t":3000,"kind":"step.end","step":"probe","status":"ok"}
 {"t":3200,"kind":"step.start","step":"build","total":3}
 {"t":3300,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":3320,"kind":"host.state","host":"gfx","state":"building"}
 {"t":3340,"kind":"host.state","host":"nlt","state":"building"}
+{"t":3600,"kind":"host.output","host":"gfx","phase":"build","line":"building home-manager-generation.drv"}
 {"t":4600,"kind":"host.state","host":"gw-ag","state":"built"}
 {"t":4700,"kind":"host.state","host":"gfx","state":"built"}
 {"t":4800,"kind":"host.state","host":"nlt","state":"built"}
@@ -34,21 +36,42 @@
 {"t":8800,"kind":"host.state","host":"nlt","state":"failed","failure":"service","note":"nginx.service failed"}
 {"t":8900,"kind":"log","host":"nlt","level":"error","message":"activation failed: 1 unit failed (nginx.service)"}
 {"t":9000,"kind":"host.state","host":"gfx","state":"tested"}
-{"t":9400,"kind":"ai","message":"nlt: nginx failed on an activation ordering race","detail":["journalctl shows nginx started before the ACME cert was renewed.","The unit exited 1 on a missing /var/lib/acme/nlt.poncon.fr/fullchain.pem.","The file exists now: the renewal unit finished 4s after nginx.","Deterministic fix: restart nginx.service, then re-check the unit state.","Durable fix: add a systemd After= on acme-nlt.poncon.fr.service."]}
-{"t":10200,"kind":"ask","id":"repair","question":"Restart nginx.service on nlt?","options":[{"value":"yes","label":"yes, restart and re-check"},{"value":"exclude","label":"exclude nlt"},{"value":"stop","label":"stop the run"}]}
-{"t":10400,"kind":"log","host":"nlt","level":"info","message":"AI action: systemctl restart nginx.service"}
-{"t":10500,"kind":"host.state","host":"nlt","state":"testing"}
-{"t":10700,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: active (running)"}
-{"t":11400,"kind":"host.state","host":"nlt","state":"tested"}
-{"t":11500,"kind":"log","host":"nlt","level":"ok","message":"nginx recovered, activation order issue reported"}
-{"t":11700,"kind":"step.progress","step":"test","done":2,"total":2}
-{"t":11800,"kind":"step.end","step":"test","status":"ok"}
-{"t":12000,"kind":"step.start","step":"switch","total":3}
-{"t":12200,"kind":"host.state","host":"gw-ag","state":"deployed"}
-{"t":12300,"kind":"host.state","host":"gfx","state":"deployed"}
-{"t":12400,"kind":"host.state","host":"nlt","state":"deployed"}
-{"t":12500,"kind":"step.progress","step":"switch","done":3,"total":3}
-{"t":12600,"kind":"step.end","step":"switch","status":"ok"}
-{"t":12800,"kind":"step.start","step":"report"}
-{"t":13300,"kind":"step.end","step":"report","status":"ok"}
-{"t":13400,"kind":"run.end","status":"done","exitCode":0,"report":["3 deployed","nlt needed one service restart: activation ordering","suggested durable fix: After= on the ACME unit"]}
+{"t":9400,"kind":"ai","id":"a1","message":"analysing nlt: nginx.service failed during activation"}
+{"t":9700,"kind":"ai.line","id":"a1","line":"Collecting deterministic evidence first."}
+{"t":10000,"kind":"ai.line","id":"a1","line":"systemctl status nginx.service -> failed (Result: exit-code)"}
+{"t":10300,"kind":"ai.line","id":"a1","line":"journalctl -u nginx.service --since the start of wave 2:"}
+{"t":10600,"kind":"ai.line","id":"a1","line":"  nginx: [emerg] cannot load certificate"}
+{"t":10900,"kind":"ai.line","id":"a1","line":"  /var/lib/acme/nlt.poncon.fr/fullchain.pem: No such file"}
+{"t":11200,"kind":"ai.line","id":"a1","line":"  nginx.service: Main process exited, code=exited, status=1"}
+{"t":11500,"kind":"ai.line","id":"a1","line":"  nginx.service: Failed with result 'exit-code'"}
+{"t":11800,"kind":"ai.line","id":"a1","line":"Checking the certificate on the host now."}
+{"t":12100,"kind":"ai.line","id":"a1","line":"  fullchain.pem exists, mtime 4s after nginx first started"}
+{"t":12400,"kind":"ai.line","id":"a1","line":"  acme-nlt.poncon.fr.service finished after nginx.service"}
+{"t":12700,"kind":"ai.line","id":"a1","line":"So this is an activation ordering race, not a config error."}
+{"t":13000,"kind":"ai.line","id":"a1","line":"nginx started before the renewal unit produced the cert."}
+{"t":13300,"kind":"ai.line","id":"a1","line":"The cert is in place now, so a restart should be enough."}
+{"t":13600,"kind":"ai.line","id":"a1","line":"Blast radius: nlt only. No other host enables this vhost."}
+{"t":13900,"kind":"ai.line","id":"a1","line":"Immediate fix: systemctl restart nginx.service, then re-check."}
+{"t":14200,"kind":"ai.line","id":"a1","line":"Durable fix: add After=acme-nlt.poncon.fr.service to the unit,"}
+{"t":14500,"kind":"ai.line","id":"a1","line":"in dnf/modules/service/nginx.nix, guarded by the acme option."}
+{"t":14800,"kind":"ai.line","id":"a1","line":"That durable fix is a code change: out of scope for this run."}
+{"t":15100,"kind":"ai.line","id":"a1","line":"Recommending the restart, reporting the ordering issue."}
+{"t":15400,"kind":"ai.end","id":"a1"}
+{"t":15800,"kind":"ask","id":"repair","question":"Restart nginx.service on nlt?","options":[{"value":"yes","label":"restart and re-check"},{"value":"exclude","label":"exclude nlt"},{"value":"stop","label":"stop the run"}]}
+{"t":16000,"kind":"log","host":"nlt","level":"info","message":"AI action: systemctl restart nginx.service"}
+{"t":16100,"kind":"host.state","host":"nlt","state":"testing"}
+{"t":16400,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: active (running)"}
+{"t":17100,"kind":"host.state","host":"nlt","state":"tested"}
+{"t":17200,"kind":"log","host":"nlt","level":"ok","message":"nginx recovered, activation order issue reported"}
+{"t":17400,"kind":"step.progress","step":"test","done":2,"total":2}
+{"t":17500,"kind":"step.end","step":"test","status":"ok"}
+{"t":17700,"kind":"step.start","step":"switch","total":3}
+{"t":17900,"kind":"host.state","host":"gw-ag","state":"switching"}
+{"t":18100,"kind":"host.state","host":"gw-ag","state":"deployed"}
+{"t":18200,"kind":"host.state","host":"gfx","state":"deployed"}
+{"t":18300,"kind":"host.state","host":"nlt","state":"deployed"}
+{"t":18400,"kind":"step.progress","step":"switch","done":3,"total":3}
+{"t":18500,"kind":"step.end","step":"switch","status":"ok"}
+{"t":18700,"kind":"step.start","step":"report"}
+{"t":19200,"kind":"step.end","step":"report","status":"ok"}
+{"t":19300,"kind":"run.end","status":"done","exitCode":0,"report":["3 deployed","nlt needed one service restart: activation ordering","suggested durable fix: After= on the ACME unit"]}

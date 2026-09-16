@@ -80,7 +80,12 @@ export type Event =
     })
   | (Base & { kind: "host.output"; host: string; phase: string; line: string })
   | (Base & { kind: "log"; host?: string; level: Level; message: string })
-  | (Base & { kind: "ai"; message: string; detail?: string[] })
+
+  // AI answers stream: `ai` opens the block, `ai.line` appends, `ai.end` closes
+  // it. `detail` on `ai` is the one-shot form, already complete.
+  | (Base & { kind: "ai"; id?: string; message: string; detail?: string[] })
+  | (Base & { kind: "ai.line"; id?: string; line: string })
+  | (Base & { kind: "ai.end"; id?: string })
   | (Base & { kind: "ask"; id: string; question: string; options: AskOption[] })
   | (Base & { kind: "ask.close"; id: string; value: string })
   | (Base & {

@@ -77,3 +77,27 @@ test("settled hosts drop their live output line", () => {
     if (host.state === "deployed") expect(host.lastLine).toBeUndefined();
   }
 });
+
+test("each started step opens a heading in the feed", () => {
+  const state = fold("nominal");
+  const headings = state.feed.filter((item) => item.kind === "step").map((item) => item.message);
+  expect(headings).toEqual(["Update", "Select", "Probe", "Build", "Test", "Switch", "Report"]);
+});
+
+test("a streamed AI answer accumulates and closes", () => {
+  const state = fold("ai-repair");
+  const blocks = state.feed.filter((item) => item.kind === "ai");
+  expect(blocks).toHaveLength(1);
+
+  const block = blocks[0]!;
+  expect(block.detail?.length).toBeGreaterThan(AI_STREAM_ROWS);
+  expect(block.streaming).toBe(false);
+});
+
+/** Above this many lines the block scrolls instead of growing (see panels.tsx). */
+const AI_STREAM_ROWS = 8;
+
+test("a skipped step still counts as settled", () => {
+  const state = fold("offline");
+  expect(state.steps.update.status).toBe("skipped");
+});

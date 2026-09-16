@@ -7,7 +7,7 @@ import type { Event } from "../model/events.ts";
 import { initialState, reduce, visibleHosts, type Ask } from "../model/state.ts";
 import { color } from "../model/theme.ts";
 import { startReplay, type Replay } from "../engine/replay.ts";
-import { Active, Feed, Keys, Sidebar, StatusBar, useSpinner } from "./panels.tsx";
+import { Active, Feed, Footer, HelpCallout, Sidebar, useSpinners } from "./panels.tsx";
 
 /** Below this the two columns stop making sense (§ Rendu). */
 const MIN_WIDTH = 100;
@@ -23,7 +23,7 @@ const ABORT_ASK: Ask = {
   ],
 };
 
-type View = "main" | "logs" | "help";
+type View = "main" | "logs";
 
 export function App({ scenario, speed }: { scenario: string; speed: number }) {
   const renderer = useRenderer();
@@ -34,9 +34,11 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
   const [selected, setSelected] = useState(0);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [localAsk, setLocalAsk] = useState<Ask | null>(null);
+  const [choice, setChoice] = useState(0);
   const [aiPrompt, setAiPrompt] = useState(false);
+  const [help, setHelp] = useState(false);
   const replay = useRef<Replay | null>(null);
-  const spinner = useSpinner();
+  const spinner = useSpinners();
 
   useEffect(() => {
     replay.current = startReplay(scenario, speed, (event: Event) => dispatch(event));
@@ -48,6 +50,9 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
 
   // Engine question wins over a locally raised one: it blocks the stream.
   const ask = state.ask ?? localAsk;
+
+  // A new question always starts on its first button.
+  useEffect(() => setChoice(0), [ask?.id]);
 
   const quit = () => {
     replay.current?.stop();
@@ -77,6 +82,18 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
     setLocalAsk(null);
   };
 
+  /** `↵` on the feed expands the last AI block: the only expandable item. */
+  const expandLastAi = () => {
+    const last = [...state.feed].reverse().find((item) => item.kind === "ai");
+    if (!last) return;
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(last.id)) next.delete(last.id);
+      else next.add(last.id);
+      return next;
+    });
+  };
+
   useKeyboard((key) => {
     if (aiPrompt) {
       if (key.name === "escape") setAiPrompt(false);
@@ -84,15 +101,27 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
     }
 
     if (ask) {
-      const index = ask.options.findIndex((option) => option.value.startsWith(key.name));
-      if (key.name === "escape") answer("cancel");
-      else if (index >= 0) answer(ask.options[index]!.value);
+      const count = ask.options.length;
+      if (key.name === "left") setChoice((value) => (value - 1 + count) % count);
+      else if (key.name === "right") setChoice((value) => (value + 1) % count);
+      else if (key.name === "return") answer(ask.options[choice]!.value);
+      else if (key.name === "escape") answer("cancel");
       else if (key.ctrl && key.name === "c") answer("now");
+      return;
+    }
+
+    if (help) {
+      if (key.name === "escape" || key.sequence === "?") setHelp(false);
       return;
     }
 
     if (key.ctrl && key.name === "c") {
       setLocalAsk(ABORT_ASK);
+      return;
+    }
+
+    if (key.sequence === "?") {
+      setHelp(true);
       return;
     }
 
@@ -120,30 +149,13 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
       default:
         break;
     }
-
-    if (key.sequence === "?") setView((current) => (current === "help" ? "main" : "help"));
   });
 
-  /** `↵` on the feed expands the last AI block: the only expandable item. */
-  const expandLastAi = () => {
-    const last = [...state.feed].reverse().find((item) => item.kind === "ai");
-    if (!last) return;
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(last.id)) next.delete(last.id);
-      else next.add(last.id);
-      return next;
-    });
-  };
-
-  const options = useMemo(
-    () => ask?.options.map((option) => ({ name: option.label, description: "", value: option.value })) ?? [],
-    [ask],
-  );
+  const buttons = useMemo(() => ask?.options ?? [], [ask]);
 
   if (width < MIN_WIDTH || height < MIN_HEIGHT) {
     return (
-      <box padding={1}>
+      <box padding={1} backgroundColor={color.bg}>
         <text fg={color.warn}>{`terminal too small — need ${MIN_WIDTH}x${MIN_HEIGHT}, got ${width}x${height}`}</text>
       </box>
     );
@@ -151,86 +163,149 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
 
   if (view === "logs" && host) {
     return (
-      <box flexDirection="column" width="100%" height="100%">
-        <scrollbox flexGrow={1} focused paddingLeft={1} title={` ${host.name} — logs `}>
+      <box flexDirection="column" width="100%" height="100%" backgroundColor={color.bg}>
+        <box marginTop={1} marginLeft={2}>
+          <text fg={color.white}>{`${host.name} — logs`}</text>
+        </box>
+        <scrollbox
+          flexGrow={1}
+          minHeight={0}
+          focused
+          paddingLeft={2}
+          backgroundColor={color.bg}
+          contentOptions={{ backgroundColor: color.bg }}
+          scrollbarOptions={{ visible: false }}
+        >
           {host.logs.length === 0 ? (
             <text fg={color.dim}>no output yet</text>
           ) : (
             host.logs.map((entry, index) => (
               <text key={index}>
-                <span fg={color.dim}>{`${entry.phase.padEnd(10)} `}</span>
+                <span fg={color.dim}>{`${entry.phase.padEnd(11)}`}</span>
                 <span fg={color.text}>{entry.line}</span>
               </text>
             ))
           )}
         </scrollbox>
-        <Keys view="logs" />
-      </box>
-    );
-  }
-
-  if (view === "help") {
-    return (
-      <box flexDirection="column" padding={1} width="100%" height="100%">
-        <text fg={color.text}>Keys</text>
-        <text fg={color.dim}>q   close the current view, quit at the root</text>
-        <text fg={color.dim}>⇥   switch focus feed ↔ hosts</text>
-        <text fg={color.dim}>↑↓  scroll the focused panel</text>
-        <text fg={color.dim}>↵   selected host → logs, AI block → expand</text>
-        <text fg={color.dim}>a   AI dialog</text>
-        <text fg={color.dim}>^C  abort</text>
-        <text fg={color.dim}>?   this help</text>
+        <Footer state={state} />
       </box>
     );
   }
 
   return (
-    <box flexDirection="row" width="100%" height="100%">
-      <box flexDirection="column" flexGrow={1}>
+    <box flexDirection="row" width="100%" height="100%" backgroundColor={color.bg}>
+      <box flexDirection="column" flexGrow={1} minHeight={0} backgroundColor={color.bg}>
         <Feed state={state} focused={focus === "feed"} expanded={expanded} />
-        <Active state={state} spinner={spinner} />
+        <Active state={state} spinner={spinner.host} />
 
         {ask ? (
-          <box flexDirection="column" border={["top", "right"]} borderColor={color.warn} paddingLeft={1}>
-            <text fg={color.warn}>{ask.question}</text>
-            <select
-              focused
-              options={options}
-              showDescription={false}
-              onSelect={(_index, option) => answer(String(option?.value ?? "cancel"))}
-            />
+          <box
+            flexDirection="row"
+            flexShrink={0}
+            marginTop={1}
+            marginLeft={2}
+            marginRight={2}
+            backgroundColor={color.block}
+          >
+            <box width={1} backgroundColor={color.accentBlue} />
+            <box
+              flexDirection="column"
+              flexGrow={1}
+              paddingLeft={2}
+              paddingRight={2}
+              paddingTop={1}
+              paddingBottom={1}
+              backgroundColor={color.block}
+            >
+              <text fg={color.white} bg={color.block}>
+                {ask.question}
+              </text>
+              <box flexDirection="row" marginTop={1} backgroundColor={color.block}>
+                {buttons.map((option, index) => {
+                  const current = index === choice;
+                  return (
+                    <text
+                      key={option.value}
+                      fg={current ? color.bg : color.text}
+                      bg={current ? color.accentBlue : color.selection}
+                    >
+                      {`  ${option.label}  `}
+                    </text>
+                  );
+                })}
+                <box flexGrow={1} backgroundColor={color.block} />
+                <text fg={color.dim} bg={color.block}>
+                  ←→ choose · ↵ confirm
+                </text>
+              </box>
+            </box>
           </box>
         ) : null}
 
         {aiPrompt ? (
-          <box flexDirection="column" border={["top", "right"]} borderColor={color.ai} paddingLeft={1}>
-            <text fg={color.ai}>ask the AI (esc to close)</text>
-            <input
-              focused
-              placeholder="why did nginx fail on nlt?"
-              onSubmit={(value) => {
-                setAiPrompt(false);
+          <box
+            flexDirection="row"
+            flexShrink={0}
+            marginTop={1}
+            marginLeft={2}
+            marginRight={2}
+            backgroundColor={color.block}
+          >
+            <box width={1} backgroundColor={color.accentBlue} />
+            <box
+              flexDirection="column"
+              flexGrow={1}
+              paddingLeft={2}
+              paddingRight={2}
+              paddingTop={1}
+              paddingBottom={1}
+              backgroundColor={color.block}
+            >
+              <text fg={color.dim} bg={color.block}>
+                ask the AI · esc to close
+              </text>
+              <input
+                focused
+                backgroundColor={color.block}
+                placeholder="why did nginx fail on nlt?"
+                onSubmit={(value) => {
+                  setAiPrompt(false);
 
-                // Prop widens to `string | SubmitEvent`; only the string branch carries text.
-                const question = typeof value === "string" ? value.trim() : "";
-                if (!question) return;
-                dispatch({ t: Date.now(), kind: "log", level: "info", message: `you: ${question}` });
-                dispatch({
-                  t: Date.now(),
-                  kind: "ai",
-                  message: "mockup: no model wired yet",
-                  detail: ["The real tool answers here, with the tools of the current --ai-analysis level."],
-                });
-              }}
-            />
+                  // Prop widens to `string | SubmitEvent`; only the string branch carries text.
+                  const question = typeof value === "string" ? value.trim() : "";
+                  if (!question) return;
+                  dispatch({
+                    t: Date.now(),
+                    kind: "log",
+                    level: "info",
+                    message: `you: ${question}`,
+                  });
+                  dispatch({
+                    t: Date.now(),
+                    kind: "ai",
+                    message: "mockup: no model wired yet",
+                    detail: [
+                      "The real tool answers here, with the tools of the",
+                      "current --ai-analysis level.",
+                    ],
+                  });
+                }}
+              />
+            </box>
           </box>
         ) : null}
 
-        <StatusBar state={state} />
-        <Keys view={view} />
+        {help ? <HelpCallout /> : null}
+
+        <Footer state={state} />
       </box>
 
-      <Sidebar state={state} spinner={spinner} selected={selected} focused={focus === "hosts"} />
+      <Sidebar
+        state={state}
+        spinners={spinner}
+        selected={selected}
+        focused={focus === "hosts"}
+      />
     </box>
   );
 }

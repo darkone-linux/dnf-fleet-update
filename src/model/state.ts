@@ -5,6 +5,7 @@
 
 import {
   STEPS,
+  STEP_LABELS,
   isActive,
   type AskOption,
   type Event,
@@ -42,13 +43,17 @@ export interface HostRow {
 export interface FeedItem {
   id: number;
   t: number;
-  kind: "log" | "ai";
+
+  /** `step` is a heading, `ai` a block, `log` a plain line. */
+  kind: "log" | "ai" | "step";
   level: Level;
   host?: string;
   message: string;
 
-  /** AI blocks only: collapsed to 3 lines until expanded. */
+  /** AI blocks only. */
+  aiId?: string;
   detail?: string[];
+  streaming?: boolean;
 }
 
 export interface Ask {
@@ -91,6 +96,23 @@ function patchHost(state: RunState, name: string, patch: Partial<HostRow>): Host
   return state.hosts.map((host) => (host.name === name ? { ...host, ...patch } : host));
 }
 
+/** Targets the named AI block, or the last one opened when the stream omits the id. */
+function patchAi(
+  state: RunState,
+  id: string | undefined,
+  patch: (item: FeedItem) => FeedItem,
+): FeedItem[] {
+  for (let index = state.feed.length - 1; index >= 0; index -= 1) {
+    const item = state.feed[index]!;
+    if (item.kind !== "ai") continue;
+    if (id && item.aiId !== id) continue;
+    const next = [...state.feed];
+    next[index] = patch(item);
+    return next;
+  }
+  return state.feed;
+}
+
 /** Applies one event. Unknown kinds are ignored: a newer engine must not break an older UI. */
 export function reduce(state: RunState, event: Event): RunState {
   switch (event.kind) {
@@ -119,6 +141,14 @@ export function reduce(state: RunState, event: Event): RunState {
           ...state.steps,
           [event.step]: { status: "running", done: 0, total: event.total ?? 0 },
         },
+
+        // Heading in the feed: marks where a step begins in the scrollback.
+        feed: pushFeed(state, {
+          t: event.t,
+          kind: "step",
+          level: "info",
+          message: STEP_LABELS[event.step],
+        }),
       };
 
     case "step.progress":
@@ -200,8 +230,27 @@ export function reduce(state: RunState, event: Event): RunState {
           kind: "ai",
           level: "info",
           message: event.message,
-          detail: event.detail,
+          aiId: event.id,
+          detail: event.detail ?? [],
+
+          // One-shot answers arrive complete; a streamed one opens empty.
+          streaming: event.detail === undefined,
         }),
+      };
+
+    case "ai.line":
+      return {
+        ...state,
+        feed: patchAi(state, event.id, (item) => ({
+          ...item,
+          detail: [...(item.detail ?? []), event.line],
+        })),
+      };
+
+    case "ai.end":
+      return {
+        ...state,
+        feed: patchAi(state, event.id, (item) => ({ ...item, streaming: false })),
       };
 
     case "ask":
