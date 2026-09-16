@@ -79,6 +79,10 @@ starts.
 fleet-update [options]
 ```
 
+From a DNF consumer project, `just fleet-update [options]` runs the sources in
+co-development, else the command installed by the `darkone.admin.fleet-update`
+module, else the package pinned by the project's `flake.lock`.
+
 ### Selection and order
 
 | Option | Default | Description |
@@ -87,6 +91,16 @@ fleet-update [options]
 | `--deployment-order <profiles>` | `hcs:gateway:server:[others]:laptop` | one wave per profile; `[others]` = profiles not listed |
 | `--critical-profiles <profiles>` | `hcs:gateway:server` | failures on these hosts also go to the incidents room |
 | `--no-current-zone-before` | | waves by profile across all zones, without testing the current zone first |
+
+A fleet sets its own defaults for the two profile lists in `etc/config.yaml`;
+the options still win:
+
+```yaml
+network:
+  fleetUpdate:
+    deploymentOrder: "hcs:gateway:server:[others]:laptop"
+    criticalProfiles: "hcs:gateway:server"
+```
 
 ### Update
 
@@ -263,7 +277,8 @@ just release [auto|patch|minor|major|X.Y.Z]
 
 `just release` runs the CI gate, bumps `package.json`, writes the CHANGELOG
 entry, tags and pushes; the tag workflow checks it and publishes the GitHub
-release with that entry as notes.
+release with that entry as notes. The workspace release train does the same
+when this repository changed, then pins the tag in the framework package.
 
 ## License
 

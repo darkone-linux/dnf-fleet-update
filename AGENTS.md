@@ -11,7 +11,7 @@ behaviour; this file owns code policy and routing.
 - Interface validated on recorded scenarios. Engine (native Nix commands, no
   colmena) not written: contracts only (`src/engine/ports.ts`).
 - Published by tag (GitHub release); packaged by the framework
-  (`dnf/pkgs/fleet-update/package.nix`), not here.
+  (`dnf/pkgs/fleet-update/package.nix`), not here: § Framework contract.
 
 ## Rules
 
@@ -188,6 +188,24 @@ loses every colour. Three false alarms came from exactly that.
   lint, typecheck, tests with coverage, audit. Toolchain from `nix develop`.
 - Every CI step is a `just` recipe: change the recipe, not the workflow.
 
+## Framework contract
+
+What `dnf/` builds around this repo. A change on either side moves the other
+in the same release train.
+
+| Surface | DNF side | Holds here |
+|---|---|---|
+| Launch | package: `bun run <out>/lib/fleet-update/src/main.tsx`; `just fleet-update`: same file from sources (codev) | entry stays `src/main.tsx`; no `bun build --compile` |
+| Packaged files | `package.json`, `tsconfig.json`, `src/`, `mock/`, production `node_modules` | a runtime read elsewhere → package first; `tests/cli.test.ts` runs outside the repo |
+| Workspace | recipe `cd` and unit `WorkingDirectory` = consumer root | workspace = cwd; codev = `dnf/.git` present |
+| Fleet defaults | generator: `network.fleetUpdate.{deploymentOrder,criticalProfiles}` in `var/generated/network.nix`, only when declared, syntax checked | option > `network.fleetUpdate` > built-in default |
+| Unattended run | module: `fleet-update --no-ui <timer.extraArgs>`, `User` = project owner, `SuccessExitStatus=4`, `KillMode=mixed`, `TimeoutStartSec`, `restartIfChanged = false` | SIGTERM → children stopped, run `interrupted`; codes of `exit-codes.ts` |
+| Programs | package `PATH` suffix: `git`, `nix-eval-jobs`, `ssh`; host: `nix`; unit: `just`, `statix`, `deadnix`, `nixfmt`, `treefmt`, `dnf-generator`, `cargo`; `/run/wrappers/bin`: `sudo`, `ping` | argv names resolved from `PATH`, never a store path |
+| Deploy identity | key `~nix/.ssh/id_ed25519`, readable by `nix` only | ssh and `nix copy` through `sudo -u nix -H`, like `just apply` |
+| Toplevel | colmena and `nixosConfigurations` evaluate to the same path | build `nixosConfigurations.<host>.config.system.build.toplevel` |
+| `var/deployments/` | consumer `.gitignore`: `/var/*`, except `generated/` and `security/**/*.pub` | run state never dirties the tree check |
+| Version | `versionCheckHook` once `--version` exists; tags `vX.Y.Z` pinned by the train | `--version` prints `package.json` version, exit `0` |
+
 ## Release
 
 - Version: `package.json` only, written by `just bump`.
@@ -199,6 +217,9 @@ loses every colour. Three false alarms came from exactly that.
 - `just bump [auto|patch|minor|major|X.Y.Z]`: version, CHANGELOG entry,
   `chore(release): vX.Y.Z` commit, annotated tag. No push.
 - `just release [level]`: `just ci`, bump, push branch and tag.
+- Workspace train (`just release` at its root, `dnf/just/codev/release.just`):
+  gates `ci` + `audit`, releases this repo when it moved since its last tag,
+  then pins the tag in the framework package (`just pkg-update fleet-update <version>`).
 - Tag `v*` → `release.yml`: guards (tag = `package.json`, CHANGELOG entry), CI
   replay, GitHub release with the CHANGELOG section as notes.
 - Released CHANGELOG sections are history, never rewritten. Hand-written notes
