@@ -1,0 +1,63 @@
+{"t":0,"kind":"run.start","run":{"version":"0.1.0","selection":"all","mode":"full","codev":true,"aiModel":"opus@high","maxParallel":10}}
+{"t":10,"kind":"host.add","host":"hcs","profile":"hcs","zone":"www"}
+{"t":12,"kind":"host.add","host":"gw-ag","profile":"gateway","zone":"ag"}
+{"t":14,"kind":"host.add","host":"gfx","profile":"admin-desktop","zone":"ag"}
+{"t":16,"kind":"host.add","host":"ms-a2","profile":"server","zone":"cp"}
+{"t":18,"kind":"host.add","host":"fd-01","profile":"desktop","zone":"ag"}
+{"t":300,"kind":"step.start","step":"update"}
+{"t":1800,"kind":"log","level":"ok","message":"inputs updated, just clean ok"}
+{"t":2000,"kind":"step.end","step":"update","status":"ok"}
+{"t":2100,"kind":"step.start","step":"select"}
+{"t":2600,"kind":"log","level":"ok","message":"5 hosts selected"}
+{"t":2700,"kind":"step.end","step":"select","status":"ok"}
+{"t":2800,"kind":"step.start","step":"probe","total":5}
+{"t":3400,"kind":"step.progress","step":"probe","done":5,"total":5}
+{"t":3500,"kind":"step.end","step":"probe","status":"ok"}
+{"t":3700,"kind":"step.start","step":"build","total":5}
+{"t":3800,"kind":"host.state","host":"hcs","state":"building"}
+{"t":3820,"kind":"host.state","host":"gw-ag","state":"building"}
+{"t":3840,"kind":"host.state","host":"gfx","state":"building"}
+{"t":3860,"kind":"host.state","host":"ms-a2","state":"building"}
+{"t":3880,"kind":"host.state","host":"fd-01","state":"building"}
+{"t":4200,"kind":"host.output","host":"ms-a2","phase":"build","line":"building immich-server.drv"}
+{"t":4800,"kind":"host.state","host":"hcs","state":"built"}
+{"t":4900,"kind":"host.state","host":"gw-ag","state":"built"}
+{"t":5200,"kind":"host.output","host":"ms-a2","phase":"build","line":"error: attribute 'immich-machine-learning' missing"}
+{"t":5400,"kind":"host.state","host":"ms-a2","state":"failed","failure":"other","note":"eval error"}
+{"t":5500,"kind":"log","host":"ms-a2","level":"error","message":"build failed: attribute 'immich-machine-learning' missing"}
+{"t":5700,"kind":"host.state","host":"gfx","state":"built"}
+{"t":5800,"kind":"host.state","host":"fd-01","state":"built"}
+{"t":5900,"kind":"step.progress","step":"build","done":5,"total":5}
+{"t":6000,"kind":"step.end","step":"build","status":"error"}
+{"t":6200,"kind":"ai","message":"ms-a2 build failure: renamed attribute in nixpkgs","detail":["The module sets services.immich.machine-learning.enable, removed upstream.","nixpkgs 2026-09-14 renamed it to services.immich.ml.enable.","Fix: rename the option in dnf/modules/service/immich.nix, rebuild ms-a2.","No other host uses the module, blast radius is one server."]}
+{"t":6800,"kind":"ask","id":"failure","question":"ms-a2 build failed (critical profile: server). Continue?","options":[{"value":"exclude","label":"exclude ms-a2 and continue"},{"value":"repair","label":"let the AI repair"},{"value":"stop","label":"stop the run"}]}
+{"t":7000,"kind":"host.state","host":"ms-a2","state":"excluded","note":"build failure"}
+{"t":7100,"kind":"log","level":"warn","message":"ms-a2 excluded, incidents room notified"}
+{"t":7300,"kind":"step.start","step":"test","total":2}
+{"t":7400,"kind":"wave.start","index":1,"total":2,"hosts":["hcs"]}
+{"t":7500,"kind":"host.state","host":"hcs","state":"copying"}
+{"t":8200,"kind":"host.state","host":"hcs","state":"testing"}
+{"t":9000,"kind":"host.state","host":"hcs","state":"tested"}
+{"t":9100,"kind":"step.progress","step":"test","done":1,"total":2}
+{"t":9300,"kind":"wave.start","index":2,"total":2,"hosts":["gw-ag","gfx","fd-01"]}
+{"t":9400,"kind":"host.state","host":"gw-ag","state":"copying"}
+{"t":9420,"kind":"host.state","host":"gfx","state":"copying"}
+{"t":9440,"kind":"host.state","host":"fd-01","state":"copying"}
+{"t":10400,"kind":"host.state","host":"gw-ag","state":"testing"}
+{"t":10420,"kind":"host.state","host":"gfx","state":"testing"}
+{"t":10440,"kind":"host.state","host":"fd-01","state":"testing"}
+{"t":11400,"kind":"host.state","host":"gw-ag","state":"tested"}
+{"t":11420,"kind":"host.state","host":"gfx","state":"tested"}
+{"t":11440,"kind":"host.state","host":"fd-01","state":"tested"}
+{"t":11600,"kind":"step.progress","step":"test","done":2,"total":2}
+{"t":11700,"kind":"step.end","step":"test","status":"ok"}
+{"t":11900,"kind":"step.start","step":"switch","total":4}
+{"t":12100,"kind":"host.state","host":"hcs","state":"deployed"}
+{"t":12200,"kind":"host.state","host":"gw-ag","state":"deployed"}
+{"t":12300,"kind":"host.state","host":"gfx","state":"deployed"}
+{"t":12400,"kind":"host.state","host":"fd-01","state":"deployed"}
+{"t":12500,"kind":"step.progress","step":"switch","done":4,"total":4}
+{"t":12600,"kind":"step.end","step":"switch","status":"ok"}
+{"t":12800,"kind":"step.start","step":"report"}
+{"t":13200,"kind":"step.end","step":"report","status":"ok"}
+{"t":13300,"kind":"run.end","status":"done","exitCode":0,"report":["4 deployed, 1 excluded (ms-a2, build failure)","ms-a2 carries a server profile: incidents room notified","suggested fix in the AI analysis above"]}

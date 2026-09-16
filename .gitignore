@@ -1,0 +1,9 @@
+/node_modules/
+/dist/
+
+# Workspace-only symlink: broken in a standalone clone.
+/.claude
+/result
+/.direnv/
+/tmp/
+*.tmp

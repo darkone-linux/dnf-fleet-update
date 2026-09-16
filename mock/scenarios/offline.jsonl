@@ -1,0 +1,57 @@
+{"t":0,"kind":"run.start","run":{"version":"0.1.0","selection":"@zone-ag","mode":"partial","codev":false,"aiModel":"opus@high","maxParallel":10}}
+{"t":10,"kind":"host.add","host":"gw-ag","profile":"gateway","zone":"ag"}
+{"t":12,"kind":"host.add","host":"gfx","profile":"admin-desktop","zone":"ag"}
+{"t":14,"kind":"host.add","host":"nlt","profile":"lan","zone":"ag"}
+{"t":16,"kind":"host.add","host":"fd-01","profile":"desktop","zone":"ag"}
+{"t":18,"kind":"host.add","host":"alt","profile":"laptop","zone":"ag"}
+{"t":20,"kind":"host.add","host":"vbox-test","profile":"vbox","zone":"ag"}
+{"t":22,"kind":"host.add","host":"vbox-umi","profile":"umi","zone":"ag"}
+{"t":300,"kind":"step.end","step":"update","status":"skipped"}
+{"t":400,"kind":"log","level":"info","message":"--no-consumer-flake: inputs left untouched"}
+{"t":600,"kind":"step.start","step":"select"}
+{"t":1200,"kind":"log","level":"ok","message":"7 hosts selected in zone ag"}
+{"t":1300,"kind":"step.end","step":"select","status":"ok"}
+{"t":1500,"kind":"step.start","step":"probe","total":7}
+{"t":2200,"kind":"step.progress","step":"probe","done":7,"total":7}
+{"t":2300,"kind":"host.state","host":"alt","state":"offline"}
+{"t":2350,"kind":"host.state","host":"vbox-umi","state":"offline"}
+{"t":2400,"kind":"host.state","host":"vbox-test","state":"offline"}
+{"t":2500,"kind":"log","level":"warn","message":"3 hosts offline: alt, vbox-test, vbox-umi"}
+{"t":2600,"kind":"host.state","host":"nlt","state":"excluded","note":"known broken, administrator fix pending"}
+{"t":2700,"kind":"log","host":"nlt","level":"warn","message":"excluded by consumer known-issues list"}
+{"t":2800,"kind":"step.end","step":"probe","status":"ok"}
+{"t":3000,"kind":"step.start","step":"build","total":6}
+{"t":3100,"kind":"host.state","host":"gw-ag","state":"building"}
+{"t":3120,"kind":"host.state","host":"gfx","state":"building"}
+{"t":3140,"kind":"host.state","host":"fd-01","state":"building"}
+{"t":3400,"kind":"host.output","host":"gfx","phase":"build","line":"building home-manager-generation.drv"}
+{"t":4600,"kind":"host.state","host":"gw-ag","state":"built"}
+{"t":4700,"kind":"host.state","host":"gfx","state":"built"}
+{"t":4800,"kind":"host.state","host":"fd-01","state":"built"}
+{"t":4900,"kind":"step.progress","step":"build","done":6,"total":6}
+{"t":5000,"kind":"log","level":"info","message":"offline hosts built anyway, deployment skipped"}
+{"t":5100,"kind":"step.end","step":"build","status":"ok"}
+{"t":5300,"kind":"step.start","step":"test","total":2}
+{"t":5400,"kind":"wave.start","index":1,"total":2,"hosts":["gw-ag"]}
+{"t":5500,"kind":"host.state","host":"gw-ag","state":"copying"}
+{"t":6200,"kind":"host.state","host":"gw-ag","state":"testing"}
+{"t":7000,"kind":"host.state","host":"gw-ag","state":"tested"}
+{"t":7100,"kind":"step.progress","step":"test","done":1,"total":2}
+{"t":7300,"kind":"wave.start","index":2,"total":2,"hosts":["gfx","fd-01"]}
+{"t":7400,"kind":"host.state","host":"gfx","state":"copying"}
+{"t":7420,"kind":"host.state","host":"fd-01","state":"copying"}
+{"t":8200,"kind":"host.state","host":"gfx","state":"testing"}
+{"t":8220,"kind":"host.state","host":"fd-01","state":"testing"}
+{"t":9000,"kind":"host.state","host":"gfx","state":"tested"}
+{"t":9020,"kind":"host.state","host":"fd-01","state":"tested"}
+{"t":9100,"kind":"step.progress","step":"test","done":2,"total":2}
+{"t":9200,"kind":"step.end","step":"test","status":"ok"}
+{"t":9400,"kind":"step.start","step":"switch","total":3}
+{"t":9600,"kind":"host.state","host":"gw-ag","state":"deployed"}
+{"t":9700,"kind":"host.state","host":"gfx","state":"deployed"}
+{"t":9800,"kind":"host.state","host":"fd-01","state":"deployed"}
+{"t":9900,"kind":"step.progress","step":"switch","done":3,"total":3}
+{"t":10000,"kind":"step.end","step":"switch","status":"ok"}
+{"t":10200,"kind":"step.start","step":"report"}
+{"t":10600,"kind":"step.end","step":"report","status":"ok"}
+{"t":10700,"kind":"run.end","status":"done","exitCode":0,"report":["3 deployed, 3 offline, 1 excluded","offline hosts carry a stale configuration","no critical profile affected: warnings room only"]}

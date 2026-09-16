@@ -1,0 +1,42 @@
+{"t":0,"kind":"run.start","run":{"version":"0.1.0","selection":"all","mode":"full","codev":true,"aiModel":"opus@high","maxParallel":10}}
+{"t":10,"kind":"host.add","host":"hcs","profile":"hcs","zone":"www"}
+{"t":12,"kind":"host.add","host":"gw-ag","profile":"gateway","zone":"ag"}
+{"t":14,"kind":"host.add","host":"gw-cp","profile":"gateway","zone":"cp"}
+{"t":16,"kind":"host.add","host":"gfx","profile":"admin-desktop","zone":"ag"}
+{"t":18,"kind":"host.add","host":"fd-01","profile":"desktop","zone":"ag"}
+{"t":20,"kind":"host.add","host":"fd-02","profile":"desktop","zone":"ag"}
+{"t":300,"kind":"step.start","step":"update"}
+{"t":1600,"kind":"log","level":"ok","message":"inputs updated, just clean ok"}
+{"t":1800,"kind":"step.end","step":"update","status":"ok"}
+{"t":1900,"kind":"step.start","step":"select"}
+{"t":2400,"kind":"step.end","step":"select","status":"ok"}
+{"t":2500,"kind":"step.start","step":"probe","total":6}
+{"t":3100,"kind":"step.progress","step":"probe","done":6,"total":6}
+{"t":3200,"kind":"step.end","step":"probe","status":"ok"}
+{"t":3400,"kind":"step.start","step":"build","total":6}
+{"t":3500,"kind":"host.state","host":"hcs","state":"building"}
+{"t":3520,"kind":"host.state","host":"gw-ag","state":"building"}
+{"t":3540,"kind":"host.state","host":"gw-cp","state":"building"}
+{"t":3560,"kind":"host.state","host":"gfx","state":"building"}
+{"t":3580,"kind":"host.state","host":"fd-01","state":"building"}
+{"t":3600,"kind":"host.state","host":"fd-02","state":"building"}
+{"t":3800,"kind":"host.output","host":"gfx","phase":"build","line":"building gnome-shell-46.4.drv"}
+{"t":4200,"kind":"host.output","host":"fd-01","phase":"build","line":"building linux-6.18.49.drv"}
+{"t":4600,"kind":"host.output","host":"fd-02","phase":"build","line":"copying path /nix/store/…-firefox-142.0"}
+{"t":5200,"kind":"host.state","host":"hcs","state":"built"}
+{"t":5400,"kind":"step.progress","step":"build","done":1,"total":6}
+{"t":5800,"kind":"host.output","host":"gfx","phase":"build","line":"still building gnome-shell-46.4.drv (2m)"}
+{"t":6400,"kind":"host.state","host":"gw-ag","state":"built"}
+{"t":6600,"kind":"step.progress","step":"build","done":2,"total":6}
+{"t":7200,"kind":"host.output","host":"fd-01","phase":"build","line":"still building linux-6.18.49.drv (3m)"}
+{"t":8000,"kind":"log","level":"info","message":"waiting on 4 builds — press ^C to abort"}
+{"t":9000,"kind":"host.output","host":"gfx","phase":"build","line":"still building gnome-shell-46.4.drv (4m)"}
+{"t":11000,"kind":"host.output","host":"fd-01","phase":"build","line":"still building linux-6.18.49.drv (5m)"}
+{"t":13000,"kind":"host.output","host":"gfx","phase":"build","line":"still building gnome-shell-46.4.drv (6m)"}
+{"t":15000,"kind":"host.output","host":"fd-02","phase":"build","line":"still copying firefox-142.0 (6m)"}
+{"t":17000,"kind":"host.output","host":"gfx","phase":"build","line":"still building gnome-shell-46.4.drv (8m)"}
+{"t":19000,"kind":"host.output","host":"fd-01","phase":"build","line":"still building linux-6.18.49.drv (9m)"}
+{"t":21000,"kind":"host.output","host":"gfx","phase":"build","line":"still building gnome-shell-46.4.drv (10m)"}
+{"t":23000,"kind":"log","level":"warn","message":"build step is long: nothing deployed yet, abort is safe here"}
+{"t":25000,"kind":"host.output","host":"fd-02","phase":"build","line":"still copying firefox-142.0 (10m)"}
+{"t":27000,"kind":"host.output","host":"gfx","phase":"build","line":"still building gnome-shell-46.4.drv (12m)"}
