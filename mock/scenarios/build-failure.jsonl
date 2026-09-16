@@ -30,7 +30,7 @@
 {"t":5900,"kind":"step.progress","step":"build","done":5,"total":5}
 {"t":6000,"kind":"step.end","step":"build","status":"error"}
 {"t":6200,"kind":"ai","message":"ms-a2 build failure: renamed attribute in nixpkgs","detail":["The module sets services.immich.machine-learning.enable, removed upstream.","nixpkgs 2026-09-14 renamed it to services.immich.ml.enable.","Fix: rename the option in dnf/modules/service/immich.nix, rebuild ms-a2.","No other host uses the module, blast radius is one server."]}
-{"t":6800,"kind":"ask","id":"failure","question":"ms-a2 build failed (critical profile: server). Continue?","options":[{"value":"exclude","label":"exclude ms-a2 and continue"},{"value":"repair","label":"let the AI repair"},{"value":"stop","label":"stop the run"}]}
+{"t":6800,"kind":"ask","id":"failure","question":"ms-a2 build failed (critical profile: server). Continue?","options":[{"value":"exclude","label":"exclude"},{"value":"repair","label":"repair"},{"value":"stop","label":"stop"}]}
 {"t":7000,"kind":"host.state","host":"ms-a2","state":"excluded","note":"build failure"}
 {"t":7100,"kind":"log","level":"warn","message":"ms-a2 excluded, incidents room notified"}
 {"t":7300,"kind":"step.start","step":"test","total":2}

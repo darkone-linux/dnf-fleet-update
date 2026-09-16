@@ -87,8 +87,8 @@ export const stepColor: Record<StepStatus, string> = {
   skipped: color.dim,
 };
 
-/** Steps: classic braille spinner, one column, aligns with the text glyphs. */
-export const STEP_SPINNER = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"] as const;
+/** Steps: classic 6-dot braille spinner, one column, aligns with the text glyphs. */
+export const STEP_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 
 /** Hosts: pulsing star, padded to the width of the weather emoji. */
 export const HOST_SPINNER = ["·", "✢", "✳", "∗", "✻", "✽", "✻", "∗", "✳", "✢"] as const;

@@ -7,18 +7,19 @@ import type { Event } from "../model/events.ts";
 import { initialState, reduce, visibleHosts, type Ask } from "../model/state.ts";
 import { color } from "../model/theme.ts";
 import { startReplay, type Replay } from "../engine/replay.ts";
-import { Active, Feed, Footer, HelpCallout, Sidebar, useSpinners } from "./panels.tsx";
+import { AccentBlock, Active, Feed, Footer, HelpCallout, Sidebar, useSpinners } from "./panels.tsx";
 
 /** Below this the two columns stop making sense (§ Rendu). */
 const MIN_WIDTH = 100;
 const MIN_HEIGHT = 24;
 
+/** Labels never repeat the question: it is right above the buttons. */
 const ABORT_ASK: Ask = {
   id: "abort",
   question: "Abort the deployment?",
   options: [
-    { value: "wave", label: "finish current wave" },
-    { value: "now", label: "stop now" },
+    { value: "wave", label: "after wave" },
+    { value: "now", label: "now" },
     { value: "cancel", label: "cancel" },
   ],
 };
@@ -82,19 +83,30 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
     setLocalAsk(null);
   };
 
-  /** `↵` on the feed expands the last AI block: the only expandable item. */
-  const expandLastAi = () => {
+  /** alt+↓ / alt+↑: `↵` is taken by the buttons of a pending question. */
+  const setLastAiExpanded = (open: boolean) => {
     const last = [...state.feed].reverse().find((item) => item.kind === "ai");
     if (!last) return;
     setExpanded((current) => {
       const next = new Set(current);
-      if (next.has(last.id)) next.delete(last.id);
-      else next.add(last.id);
+      if (open) next.add(last.id);
+      else next.delete(last.id);
       return next;
     });
   };
 
   useKeyboard((key) => {
+    const alt = key.option || key.meta;
+
+    if (alt && key.name === "down") {
+      setLastAiExpanded(true);
+      return;
+    }
+    if (alt && key.name === "up") {
+      setLastAiExpanded(false);
+      return;
+    }
+
     if (aiPrompt) {
       if (key.name === "escape") setAiPrompt(false);
       return;
@@ -144,7 +156,6 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
         return;
       case "return":
         if (focus === "hosts" && host) setView("logs");
-        else expandLastAi();
         return;
       default:
         break;
@@ -199,100 +210,69 @@ export function App({ scenario, speed }: { scenario: string; speed: number }) {
         <Active state={state} spinner={spinner.host} />
 
         {ask ? (
-          <box
-            flexDirection="row"
-            flexShrink={0}
-            marginTop={1}
-            marginLeft={2}
-            marginRight={2}
-            backgroundColor={color.block}
-          >
-            <box width={1} backgroundColor={color.accentBlue} />
-            <box
-              flexDirection="column"
-              flexGrow={1}
-              paddingLeft={2}
-              paddingRight={2}
-              paddingTop={1}
-              paddingBottom={1}
-              backgroundColor={color.block}
-            >
-              <text fg={color.white} bg={color.block}>
-                {ask.question}
-              </text>
-              <box flexDirection="row" marginTop={1} backgroundColor={color.block}>
-                {buttons.map((option, index) => {
-                  const current = index === choice;
-                  return (
+          <AccentBlock accent={color.accentBlue}>
+            <text fg={color.white} bg={color.block}>
+              {ask.question}
+            </text>
+            <box flexDirection="row" marginTop={1} backgroundColor={color.block}>
+              {buttons.map((option, index) => {
+                const current = index === choice;
+                return (
+                  <box key={option.value} flexDirection="row" backgroundColor={color.block}>
                     <text
-                      key={option.value}
                       fg={current ? color.bg : color.text}
                       bg={current ? color.accentBlue : color.selection}
                     >
                       {`  ${option.label}  `}
                     </text>
-                  );
-                })}
-                <box flexGrow={1} backgroundColor={color.block} />
-                <text fg={color.dim} bg={color.block}>
-                  ←→ choose · ↵ confirm
-                </text>
-              </box>
+                    <text bg={color.block}>{"  "}</text>
+                  </box>
+                );
+              })}
+              <box flexGrow={1} backgroundColor={color.block} />
+              <text fg={color.dim} bg={color.block}>
+                {"↔ choose  "}
+              </text>
+              <text fg={color.white} bg={color.block}>
+                ↵ confirm
+              </text>
             </box>
-          </box>
+          </AccentBlock>
         ) : null}
 
         {aiPrompt ? (
-          <box
-            flexDirection="row"
-            flexShrink={0}
-            marginTop={1}
-            marginLeft={2}
-            marginRight={2}
-            backgroundColor={color.block}
-          >
-            <box width={1} backgroundColor={color.accentBlue} />
-            <box
-              flexDirection="column"
-              flexGrow={1}
-              paddingLeft={2}
-              paddingRight={2}
-              paddingTop={1}
-              paddingBottom={1}
+          <AccentBlock accent={color.accentBlue}>
+            <text fg={color.dim} bg={color.block}>
+              ask the AI · esc to close
+            </text>
+            <input
+              focused
               backgroundColor={color.block}
-            >
-              <text fg={color.dim} bg={color.block}>
-                ask the AI · esc to close
-              </text>
-              <input
-                focused
-                backgroundColor={color.block}
-                placeholder="why did nginx fail on nlt?"
-                onSubmit={(value) => {
-                  setAiPrompt(false);
+              placeholder="why did nginx fail on nlt?"
+              onSubmit={(value) => {
+                setAiPrompt(false);
 
-                  // Prop widens to `string | SubmitEvent`; only the string branch carries text.
-                  const question = typeof value === "string" ? value.trim() : "";
-                  if (!question) return;
-                  dispatch({
-                    t: Date.now(),
-                    kind: "log",
-                    level: "info",
-                    message: `you: ${question}`,
-                  });
-                  dispatch({
-                    t: Date.now(),
-                    kind: "ai",
-                    message: "mockup: no model wired yet",
-                    detail: [
-                      "The real tool answers here, with the tools of the",
-                      "current --ai-analysis level.",
-                    ],
-                  });
-                }}
-              />
-            </box>
-          </box>
+                // Prop widens to `string | SubmitEvent`; only the string branch carries text.
+                const question = typeof value === "string" ? value.trim() : "";
+                if (!question) return;
+                dispatch({
+                  t: Date.now(),
+                  kind: "log",
+                  level: "info",
+                  message: `you: ${question}`,
+                });
+                dispatch({
+                  t: Date.now(),
+                  kind: "ai",
+                  message: "mockup: no model wired yet",
+                  detail: [
+                    "The real tool answers here, with the tools of the",
+                    "current --ai-analysis level.",
+                  ],
+                });
+              }}
+            />
+          </AccentBlock>
         ) : null}
 
         {help ? <HelpCallout /> : null}

@@ -1,6 +1,6 @@
 // Panels of the main screen. Presentation only: everything comes from RunState.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { STEP_LABELS, STEPS, type HostState } from "../model/events.ts";
 import {
   activeHosts,
@@ -34,7 +34,7 @@ export function useSpinners(): { step: string; host: string } {
     return () => clearInterval(timer);
   }, []);
   return {
-    step: STEP_SPINNER[frame % STEP_SPINNER.length] ?? "⣾",
+    step: STEP_SPINNER[frame % STEP_SPINNER.length] ?? "⠋",
     host: HOST_SPINNER[frame % HOST_SPINNER.length] ?? "✳",
   };
 }
@@ -52,13 +52,42 @@ const ACTIVE_LABEL: Partial<Record<HostState, string>> = {
   switching: "switching",
 };
 
+/**
+ * Grey callout with a thin accent rule on the left. Shared by the active
+ * region, the AI answers, the questions and the help.
+ */
+export function AccentBlock({ accent, children }: { accent: string; children: ReactNode }) {
+  return (
+    <box
+      flexDirection="column"
+      flexShrink={0}
+      marginTop={1}
+      marginLeft={2}
+      marginRight={2}
+      paddingLeft={2}
+      paddingRight={2}
+      paddingTop={1}
+      paddingBottom={1}
+      backgroundColor={color.block}
+      border={["left"]}
+      borderStyle="single"
+      borderColor={accent}
+    >
+      {children}
+    </box>
+  );
+}
+
 // -----------------------------------------------------------------------------
 // FEED
 // -----------------------------------------------------------------------------
 
 /** Rolling window while the answer streams; collapsed height once it is closed. */
 const AI_STREAM_ROWS = 8;
-const AI_COLLAPSED_ROWS = 3;
+const AI_COLLAPSED_ROWS = 4;
+
+/** Body indent, matching the width of the `AI` label so the title aligns with it. */
+const AI_INDENT = "   ";
 
 function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
   const detail = item.detail ?? [];
@@ -73,35 +102,26 @@ function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
   const hidden = streaming || expanded ? 0 : detail.length - shown.length;
 
   return (
-    <box
-      flexDirection="column"
-      backgroundColor={color.block}
-      marginTop={1}
-      marginBottom={1}
-      paddingLeft={2}
-      paddingRight={2}
-      paddingTop={1}
-      paddingBottom={1}
-    >
-      <text bg={color.block}>
-        <span fg={color.dim} bg={color.block}>
+    <AccentBlock accent={color.step}>
+      <box flexDirection="row" marginBottom={1} backgroundColor={color.block}>
+        <text fg={color.step} bg={color.block}>
           AI
-        </span>
-        <span fg={color.white} bg={color.block}>
-          {`  ${item.message}`}
-        </span>
-      </text>
+        </text>
+        <text fg={color.white} bg={color.block}>
+          {` ${item.message}`}
+        </text>
+      </box>
       {shown.map((line, index) => (
         <text key={index} fg={color.text} bg={color.block}>
-          {`   ${line}`}
+          {`${AI_INDENT}${line}`}
         </text>
       ))}
       {hidden > 0 ? (
         <text fg={color.dim} bg={color.block}>
-          {`   ⏵ ${hidden} more lines (↵)`}
+          {`${AI_INDENT}⏵ ${hidden} more lines (alt+↓)`}
         </text>
       ) : null}
-    </box>
+    </AccentBlock>
   );
 }
 
@@ -120,7 +140,8 @@ function FeedLine({ item, expanded }: { item: FeedItem; expanded: boolean }) {
   return (
     <text>
       <span fg={color.dim}>{`${clock(item.t)}  `}</span>
-      {item.host ? <span fg={color.host}>{`${item.host}  `}</span> : null}
+      {item.host ? <span fg={color.host}>{item.host}</span> : null}
+      {item.host ? <span fg={color.white}>{" · "}</span> : null}
       <span fg={levelColor[item.level]}>{item.message}</span>
     </text>
   );
@@ -168,47 +189,29 @@ export function Active({ state, spinner }: { state: RunState; spinner: string })
   const shown = hosts.slice(0, ACTIVE_MAX_ROWS);
 
   return (
-    <box
-      flexDirection="row"
-      flexShrink={0}
-      marginTop={1}
-      marginLeft={2}
-      marginRight={2}
-      backgroundColor={color.block}
-    >
-      <box width={1} backgroundColor={color.accentYellow} />
-      <box
-        flexDirection="column"
-        flexGrow={1}
-        paddingLeft={2}
-        paddingRight={2}
-        paddingTop={1}
-        paddingBottom={1}
-        backgroundColor={color.block}
-      >
-        {shown.map((host) => (
-          <box key={host.name} flexDirection="row" backgroundColor={color.block}>
-            <text fg={color.accentYellow} bg={color.block}>
-              {`${spinner}  `}
-            </text>
-            <text fg={color.host} bg={color.block}>
-              {host.name.padEnd(11)}
-            </text>
-            <text fg={color.dim} bg={color.block}>
-              {(host.phase ?? "").padEnd(11)}
-            </text>
-            <text fg={color.dim} bg={color.block}>
-              {host.lastLine ?? ""}
-            </text>
-          </box>
-        ))}
-        {hosts.length > shown.length ? (
-          <text fg={color.dim} bg={color.block}>
-            {`+${hosts.length - shown.length} more`}
+    <AccentBlock accent={color.accentYellow}>
+      {shown.map((host) => (
+        <box key={host.name} flexDirection="row" backgroundColor={color.block}>
+          <text fg={color.accentYellow} bg={color.block}>
+            {`${spinner}  `}
           </text>
-        ) : null}
-      </box>
-    </box>
+          <text fg={color.host} bg={color.block}>
+            {host.name.padEnd(11)}
+          </text>
+          <text fg={color.dim} bg={color.block}>
+            {(host.phase ?? "").padEnd(11)}
+          </text>
+          <text fg={color.dim} bg={color.block}>
+            {host.lastLine ?? ""}
+          </text>
+        </box>
+      ))}
+      {hosts.length > shown.length ? (
+        <text fg={color.dim} bg={color.block}>
+          {`+${hosts.length - shown.length} more`}
+        </text>
+      ) : null}
+    </AccentBlock>
   );
 }
 
@@ -216,14 +219,16 @@ export function Active({ state, spinner }: { state: RunState; spinner: string })
 // SIDEBAR
 // -----------------------------------------------------------------------------
 
+/** Counter width: pads so the bars line up whatever `4/12` or `14/14` measures. */
+const COUNTER_WIDTH = 5;
+
 function StepRows({ state, spinner }: { state: RunState; spinner: string }) {
   return (
     <box flexDirection="column" flexShrink={0} paddingLeft={2} paddingRight={2}>
-      {STEPS.map((step, index) => {
+      {STEPS.map((step) => {
         const row = state.steps[step];
         const running = row.status === "running";
         const glyph = stepGlyph[row.status] === "" ? spinner : stepGlyph[row.status];
-        const counter = row.total > 0 ? `${row.done}/${row.total}` : "";
         const background = running ? color.selection : color.panel;
         return (
           <box key={step} flexDirection="row" backgroundColor={background}>
@@ -231,12 +236,12 @@ function StepRows({ state, spinner }: { state: RunState; spinner: string }) {
               {`${glyph} `}
             </text>
             <text fg={running ? color.white : color.text} bg={background}>
-              {`${index + 1} ${STEP_LABELS[step]}`}
+              {STEP_LABELS[step]}
             </text>
             <box flexGrow={1} backgroundColor={background} />
-            {counter ? (
+            {row.total > 0 ? (
               <text fg={color.dim} bg={background}>
-                {`${progressBar(row.done, row.total)} ${counter}`}
+                {`${progressBar(row.done, row.total)}  ${`${row.done}/${row.total}`.padStart(COUNTER_WIDTH)}`}
               </text>
             ) : null}
           </box>
@@ -291,7 +296,14 @@ function HostRows({
 /** Product signature, bottom right, opencode style: green dot, name, version. */
 function Signature({ version }: { version: string }) {
   return (
-    <box flexDirection="row" flexShrink={0} marginTop={1} paddingLeft={2} paddingRight={2}>
+    <box
+      flexDirection="row"
+      flexShrink={0}
+      marginTop={1}
+      marginBottom={1}
+      paddingLeft={2}
+      paddingRight={2}
+    >
       <text fg={color.ok} bg={color.panel}>
         {"• "}
       </text>
@@ -347,7 +359,14 @@ export function Footer({ state }: { state: RunState }) {
     : [{ text: "starting…", strong: false }];
 
   return (
-    <box flexDirection="row" flexShrink={0} marginTop={1} paddingLeft={2} paddingRight={2}>
+    <box
+      flexDirection="row"
+      flexShrink={0}
+      marginTop={1}
+      marginBottom={1}
+      paddingLeft={2}
+      paddingRight={2}
+    >
       {segments.map((segment, index) => (
         <text key={index} fg={segment.strong ? color.white : color.dim}>
           {`${index > 0 ? " · " : ""}${segment.text}`}
@@ -371,42 +390,25 @@ export function HelpCallout() {
     ["q", "close the current view, quit at the root"],
     ["⇥", "switch focus feed ↔ hosts"],
     ["↑↓", "scroll the focused panel"],
-    ["↵", "selected host → logs, AI block → expand"],
+    ["↵", "selected host → logs"],
+    ["alt+↓↑", "expand / collapse the AI answer"],
     ["a", "AI dialog"],
     ["^C", "abort"],
     ["esc", "close this callout"],
   ];
 
   return (
-    <box
-      flexDirection="row"
-      flexShrink={0}
-      marginTop={1}
-      marginLeft={2}
-      marginRight={2}
-      backgroundColor={color.block}
-    >
-      <box width={1} backgroundColor={color.accentBlue} />
-      <box
-        flexDirection="column"
-        flexGrow={1}
-        paddingLeft={2}
-        paddingRight={2}
-        paddingTop={1}
-        paddingBottom={1}
-        backgroundColor={color.block}
-      >
-        {keys.map(([key, label]) => (
-          <box key={key} flexDirection="row" backgroundColor={color.block}>
-            <text fg={color.white} bg={color.block}>
-              {key.padEnd(6)}
-            </text>
-            <text fg={color.dim} bg={color.block}>
-              {label}
-            </text>
-          </box>
-        ))}
-      </box>
-    </box>
+    <AccentBlock accent={color.dim}>
+      {keys.map(([key, label]) => (
+        <box key={key} flexDirection="row" backgroundColor={color.block}>
+          <text fg={color.white} bg={color.block}>
+            {key.padEnd(8)}
+          </text>
+          <text fg={color.dim} bg={color.block}>
+            {label}
+          </text>
+        </box>
+      ))}
+    </AccentBlock>
   );
 }

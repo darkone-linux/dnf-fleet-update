@@ -57,7 +57,7 @@
 {"t":14800,"kind":"ai.line","id":"a1","line":"That durable fix is a code change: out of scope for this run."}
 {"t":15100,"kind":"ai.line","id":"a1","line":"Recommending the restart, reporting the ordering issue."}
 {"t":15400,"kind":"ai.end","id":"a1"}
-{"t":15800,"kind":"ask","id":"repair","question":"Restart nginx.service on nlt?","options":[{"value":"yes","label":"restart and re-check"},{"value":"exclude","label":"exclude nlt"},{"value":"stop","label":"stop the run"}]}
+{"t":15800,"kind":"ask","id":"repair","question":"Restart nginx.service on nlt?","options":[{"value":"yes","label":"yes"},{"value":"exclude","label":"exclude"},{"value":"stop","label":"stop"}]}
 {"t":16000,"kind":"log","host":"nlt","level":"info","message":"AI action: systemctl restart nginx.service"}
 {"t":16100,"kind":"host.state","host":"nlt","state":"testing"}
 {"t":16400,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: active (running)"}
