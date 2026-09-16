@@ -90,12 +90,11 @@ test("a streamed AI answer accumulates and closes", () => {
   expect(blocks).toHaveLength(1);
 
   const block = blocks[0]!;
-  expect(block.detail?.length).toBeGreaterThan(AI_STREAM_ROWS);
+  // Longer than the 8-row streaming window of panels.tsx, so the scenario
+  // exercises the rolling view and the collapse that follows it.
+  expect(block.detail?.length).toBeGreaterThan(8);
   expect(block.streaming).toBe(false);
 });
-
-/** Above this many lines the block scrolls instead of growing (see panels.tsx). */
-const AI_STREAM_ROWS = 8;
 
 test("a skipped step still counts as settled", () => {
   const state = fold("offline");
