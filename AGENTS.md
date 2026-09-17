@@ -92,7 +92,7 @@ read twice has failed, however accurate it is.
 - No `console.*` outside `src/main.tsx`, `src/cli/`, `src/output/`,
   `src/testing/` and tests: the engine speaks in events.
 - No module-level side effect outside entry points (`main.tsx`,
-  `testing/capture.tsx`).
+  `testing/capture.tsx`, `testing/mock.tsx`).
 - Functions and plain data first; classes for stateful port implementations.
 
 ## Architecture
@@ -102,7 +102,7 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | Path | Role | May import |
 |---|---|---|
 | `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `params.ts` (resolved options, built-in defaults), `state.ts` (interface fold), `persist.ts` (`state.json` fold), `transitions.ts`, `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
-| `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `fleet.ts` (consumer data schemas), `query.ts` (`--on`), `waves.ts` (waves, current zone), `nix-output.ts` (eval and build log parsers), `recorder.ts` (stream → `var/deployments/`), `hosts.ts` (host table, transition guard), `presence.ts` (pings), `decisions.ts` (failed and lost hosts), `deploy.ts` (one host: copy, activation, reconnection), `rollback.ts` (forced fleet rollback), `pool.ts`, `report.ts`, `run.ts` (orchestration: lock, steps, exit code), `replay.ts` (scenario source) | model |
+| `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `fleet.ts` (consumer data schemas), `query.ts` (`--on`), `waves.ts` (waves, current zone), `nix-output.ts` (eval and build log parsers), `recorder.ts` (stream → `var/deployments/`), `hosts.ts` (host table, transition guard), `presence.ts` (pings), `decisions.ts` (failed and lost hosts), `deploy.ts` (one host: copy, activation, reconnection), `rollback.ts` (forced fleet rollback), `pool.ts`, `report.ts`, `run.ts` (orchestration: lock, steps, exit code) | model |
 | `src/engine/commands/` | argv builders (`CommandSpec`): workspace (git, flake, `just`), build (`nix-eval-jobs`, `nix build`), hosts (ssh, sudo as `nix`, activation, rollback) | model, engine |
 | `src/engine/steps/` | one module per step (`update.ts`, `select.ts`, `build.ts`, `waves.ts` for test and switch), receives `RunContext` (`context.ts`: ports, parameters, `flow.ts` early ends, questions); `exec.ts` runs their commands | model, engine |
 | `src/adapters/` | real ports: `process.ts` (`CommandRunner`, one process group per command), `clock.ts`, `lock.ts` (flock(2) through `bun:ffi`), `store.ts` (`var/deployments/`), `localhost.ts`; *planned*: Matrix | model, ports |
@@ -110,7 +110,7 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | `src/cli/` | `options.ts` (argv → run parameters, validation: exit `2`, `--resume` rules), `help.ts` | model, engine |
 | `src/ui/` | TUI: `App.tsx` (screen, keys, views), `panels.tsx` (components); presentation only | model |
 | `src/output/` | *planned* — `--no-ui` text output | model |
-| `src/testing/` | capture harness, port fakes | anything |
+| `src/testing/` | capture harness (`capture.tsx`), scenario replay (`mock.tsx`, `replay.ts`), port fakes | anything |
 | `src/main.tsx` | composition root: binds a run source to a consumer | anything |
 | `tests/` | integration tests; fixtures in `tests/fixtures/` | anything |
 | `mock/scenarios/` | recorded streams (`.jsonl`) | — |

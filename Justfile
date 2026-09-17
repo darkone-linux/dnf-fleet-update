@@ -40,12 +40,12 @@ hooks:
 # Replay a mock scenario in the real interface
 [group('mock')]
 mock scenario="nominal":
-    bun run src/main.tsx {{ scenario }}
+    bun run src/testing/mock.tsx {{ scenario }}
 
 # List available scenarios
 [group('mock')]
 scenarios:
-    bun run src/main.tsx --list
+    bun run src/testing/mock.tsx --list
 
 # Print the exact frame of a scenario at a given time, without a terminal
 [group('mock')]

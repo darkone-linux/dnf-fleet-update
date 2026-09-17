@@ -16,20 +16,6 @@ function run(args: readonly string[], cwd?: string) {
   return { code: proc.exitCode, stdout: proc.stdout.toString(), stderr: proc.stderr.toString() };
 }
 
-test("--list prints the scenarios and exits cleanly", () => {
-  const result = run(["--list"]);
-
-  expect(result.code).toBe(ExitCode.Ok);
-  expect(result.stdout.split("\n")).toContain("nominal");
-});
-
-test("an unknown scenario is an invalid option", () => {
-  const result = run(["no-such-scenario"]);
-
-  expect(result.code).toBe(ExitCode.InvalidOptions);
-  expect(result.stderr).toContain("unknown scenario: no-such-scenario");
-});
-
 // Packaged as `bun run <store>/src/main.tsx` from the caller's directory: JSX
 // config and scenarios must resolve from the file, never from the cwd.
 test("runs from outside the repository, as packaged", () => {

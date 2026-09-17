@@ -8,9 +8,9 @@
 process.env.FLEET_CAPTURE = "1";
 
 import { testRender } from "@opentui/react/test-utils";
-import { listScenarios, loadScenario } from "../engine/replay.ts";
 import { ExitCode } from "../model/exit-codes.ts";
 import { App } from "../ui/App.tsx";
+import { listScenarios, loadScenario } from "./replay.ts";
 
 interface Options {
   scenario: string;

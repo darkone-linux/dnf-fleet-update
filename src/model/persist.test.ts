@@ -1,7 +1,7 @@
 // `state.json` fold: recorded scenarios and the status of each host.
 
 import { expect, test } from "bun:test";
-import { loadScenario } from "../engine/replay.ts";
+import { loadScenario } from "../testing/replay.ts";
 import { type Event, type HostState, STEPS } from "./events.ts";
 import {
   type HostStatus,

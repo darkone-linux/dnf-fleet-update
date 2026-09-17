@@ -4,8 +4,8 @@ import { describe, expect, test } from "bun:test";
 import type { Event } from "../model/events.ts";
 import { initialPersisted, persist } from "../model/persist.ts";
 import { MemoryRunStore, RecordingChannel } from "../testing/fakes.ts";
+import { listScenarios, loadScenario } from "../testing/replay.ts";
 import { Recorder, recordedChannel } from "./recorder.ts";
-import { listScenarios, loadScenario } from "./replay.ts";
 
 describe("Recorder", () => {
   for (const scenario of listScenarios()) {

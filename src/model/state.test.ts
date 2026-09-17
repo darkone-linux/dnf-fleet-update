@@ -4,7 +4,7 @@
 // its expected end state means the contract moved.
 
 import { expect, test } from "bun:test";
-import { listScenarios, loadScenario } from "../engine/replay.ts";
+import { listScenarios, loadScenario } from "../testing/replay.ts";
 import { type Event, type HostState, STEPS } from "./events.ts";
 import {
   excludedCount,

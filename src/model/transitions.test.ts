@@ -1,7 +1,7 @@
 // Transition table against the spec rows, and every recorded scenario against the table.
 
 import { describe, expect, test } from "bun:test";
-import { listScenarios, loadScenario } from "../engine/replay.ts";
+import { listScenarios, loadScenario } from "../testing/replay.ts";
 import type { HostState } from "./events.ts";
 import { canTransition, isTerminal } from "./transitions.ts";
 

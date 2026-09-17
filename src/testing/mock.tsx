@@ -1,14 +1,14 @@
-// Entry point and composition root: binds a run source to the interface.
+// Development entry point: replays a recorded scenario in the real interface.
 //
-// Today the source is a recorded scenario; the engine binds to the same
-// `RunSource`, and `--no-ui` swaps the interface for the text output.
+// Outside the published command line (spec § Maquette): `just mock`,
+// `just scenarios`.
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import type { RunSource } from "./model/events.ts";
-import { ExitCode } from "./model/exit-codes.ts";
-import { listScenarios, startReplay } from "./testing/replay.ts";
-import { App } from "./ui/App.tsx";
+import type { RunSource } from "../model/events.ts";
+import { ExitCode } from "../model/exit-codes.ts";
+import { App } from "../ui/App.tsx";
+import { listScenarios, startReplay } from "./replay.ts";
 
 const args = process.argv.slice(2);
 
