@@ -101,7 +101,7 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 
 | Path | Role | May import |
 |---|---|---|
-| `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `params.ts` (resolved options), `state.ts` (interface fold), `transitions.ts`, `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
+| `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `params.ts` (resolved options), `state.ts` (interface fold), `persist.ts` (`state.json` fold), `transitions.ts`, `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
 | `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `replay.ts` (scenario source) | model |
 | `src/engine/steps/` | *planned* — one module per step, receives `EngineContext` | model, ports |
 | `src/adapters/` | *planned* — real ports: process, nix, ssh, git, flock, store (`var/deployments/`), Matrix | model, ports |

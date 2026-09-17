@@ -85,6 +85,11 @@ export interface RunState {
   end?: RunEnd;
 }
 
+/** Status of a step once `step.end` arrived. */
+export function endedStep(status: "ok" | "error" | "skipped"): StepStatus {
+  return status === "ok" ? "done" : status === "skipped" ? "skipped" : "error";
+}
+
 export function initialState(): RunState {
   const steps = {} as Record<StepId, StepRow>;
   for (const step of STEPS) {
@@ -175,11 +180,9 @@ export function reduce(state: RunState, event: Event): RunState {
 
     case "step.end": {
       const previous = state.steps[event.step];
-      const status: StepStatus =
-        event.status === "ok" ? "done" : event.status === "skipped" ? "skipped" : "error";
       return {
         ...state,
-        steps: { ...state.steps, [event.step]: { ...previous, status } },
+        steps: { ...state.steps, [event.step]: { ...previous, status: endedStep(event.status) } },
       };
     }
 
