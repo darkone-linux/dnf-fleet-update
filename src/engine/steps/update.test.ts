@@ -7,7 +7,7 @@ import { update } from "./update.ts";
 const stdout = (line: string) => [{ stream: "stdout" as const, line }];
 
 describe("update", () => {
-  test("codev: dnf/ then consumer inputs, clean, dnf/ commit, lock realigned", async () => {
+  test("codev: consumer then dnf/ inputs, clean, dnf/ commit, lock realigned", async () => {
     const context = fakeRunContext({
       codev: true,
       commands: [
@@ -27,8 +27,8 @@ describe("update", () => {
       (call) => call.argv.slice(0, 4).join(" ") + (call.cwd === undefined ? "" : ` @ ${call.cwd}`),
     );
     expect(commands).toEqual([
-      "nix flake update @ /ws/dnf",
-      "nix flake update @ /ws",
+      "nix flake update --refresh @ /ws",
+      "nix flake update --refresh @ /ws/dnf",
       "just clean @ /ws",
       "git -C /ws/dnf status",
       "git -C /ws/dnf add",

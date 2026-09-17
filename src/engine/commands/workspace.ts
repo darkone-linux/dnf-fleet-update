@@ -29,8 +29,13 @@ export function gitCommit(repo: string, message: string, timeouts: Timeouts): Co
   };
 }
 
+/** `--refresh`: the fetch cache of nix (`tarball-ttl`) hides newer revisions. */
 export function flakeUpdate(repo: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["nix", "flake", "update"], cwd: repo, ...limits(timeouts.flakeUpdate, timeouts) };
+  return {
+    argv: ["nix", "flake", "update", "--refresh"],
+    cwd: repo,
+    ...limits(timeouts.flakeUpdate, timeouts),
+  };
 }
 
 /** Codev: the consumer lock follows `dnf/` HEAD, even under `--no-consumer-flake`. */

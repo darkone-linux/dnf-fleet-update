@@ -24,7 +24,7 @@ import {
 } from "./host.ts";
 import { buildHost, evalHosts, selectExpression } from "./nix.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
-import { justClean, readGenerated, realignDnfLock } from "./workspace.ts";
+import { flakeUpdate, justClean, readGenerated, realignDnfLock } from "./workspace.ts";
 
 const NEW = "/nix/store/jq1s2fmaq2pnv5f233sfkhmjm0lzqgcm-nixos-system-gw-ag-26.11";
 const OLD = "/nix/store/0h15zmc3vn75j3w5b2yc4m0j2rxwdzlg-nixos-system-gw-ag-26.05";
@@ -340,6 +340,16 @@ describe("workspace", () => {
       cwd: "/etc/nixos",
       env: { QUIET: "1" },
       timeoutMs: 60_000,
+      killGraceMs: 10_000,
+    });
+  });
+
+  // `--refresh`: without it the fetch cache of nix kept an input eight days old.
+  test("flake update refreshes every input of the repository", () => {
+    expect(flakeUpdate("/etc/nixos/dnf", T)).toEqual({
+      argv: ["nix", "flake", "update", "--refresh"],
+      cwd: "/etc/nixos/dnf",
+      timeoutMs: 120_000,
       killGraceMs: 10_000,
     });
   });

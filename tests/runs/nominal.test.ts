@@ -78,9 +78,10 @@ test("codev: dnf/ committed, lock realigned, consumer committed, both in the rep
   const order = run.sim.commands
     .map((command) => `${command.kind}${command.detail ? ` ${command.detail}` : ""}`)
     .filter((line) => /^(flake-update|realign|clean|commit)/.test(line));
+  // Consumer first: nix writes no lock while `dnf/` is dirty.
   expect(order).toEqual([
-    "flake-update dnf",
     "flake-update consumer",
+    "flake-update dnf",
     "clean",
     "commit dnf",
     "realign",

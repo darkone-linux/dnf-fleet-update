@@ -75,17 +75,19 @@ async function steps(context: RunContext): Promise<boolean> {
   const { timeouts } = params;
   const dnf = `${workspace}/dnf`;
 
-  if (codev && params.dnfFlake) {
-    const updated = await run(context, "nix flake update dnf/", flakeUpdate(dnf, timeouts), {
-      start: "nix flake update dnf/",
-      done: "dnf/ inputs updated",
-    });
-    if (!updated) return false;
-  }
+  // Consumer first, while `dnf/` is still clean: nix refuses to write the lock
+  // of a flake whose input is a dirty git tree (codev), silently.
   if (params.consumerFlake) {
     const updated = await run(context, "nix flake update", flakeUpdate(workspace, timeouts), {
       start: "nix flake update (consumer)",
       done: "consumer inputs updated",
+    });
+    if (!updated) return false;
+  }
+  if (codev && params.dnfFlake) {
+    const updated = await run(context, "nix flake update dnf/", flakeUpdate(dnf, timeouts), {
+      start: "nix flake update dnf/",
+      done: "dnf/ inputs updated",
     });
     if (!updated) return false;
   }
