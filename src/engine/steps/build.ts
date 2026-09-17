@@ -154,7 +154,9 @@ export async function build(
   }
   for (const host of failed) await decideFailure(context, hosts, host.name);
   endStep(context, "build", !flow.halt.aborted);
-  if (flow.halt.aborted) return outcome;
+
+  // An abort after the step, or a stop: nothing left to confirm.
+  if (flow.ending !== undefined) return outcome;
 
   if (built === 0) {
     log(context, "warn", "no host built: nothing to deploy");
