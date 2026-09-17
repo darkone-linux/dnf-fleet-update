@@ -101,6 +101,10 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
       }
       if (hosts.get(job.host).state !== "building") return;
       if (job.kind === "error") {
+        // Whole trace to the host log: the feed and the report carry its cause only.
+        for (const text of job.message.split("\n")) {
+          emit(context, { kind: "host.output", host: job.host, phase: "build", line: text });
+        }
         const note = errorSummary(job.message);
         hosts.set(job.host, "failed", { note });
         log(context, "error", `evaluation failed: ${note}`, job.host);

@@ -61,6 +61,11 @@ test("evaluation error: that host failed and excluded, the others built from the
   expect(run.sim.count("build", "lt-cp")).toBe(0);
   expect(run.statuses["lt-cp"]).toBe("excluded");
   expect(run.feed).toContain("error lt-cp: evaluation failed: attribute 'foo' missing");
+  expect(run.recorded?.logs.get("lt-cp.build")).toEqual([
+    "error: attribute 'foo' missing",
+    "",
+    "  at /ws/x.nix:3:5",
+  ]);
 });
 
 test("evaluation failed as a whole, interactive: one error, no question, exit 1", async () => {

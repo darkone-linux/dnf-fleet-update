@@ -110,6 +110,15 @@ describe("build", () => {
 
     expect(states()).toMatchObject({ hcs: "excluded", "gw-ag": "excluded", "lt-cp": "excluded" });
     expect(hosts.get("hcs").note).toBe("attribute 'x' missing");
+    const hcsLog = context.events.events.flatMap((event) =>
+      event.kind === "host.output" && event.host === "hcs" ? [`${event.phase} ${event.line}`] : [],
+    );
+    expect(hcsLog).toEqual([
+      "build error:",
+      "build   … while evaluating the option `x':",
+      "build ",
+      "build   error: attribute 'x' missing",
+    ]);
     expect(hosts.get("gw-ag").note).toBe("builder for x failed");
     expect(hosts.get("lt-cp").note).toBe("not evaluated");
     expect(feed(context.events.events)).toContain("warn 3 builds ok, 3 failed");
