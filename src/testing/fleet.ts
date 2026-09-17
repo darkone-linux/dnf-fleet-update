@@ -83,3 +83,36 @@ export function evalLine(name: string): string {
     outputs: { out: storePath(name) },
   });
 }
+
+/** Toplevel every synthetic host runs before the run. */
+export const ORIGIN_PATH = storePath("origin");
+
+/** Remote command on `host` whose host-side part contains `word`. */
+export const remote =
+  (host: string, word: string) =>
+  (argv: readonly string[]): boolean =>
+    argv.includes(`nix@${host}`) && (argv.at(-1) ?? "").includes(word);
+
+/** Command on any host containing `word`. */
+export const anywhere = (word: string) => (argv: readonly string[]) =>
+  argv.join(" ").includes(word);
+
+export const pingOf = (host: string, exitCode: number, once = false): CommandScript => ({
+  match: ["ping", "-c", "1", "-W", "5", host],
+  exitCode,
+  once,
+});
+
+/** Hosts that answer and deploy: placed last, after the scripts of a test case. */
+export const HAPPY_HOSTS: CommandScript[] = [
+  { match: ["ping"] },
+  { match: anywhere("dnf-maintenance") },
+  { match: anywhere("ssh-ng://") },
+  {
+    match: anywhere("readlink"),
+    output: [ORIGIN_PATH, ORIGIN_PATH].map((line) => ({ stream: "stdout", line })),
+  },
+  { match: anywhere("nix-env") },
+  { match: anywhere("rc=$?") },
+  { match: anywhere("[ -f"), output: [{ stream: "stdout", line: "0" }] },
+];

@@ -5,39 +5,20 @@ import { describe, expect, test } from "bun:test";
 import type { HostState } from "../../model/events.ts";
 import type { RunParams } from "../../model/params.ts";
 import { type CommandScript, drive, fakeRunContext, feed } from "../../testing/fakes.ts";
-import { fleetSelection, storePath } from "../../testing/fleet.ts";
+import {
+  anywhere,
+  fleetSelection,
+  HAPPY_HOSTS as HAPPY,
+  ORIGIN_PATH as OLD,
+  pingOf,
+  remote,
+  storePath,
+} from "../../testing/fleet.ts";
 import { HostTable } from "../hosts.ts";
 import { Presence } from "../presence.ts";
 import { switchWaves, testWaves } from "./waves.ts";
 
-const OLD = storePath("origin");
 const PING_ROUND = 15_000;
-
-/** Remote command on `host` whose host-side part contains `word`. */
-const remote =
-  (host: string, word: string) =>
-  (argv: readonly string[]): boolean =>
-    argv.includes(`nix@${host}`) && (argv.at(-1) ?? "").includes(word);
-
-/** Same test on any host. */
-const anywhere = (word: string) => (argv: readonly string[]) => argv.join(" ").includes(word);
-
-const pingOf = (host: string, exitCode: number, once = false): CommandScript => ({
-  match: ["ping", "-c", "1", "-W", "5", host],
-  exitCode,
-  once,
-});
-
-/** Everything succeeds unless a script placed before says otherwise. */
-const HAPPY: CommandScript[] = [
-  { match: ["ping"] },
-  { match: anywhere("dnf-maintenance") },
-  { match: anywhere("ssh-ng://") },
-  { match: anywhere("readlink"), output: [OLD, OLD].map((line) => ({ stream: "stdout", line })) },
-  { match: anywhere("nix-env") },
-  { match: anywhere("rc=$?") },
-  { match: anywhere("[ -f"), output: [{ stream: "stdout", line: "0" }] },
-];
 
 function setup(
   commands: CommandScript[] = [],

@@ -9,7 +9,7 @@ behaviour; this file owns code policy and routing.
 
 - TypeScript (strict) on Bun; interface on OpenTUI (`@opentui/react`).
 - Interface validated on recorded scenarios. Engine (native Nix commands, no
-  colmena) not written: contracts only (`src/engine/ports.ts`).
+  colmena) written and tested on fakes, not yet bound to the entry point.
 - Published by tag (GitHub release); packaged by the framework
   (`dnf/pkgs/fleet-update/package.nix`), not here: § Framework contract.
 
@@ -101,8 +101,8 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 
 | Path | Role | May import |
 |---|---|---|
-| `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `params.ts` (resolved options), `state.ts` (interface fold), `persist.ts` (`state.json` fold), `transitions.ts`, `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
-| `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `fleet.ts` (consumer data schemas), `query.ts` (`--on`), `waves.ts` (waves, current zone), `nix-output.ts` (eval and build log parsers), `recorder.ts` (stream → `var/deployments/`), `hosts.ts` (host table, transition guard), `presence.ts` (pings), `decisions.ts` (failed and lost hosts), `deploy.ts` (one host: copy, activation, reconnection), `rollback.ts` (forced fleet rollback), `pool.ts`, `replay.ts` (scenario source) | model |
+| `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `params.ts` (resolved options, built-in defaults), `state.ts` (interface fold), `persist.ts` (`state.json` fold), `transitions.ts`, `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
+| `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `fleet.ts` (consumer data schemas), `query.ts` (`--on`), `waves.ts` (waves, current zone), `nix-output.ts` (eval and build log parsers), `recorder.ts` (stream → `var/deployments/`), `hosts.ts` (host table, transition guard), `presence.ts` (pings), `decisions.ts` (failed and lost hosts), `deploy.ts` (one host: copy, activation, reconnection), `rollback.ts` (forced fleet rollback), `pool.ts`, `report.ts`, `run.ts` (orchestration: lock, steps, exit code), `replay.ts` (scenario source) | model |
 | `src/engine/commands/` | argv builders (`CommandSpec`): workspace (git, flake, `just`), build (`nix-eval-jobs`, `nix build`), hosts (ssh, sudo as `nix`, activation, rollback) | model, engine |
 | `src/engine/steps/` | one module per step (`update.ts`, `select.ts`, `build.ts`, `waves.ts` for test and switch), receives `RunContext` (`context.ts`: ports, parameters, `flow.ts` early ends, questions); `exec.ts` runs their commands | model, engine |
 | `src/adapters/` | real ports: `process.ts` (`CommandRunner`, one process group per command), `clock.ts`, `lock.ts` (flock(2) through `bun:ffi`), `store.ts` (`var/deployments/`), `localhost.ts`; *planned*: Matrix | model, ports |
