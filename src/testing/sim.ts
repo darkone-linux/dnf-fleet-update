@@ -100,6 +100,9 @@ export interface SimOptions {
   hostsJson?: unknown;
   networkJson?: unknown;
   evalWarnings?: string[];
+
+  /** `nix-eval-jobs` fails as a whole: this error, no line, exit `1`. */
+  evalFailure?: string;
 }
 
 const WORKSPACE = "/ws";
@@ -355,6 +358,10 @@ export class SimFleet implements CommandRunner {
     const select = spec.argv[spec.argv.indexOf("--select") + 1] ?? "";
     const names = [...select.matchAll(/"([a-zA-Z0-9_-]+)"/g)].map((match) => match[1] ?? "");
     for (const warning of this.options.evalWarnings ?? []) err(`evaluation warning: ${warning}`);
+    if (this.options.evalFailure !== undefined) {
+      err(`error: ${this.options.evalFailure}`);
+      return exit(1);
+    }
     for (const name of names) {
       const error = this.behaviour(name).evalError;
       if (error !== undefined) {

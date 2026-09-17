@@ -13,6 +13,9 @@ import { endStep } from "./step.ts";
 export interface BuildOutcome {
   /** Evaluation warnings, deduplicated, for the report. */
   warnings: string[];
+
+  /** `nix-eval-jobs` failed and hosts got no result: nothing to decide per host. */
+  evaluationFailed: boolean;
 }
 
 const EVAL_WARNING = /^(evaluation )?warning:/;
@@ -111,21 +114,22 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
     },
   });
 
-  if (!context.flow.halt.aborted && !succeeded(evaluation.result)) {
-    log(context, "error", `evaluation failed: ${describeFailure(evaluation)}`);
-  }
+  const failed = !context.flow.halt.aborted && !succeeded(evaluation.result);
+  if (failed) log(context, "error", `evaluation failed: ${describeFailure(evaluation)}`);
   await Promise.all(builds);
 
   // Still building once every build settled: no line, the evaluation stopped before it.
+  let missing = false;
   if (!context.flow.halt.aborted) {
     for (const host of hosts.all()) {
       if (host.state !== "building") continue;
+      missing = true;
       hosts.set(host.name, "failed", { note: "not evaluated" });
-      log(context, "error", "evaluation failed: no result", host.name);
+      if (!failed) log(context, "error", "evaluation failed: no result", host.name);
       settled();
     }
   }
-  return { warnings: [...warnings] };
+  return { warnings: [...warnings], evaluationFailed: failed && missing };
 }
 
 /**
@@ -152,6 +156,9 @@ export async function build(
   if (outcome.warnings.length > 0) {
     log(context, "warn", `${outcome.warnings.length} evaluation warnings (logs/build.log)`);
   }
+
+  // Failed as a whole: its error already said, one stop rather than a question per host.
+  if (outcome.evaluationFailed) flow.stop("stop");
   for (const host of failed) await decideFailure(context, hosts, host.name);
   endStep(context, "build", !flow.halt.aborted);
 

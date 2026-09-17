@@ -30,6 +30,11 @@ export interface HostEntry {
   lost: boolean;
 }
 
+/** Activated during the run, reachable, not reverted yet: what a forced rollback brings back. */
+export function rollbackTarget(host: HostEntry): boolean {
+  return host.activated !== undefined && !host.lost && canTransition(host.state, "reverted");
+}
+
 export interface StateDetail {
   note?: string;
   path?: string;

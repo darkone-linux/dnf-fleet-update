@@ -148,3 +148,20 @@ test("--stop-loss: a gateway's rollback drops its own session, its result read, 
     detail: "rollback",
   });
 });
+
+test("gateway lost, interactive, nothing else activated: stopped without a question", async () => {
+  const run = await simulateRun({
+    argv: ["--on", "gw-ag"],
+    answers: { build: "yes" },
+    behaviours: { "gw-ag": { dropsOn: "test" } },
+    stepMs: 5000,
+  });
+
+  expect(run.exitCode).toBe(1);
+  expect(
+    run.events
+      .filter((event) => event.kind === "ask")
+      .map((event) => event.kind === "ask" && event.id),
+  ).toEqual(["build"]);
+  expect(run.feed).toContain("error gw-ag: run stopped");
+});

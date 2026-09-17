@@ -44,6 +44,11 @@ test("build failed, interactive stop: nothing copied, exit 1", async () => {
   expect(run.exitCode).toBe(1);
   expect(run.sim.count("copy")).toBe(0);
   expect(run.statuses).toMatchObject({ "gw-cp": "failed", hcs: "remaining" });
+  const ask = run.events.find((event) => event.kind === "ask");
+  expect(ask?.kind === "ask" && ask.options.map((option) => option.value)).toEqual([
+    "exclude",
+    "stop",
+  ]);
   expect(run.recorded?.state?.answers.map((answer) => answer.id)).toEqual(["failed-gw-cp"]);
   expect(run.events.some((event) => event.kind === "ask" && event.id === "build")).toBe(false);
 });
@@ -58,6 +63,19 @@ test("evaluation error: that host failed and excluded, the others built from the
   expect(run.sim.count("build", "lt-cp")).toBe(0);
   expect(run.statuses["lt-cp"]).toBe("excluded");
   expect(run.feed).toContain("error lt-cp: evaluation failed: error: attribute 'foo' missing");
+});
+
+test("evaluation failed as a whole, interactive: one error, no question, exit 1", async () => {
+  const run = await simulateRun({ argv: [], evalFailure: "mismatch in field 'narHash' of input" });
+
+  expect(run.exitCode).toBe(1);
+  expect(run.events.filter((event) => event.kind === "ask")).toEqual([]);
+  expect(run.feed.filter((line) => line.startsWith("error"))).toEqual([
+    "error evaluation failed: exit 1: error: mismatch in field 'narHash' of input",
+  ]);
+  expect(Object.values(run.statuses)).toEqual(Array(6).fill("failed"));
+  expect(run.ui.end?.report).toContain("run stopped on error");
+  expect(run.recorded?.state?.steps.build.status).toBe("error");
 });
 
 test("nothing built: no test, no switch, the run is done", async () => {

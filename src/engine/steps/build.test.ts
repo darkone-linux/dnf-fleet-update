@@ -113,6 +113,38 @@ describe("build", () => {
     expect(context.flow.ending).toBeUndefined();
   });
 
+  test("evaluation failed as a whole: one error, no question per host, the run stops", async () => {
+    const { context, hosts, presence, states } = setup(
+      [
+        {
+          ...evaluation(["hcs", "gw-ag"].map(evalLine)),
+          exitCode: 1,
+          output: [
+            ...["hcs", "gw-ag"].map((name) => ({
+              stream: "stdout" as const,
+              line: evalLine(name),
+            })),
+            { stream: "stderr", line: "error: mismatch in field 'narHash' of input" },
+          ],
+        },
+      ],
+      { params: { interactive: true } },
+    );
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    expect(states()).toMatchObject({ hcs: "built", "gw-ag": "built", "lt-cp": "failed" });
+    expect(hosts.get("lt-cp").note).toBe("not evaluated");
+    const events = context.events.events;
+    expect(events.filter((event) => event.kind === "ask")).toEqual([]);
+    expect(feed(events).filter((line) => line.startsWith("error"))).toEqual([
+      "error evaluation failed: exit 1: error: mismatch in field 'narHash' of input",
+    ]);
+    expect(context.flow.ending).toBe("stop");
+    expect(events.at(-1)).toMatchObject({ kind: "step.end", step: "build", status: "error" });
+  });
+
   test("--stop-loss: the first failed host rolls the fleet back, nothing more is decided", async () => {
     const { context, hosts, presence } = setup([evaluation([])], { params: { stopLoss: true } });
 
@@ -136,9 +168,11 @@ describe("build", () => {
     await presence.stop();
 
     const asked = context.events.events.flatMap((event) =>
-      event.kind === "ask" ? [event.id] : [],
+      event.kind === "ask" ? [`${event.id} ${event.options.map((option) => option.value)}`] : [],
     );
-    expect(asked).toEqual(["failed-lt-cp", "build"]);
+
+    // Nothing activated yet: a rollback would only be a stop.
+    expect(asked).toEqual(["failed-lt-cp exclude,stop", "build yes,no"]);
     expect(hosts.get("lt-cp").state).toBe("excluded");
     expect(context.flow.ending).toBe("aborted");
   });

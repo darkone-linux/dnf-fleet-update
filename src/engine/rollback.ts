@@ -3,11 +3,10 @@
 // dropped by the rollback itself is settled like an activation.
 
 import type { HostOrigin } from "../model/events.ts";
-import { canTransition } from "../model/transitions.ts";
 import { onHost, type Phase, rollbackNow } from "./commands/host.ts";
 import { emit, log, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
-import type { HostEntry, HostTable } from "./hosts.ts";
+import { type HostEntry, type HostTable, rollbackTarget } from "./hosts.ts";
 import { pool } from "./pool.ts";
 import { settle, transportFailed } from "./settle.ts";
 import type { Selection } from "./steps/select.ts";
@@ -80,10 +79,7 @@ export async function rollbackFleet(
   selection: Selection,
 ): Promise<void> {
   // Lost hosts: left to their automatic rollback.
-  const target = (name: string) => {
-    const host = hosts.get(name);
-    return host.activated !== undefined && !host.lost && canTransition(host.state, "reverted");
-  };
+  const target = (name: string) => rollbackTarget(hosts.get(name));
   const waves = [...selection.waves]
     .reverse()
     .map((wave) => wave.filter(target))

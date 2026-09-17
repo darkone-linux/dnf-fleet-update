@@ -6,7 +6,7 @@
 
 import type { AskOption } from "../model/events.ts";
 import { askHoldingQueue, log, type RunContext } from "./context.ts";
-import type { HostTable } from "./hosts.ts";
+import { type HostTable, rollbackTarget } from "./hosts.ts";
 
 /** `revert` is carried out by the caller, outside the question queue. */
 export type Decision = "exclude" | "revert" | "keep" | "stop" | "rollback";
@@ -46,6 +46,10 @@ function apply(context: RunContext, hosts: HostTable, name: string, decision: De
   }
 }
 
+/**
+ * `rollback` offered only when a host can be brought back: otherwise it is a
+ * `stop`. A single option left is applied without a question.
+ */
 function decide(
   context: RunContext,
   hosts: HostTable,
@@ -57,9 +61,15 @@ function decide(
   return context.questions.run(async () => {
     if (context.flow.halt.aborted) return undefined;
     await before?.();
-    const decision = context.params.interactive
-      ? ((await askHoldingQueue(context, question.id, question.text, question.options)) as Decision)
-      : unattended;
+
+    // Hosts change while the question waits its turn: offered options read now.
+    const rollback = hosts.all().some(rollbackTarget);
+    const options = question.options.filter((option) => rollback || option.value !== "rollback");
+    const decision = !context.params.interactive
+      ? unattended
+      : options.length === 1
+        ? (options[0]!.value as Decision)
+        : ((await askHoldingQueue(context, question.id, question.text, options)) as Decision);
     apply(context, hosts, name, decision);
     return decision;
   });
