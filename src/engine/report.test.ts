@@ -74,6 +74,21 @@ describe("renderReport", () => {
     expect(markdown.endsWith("- evaluation warning: x renamed\n")).toBe(true);
   });
 
+  test("no row for the report step: it is written while that step runs", () => {
+    const running = persist(state, { t: 65_100, kind: "step.start", step: "report" });
+
+    const { markdown } = renderReport({
+      state: running,
+      status: "done",
+      exitCode: 0,
+      durationMs: 65_100,
+      warnings: [],
+    });
+
+    expect(markdown).toContain("| switch | todo |  |");
+    expect(markdown).not.toContain("| report |");
+  });
+
   test("durations", () => {
     expect([formatDuration(400), formatDuration(185_000), formatDuration(3_725_000)]).toEqual([
       "0s",

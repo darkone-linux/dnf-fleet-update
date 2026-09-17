@@ -90,11 +90,17 @@ export function renderReport(input: ReportInput): Report {
     "",
     ...table(
       ["Step", "Status", "Duration"],
-      Object.entries(state.steps).map(([step, { status: stepStatus, startedAt, endedAt }]) => [
-        step,
-        stepStatus,
-        startedAt !== undefined && endedAt !== undefined ? formatDuration(endedAt - startedAt) : "",
-      ]),
+
+      // Written during the report step: it cannot time itself.
+      Object.entries(state.steps)
+        .filter(([step]) => step !== "report")
+        .map(([step, { status: stepStatus, startedAt, endedAt }]) => [
+          step,
+          stepStatus,
+          startedAt !== undefined && endedAt !== undefined
+            ? formatDuration(endedAt - startedAt)
+            : "",
+        ]),
     ),
   ];
 
