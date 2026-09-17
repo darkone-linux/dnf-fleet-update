@@ -3,8 +3,8 @@
 // Single source for the interface: `--no-ui` renders the same events without
 // any of it.
 
-import type { HostState, Level } from "./events.ts";
-import type { StepStatus } from "./state.ts";
+import type { Level } from "./events.ts";
+import type { ShownState, StepStatus } from "./state.ts";
 
 export const color = {
   // Surfaces: black centre, grey side column, grey callout blocks. No rules
@@ -37,9 +37,9 @@ export const levelColor: Record<Level, string> = {
 
 /**
  * Weather metaphor: the run clears up as hosts land, `☀️` being a deployed
- * host. Active states take the spinner instead.
+ * host. Active states take the spinner instead (empty glyph).
  */
-export const hostGlyph: Record<HostState, string> = {
+export const hostGlyph: Record<ShownState, string> = {
   pending: "☁️",
   building: "",
   copying: "",
@@ -48,15 +48,16 @@ export const hostGlyph: Record<HostState, string> = {
   built: "🌥️",
   tested: "🌤️",
   deployed: "☀️",
+
+  // A unit that did not start is a lighter failure than a broken host.
+  error: "🌦️",
   failed: "🌧️",
+  reverted: "🌫️",
+  excluded: "⛔",
   offline: "💤",
-  excluded: "",
 };
 
-/** A service that did not start is a lighter failure than a broken host. */
-export const serviceFailureGlyph = "🌦️";
-
-export const hostStateColor: Record<HostState, string> = {
+export const hostStateColor: Record<ShownState, string> = {
   pending: color.dim,
   building: color.text,
   copying: color.text,
@@ -65,9 +66,11 @@ export const hostStateColor: Record<HostState, string> = {
   built: color.text,
   tested: color.text,
   deployed: color.ok,
+  error: color.warn,
   failed: color.error,
-  offline: color.dim,
+  reverted: color.dim,
   excluded: color.dim,
+  offline: color.dim,
 };
 
 /** Text glyphs, not emoji: one column each, so the step column never shifts. */

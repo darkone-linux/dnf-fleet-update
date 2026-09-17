@@ -20,21 +20,30 @@
 {"t":3000,"kind":"log","level":"ok","message":"consumer inputs updated"}
 {"t":3200,"kind":"log","level":"info","message":"just clean"}
 {"t":5200,"kind":"log","level":"ok","message":"var/generated/ regenerated, tree formatted"}
+{"t":5400,"kind":"commit","repo":"dnf","rev":"4f1c2a9","message":"chore(update): regular flake upgrade"}
 {"t":5400,"kind":"log","level":"ok","message":"commit dnf/ chore(update): regular flake upgrade"}
+{"t":5600,"kind":"commit","repo":"consumer","rev":"b83e07d","message":"chore(update): full fleet"}
 {"t":5600,"kind":"log","level":"ok","message":"commit consumer chore(update): full fleet"}
 {"t":5800,"kind":"step.end","step":"update","status":"ok"}
 {"t":5900,"kind":"step.start","step":"select"}
 {"t":6400,"kind":"log","level":"info","message":"current zone: ag (ipPrefix 10.0.10.0/24)"}
 {"t":6600,"kind":"log","level":"ok","message":"14 hosts selected, 5 waves"}
+{"t":6799,"kind":"plan","waves":[["hcs"],["gw-ag"],["nlt","gfx","fd-01","fd-02","vbox-test","vbox-umi"],["gw-cp","gw-lg","ms-a2"],["alt","fl-01","lenovo"]]}
 {"t":6800,"kind":"step.end","step":"select","status":"ok"}
-{"t":6900,"kind":"step.start","step":"probe","total":14}
-{"t":7400,"kind":"step.progress","step":"probe","done":9,"total":14}
-{"t":7900,"kind":"step.progress","step":"probe","done":14,"total":14}
-{"t":8000,"kind":"host.state","host":"alt","state":"offline"}
-{"t":8050,"kind":"host.state","host":"vbox-umi","state":"offline"}
 {"t":8100,"kind":"log","level":"warn","message":"2 hosts offline: alt, vbox-umi"}
-{"t":8200,"kind":"step.end","step":"probe","status":"ok"}
 {"t":8400,"kind":"step.start","step":"build","total":14}
+{"t":8401,"kind":"host.presence","host":"hcs","online":true}
+{"t":8402,"kind":"host.presence","host":"gw-ag","online":true}
+{"t":8403,"kind":"host.presence","host":"gw-cp","online":true}
+{"t":8404,"kind":"host.presence","host":"gw-lg","online":true}
+{"t":8405,"kind":"host.presence","host":"ms-a2","online":true}
+{"t":8406,"kind":"host.presence","host":"gfx","online":true}
+{"t":8407,"kind":"host.presence","host":"nlt","online":true}
+{"t":8408,"kind":"host.presence","host":"fd-01","online":true}
+{"t":8409,"kind":"host.presence","host":"fd-02","online":true}
+{"t":8410,"kind":"host.presence","host":"vbox-test","online":true}
+{"t":8411,"kind":"host.presence","host":"fl-01","online":true}
+{"t":8412,"kind":"host.presence","host":"lenovo","online":true}
 {"t":8500,"kind":"host.state","host":"hcs","state":"building"}
 {"t":8520,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":8540,"kind":"host.state","host":"gfx","state":"building"}

@@ -6,7 +6,7 @@
 import {
   type AskOption,
   type Event,
-  type FailureKind,
+  type HostOrigin,
   type HostState,
   isActive,
   type Level,
@@ -29,8 +29,15 @@ export interface HostRow {
   profile: string;
   zone: string;
   state: HostState;
-  failure?: FailureKind;
+
+  /** Last ping answer: every host starts unreachable. */
+  online: boolean;
   note?: string;
+  path?: string;
+  origin?: HostOrigin;
+
+  /** Exclusion known before the run: hidden from the table. */
+  known?: boolean;
 
   /** Phase and last output line: the active region, not the feed. */
   phase?: string;
@@ -119,6 +126,11 @@ export function reduce(state: RunState, event: Event): RunState {
     case "run.start":
       return { ...state, run: event.run };
 
+    // Persisted by `persist.ts`; the interface shows the matching `log` lines.
+    case "commit":
+    case "plan":
+      return state;
+
     case "host.add":
       return {
         ...state,
@@ -129,6 +141,7 @@ export function reduce(state: RunState, event: Event): RunState {
             profile: event.profile,
             zone: event.zone,
             state: "pending",
+            online: false,
             logs: [],
           },
         ],
@@ -182,12 +195,15 @@ export function reduce(state: RunState, event: Event): RunState {
         }),
       };
 
+    case "host.presence":
+      return { ...state, hosts: patchHost(state, event.host, { online: event.online }) };
+
     case "host.state": {
-      const patch: Partial<HostRow> = {
-        state: event.state,
-        failure: event.failure,
-        note: event.note,
-      };
+      const patch: Partial<HostRow> = { state: event.state, note: event.note, known: event.known };
+
+      // Set once, carried by later states.
+      if (event.path !== undefined) patch.path = event.path;
+      if (event.origin !== undefined) patch.origin = event.origin;
 
       // A settled host keeps no live line: the active region must empty itself.
       if (!isActive(event.state)) {
@@ -277,11 +293,25 @@ export function activeHosts(state: RunState): HostRow[] {
   return state.hosts.filter((host) => isActive(host.state));
 }
 
-/** Excluded hosts are hidden, only counted in the table title. */
+const hidden = (host: HostRow): boolean => host.state === "excluded" && host.known === true;
+
+/** Exclusions known before the run are hidden, only counted in the table title. */
 export function visibleHosts(state: RunState): HostRow[] {
-  return state.hosts.filter((host) => host.state !== "excluded");
+  return state.hosts.filter((host) => !hidden(host));
 }
 
+/** Hidden exclusions: the `M excluded` of the table title. */
 export function excludedCount(state: RunState): number {
-  return state.hosts.filter((host) => host.state === "excluded").length;
+  return state.hosts.filter(hidden).length;
+}
+
+/** Progress state, or `offline` when unreachable. */
+export type ShownState = HostState | "offline";
+
+/** Spec § États affichés: exclusion > failure > error > presence > progress. */
+export function shownState(host: HostRow): ShownState {
+  if (host.state === "excluded" || host.state === "failed" || host.state === "error") {
+    return host.state;
+  }
+  return host.online ? host.state : "offline";
 }

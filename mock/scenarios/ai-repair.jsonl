@@ -8,10 +8,10 @@
 {"t":1800,"kind":"step.start","step":"select"}
 {"t":2200,"kind":"log","level":"ok","message":"3 hosts selected, 2 waves"}
 {"t":2300,"kind":"step.end","step":"select","status":"ok"}
-{"t":2400,"kind":"step.start","step":"probe","total":3}
-{"t":2900,"kind":"step.progress","step":"probe","done":3,"total":3}
-{"t":3000,"kind":"step.end","step":"probe","status":"ok"}
 {"t":3200,"kind":"step.start","step":"build","total":3}
+{"t":3201,"kind":"host.presence","host":"gw-ag","online":true}
+{"t":3202,"kind":"host.presence","host":"gfx","online":true}
+{"t":3203,"kind":"host.presence","host":"nlt","online":true}
 {"t":3300,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":3320,"kind":"host.state","host":"gfx","state":"building"}
 {"t":3340,"kind":"host.state","host":"nlt","state":"building"}
@@ -33,7 +33,7 @@
 {"t":8100,"kind":"host.state","host":"gfx","state":"testing"}
 {"t":8120,"kind":"host.state","host":"nlt","state":"testing"}
 {"t":8600,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: Failed with result 'exit-code'"}
-{"t":8800,"kind":"host.state","host":"nlt","state":"failed","failure":"service","note":"nginx.service failed"}
+{"t":8800,"kind":"host.state","host":"nlt","state":"error","note":"nginx.service failed"}
 {"t":8900,"kind":"log","host":"nlt","level":"error","message":"activation failed: 1 unit failed (nginx.service)"}
 {"t":9000,"kind":"host.state","host":"gfx","state":"tested"}
 {"t":9400,"kind":"ai","id":"a1","message":"analysing nlt: nginx.service failed during activation"}

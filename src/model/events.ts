@@ -5,16 +5,16 @@
 // only coupling point between engine and interface.
 
 import type { ExitCode } from "./exit-codes.ts";
+import type { RunParams } from "./params.ts";
 
-/** The 7 steps of the procedure, in order. */
-export const STEPS = ["update", "select", "probe", "build", "test", "switch", "report"] as const;
+/** The 6 steps of the procedure, in order. Presence runs inside `build`. */
+export const STEPS = ["update", "select", "build", "test", "switch", "report"] as const;
 
 export type StepId = (typeof STEPS)[number];
 
 export const STEP_LABELS: Record<StepId, string> = {
   update: "Update",
   select: "Select",
-  probe: "Probe",
   build: "Build",
   test: "Test",
   switch: "Switch",
@@ -22,8 +22,12 @@ export const STEP_LABELS: Record<StepId, string> = {
 };
 
 /**
- * Host states as displayed. Active states (`building`, `copying`, `testing`,
- * `switching`) carry a spinner; the others carry a glyph.
+ * Host progress (spec § État et reprise). Presence is separate: `host.presence`.
+ * Active states (`building`, `copying`, `testing`, `switching`) carry a spinner.
+ *
+ * - `error`: activation done, at least one unit failed;
+ * - `failed`: any other failure;
+ * - `reverted`: rolled back on purpose to its origin.
  */
 export type HostState =
   | "pending"
@@ -34,12 +38,19 @@ export type HostState =
   | "tested"
   | "switching"
   | "deployed"
+  | "error"
   | "failed"
-  | "offline"
+  | "reverted"
   | "excluded";
 
-/** Split of `failed`: a service that did not start reads differently from the rest. */
-export type FailureKind = "service" | "other";
+/** Configuration a host ran before its first activation of the run: every rollback target. */
+export interface HostOrigin {
+  /** `/run/current-system`, resolved. */
+  system: string;
+
+  /** Target of the system profile, resolved. */
+  profile: string;
+}
 
 export type Level = "info" | "ok" | "warn" | "error";
 
@@ -50,6 +61,9 @@ export interface RunInfo {
   codev: boolean;
   aiModel: string;
   maxParallel: number;
+
+  /** Absent from the recorded scenarios. */
+  params?: RunParams;
 }
 
 export interface AskOption {
@@ -68,7 +82,12 @@ interface Base {
 
 export type Event =
   | (Base & { kind: "run.start"; run: RunInfo })
+  | (Base & { kind: "commit"; repo: "dnf" | "consumer"; rev: string; message: string })
+
+  // Waves as planned at selection, presence ignored.
+  | (Base & { kind: "plan"; waves: string[][] })
   | (Base & { kind: "host.add"; host: string; profile: string; zone: string })
+  | (Base & { kind: "host.presence"; host: string; online: boolean })
   | (Base & { kind: "step.start"; step: StepId; total?: number })
   | (Base & { kind: "step.progress"; step: StepId; done: number; total: number })
   | (Base & { kind: "step.end"; step: StepId; status: "ok" | "error" | "skipped" })
@@ -77,8 +96,16 @@ export type Event =
       kind: "host.state";
       host: string;
       state: HostState;
-      failure?: FailureKind;
       note?: string;
+
+      /** Toplevel store path, on `built`. */
+      path?: string;
+
+      /** On the first activation of the run. */
+      origin?: HostOrigin;
+
+      /** On `excluded`: known before the run (consumer known issue), hidden from the table. */
+      known?: boolean;
     })
   | (Base & { kind: "host.output"; host: string; phase: string; line: string })
   | (Base & { kind: "log"; host?: string; level: Level; message: string })

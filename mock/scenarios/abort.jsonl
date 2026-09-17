@@ -10,10 +10,13 @@
 {"t":1800,"kind":"step.end","step":"update","status":"ok"}
 {"t":1900,"kind":"step.start","step":"select"}
 {"t":2400,"kind":"step.end","step":"select","status":"ok"}
-{"t":2500,"kind":"step.start","step":"probe","total":6}
-{"t":3100,"kind":"step.progress","step":"probe","done":6,"total":6}
-{"t":3200,"kind":"step.end","step":"probe","status":"ok"}
 {"t":3400,"kind":"step.start","step":"build","total":6}
+{"t":3401,"kind":"host.presence","host":"hcs","online":true}
+{"t":3402,"kind":"host.presence","host":"gw-ag","online":true}
+{"t":3403,"kind":"host.presence","host":"gw-cp","online":true}
+{"t":3404,"kind":"host.presence","host":"gfx","online":true}
+{"t":3405,"kind":"host.presence","host":"fd-01","online":true}
+{"t":3406,"kind":"host.presence","host":"fd-02","online":true}
 {"t":3500,"kind":"host.state","host":"hcs","state":"building"}
 {"t":3520,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":3540,"kind":"host.state","host":"gw-cp","state":"building"}

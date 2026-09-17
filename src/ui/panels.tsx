@@ -2,13 +2,15 @@
 
 import { TextAttributes } from "@opentui/core";
 import { type ReactNode, useEffect, useState } from "react";
-import { type HostState, STEP_LABELS, STEPS } from "../model/events.ts";
+import { STEP_LABELS, STEPS } from "../model/events.ts";
 import {
   activeHosts,
   excludedCount,
   type FeedItem,
   type HostRow,
   type RunState,
+  type ShownState,
+  shownState,
   visibleHosts,
 } from "../model/state.ts";
 import {
@@ -22,7 +24,6 @@ import {
   progressBar,
   SPINNER_INTERVAL_MS,
   STEP_SPINNER,
-  serviceFailureGlyph,
   stepColor,
   stepGlyph,
 } from "../model/theme.ts";
@@ -56,13 +57,12 @@ export function useSpinners(): { step: string; host: string } {
 
 const FROZEN_FRAME = 4;
 
-function hostCell(host: HostRow, spinner: string): string {
-  if (hostGlyph[host.state] === "") return padGlyph(spinner, false);
-  if (host.state === "failed" && host.failure === "service") return serviceFailureGlyph;
-  return hostGlyph[host.state];
+function hostCell(shown: ShownState, spinner: string): string {
+  const glyph = hostGlyph[shown];
+  return glyph === "" ? padGlyph(spinner, false) : glyph;
 }
 
-const ACTIVE_LABEL: Partial<Record<HostState, string>> = {
+const ACTIVE_LABEL: Partial<Record<ShownState, string>> = {
   building: "building",
   copying: "copying",
   testing: "testing",
@@ -381,11 +381,12 @@ function HostRows({
         const current = (focused || band) && index === selected;
         const background = current ? (band ? color.host : color.selection) : color.panel;
         const nameColor = current ? (band ? color.bg : color.white) : color.host;
-        const stateColor = current && band ? color.bg : hostStateColor[host.state];
-        const label = ACTIVE_LABEL[host.state] ?? host.state;
+        const shown = shownState(host);
+        const stateColor = current && band ? color.bg : hostStateColor[shown];
+        const label = ACTIVE_LABEL[shown] ?? shown;
         return (
           <box key={host.name} flexDirection="row" backgroundColor={background}>
-            <text bg={background}>{`${hostCell(host, spinner)} `}</text>
+            <text bg={background}>{`${hostCell(shown, spinner)} `}</text>
             <text fg={nameColor} bg={background}>
               {host.name}
             </text>

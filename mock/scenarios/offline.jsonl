@@ -11,16 +11,13 @@
 {"t":600,"kind":"step.start","step":"select"}
 {"t":1200,"kind":"log","level":"ok","message":"7 hosts selected in zone ag"}
 {"t":1300,"kind":"step.end","step":"select","status":"ok"}
-{"t":1500,"kind":"step.start","step":"probe","total":7}
-{"t":2200,"kind":"step.progress","step":"probe","done":7,"total":7}
-{"t":2300,"kind":"host.state","host":"alt","state":"offline"}
-{"t":2350,"kind":"host.state","host":"vbox-umi","state":"offline"}
-{"t":2400,"kind":"host.state","host":"vbox-test","state":"offline"}
 {"t":2500,"kind":"log","level":"warn","message":"3 hosts offline: alt, vbox-test, vbox-umi"}
-{"t":2600,"kind":"host.state","host":"nlt","state":"excluded","note":"known broken, administrator fix pending"}
+{"t":2600,"kind":"host.state","host":"nlt","state":"excluded","note":"known broken, administrator fix pending","known":true}
 {"t":2700,"kind":"log","host":"nlt","level":"warn","message":"excluded by consumer known-issues list"}
-{"t":2800,"kind":"step.end","step":"probe","status":"ok"}
 {"t":3000,"kind":"step.start","step":"build","total":6}
+{"t":3001,"kind":"host.presence","host":"gw-ag","online":true}
+{"t":3002,"kind":"host.presence","host":"gfx","online":true}
+{"t":3003,"kind":"host.presence","host":"fd-01","online":true}
 {"t":3100,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":3120,"kind":"host.state","host":"gfx","state":"building"}
 {"t":3140,"kind":"host.state","host":"fd-01","state":"building"}

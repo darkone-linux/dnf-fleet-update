@@ -10,10 +10,12 @@
 {"t":2100,"kind":"step.start","step":"select"}
 {"t":2600,"kind":"log","level":"ok","message":"5 hosts selected"}
 {"t":2700,"kind":"step.end","step":"select","status":"ok"}
-{"t":2800,"kind":"step.start","step":"probe","total":5}
-{"t":3400,"kind":"step.progress","step":"probe","done":5,"total":5}
-{"t":3500,"kind":"step.end","step":"probe","status":"ok"}
 {"t":3700,"kind":"step.start","step":"build","total":5}
+{"t":3701,"kind":"host.presence","host":"hcs","online":true}
+{"t":3702,"kind":"host.presence","host":"gw-ag","online":true}
+{"t":3703,"kind":"host.presence","host":"gfx","online":true}
+{"t":3704,"kind":"host.presence","host":"ms-a2","online":true}
+{"t":3705,"kind":"host.presence","host":"fd-01","online":true}
 {"t":3800,"kind":"host.state","host":"hcs","state":"building"}
 {"t":3820,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":3840,"kind":"host.state","host":"gfx","state":"building"}
@@ -23,7 +25,7 @@
 {"t":4800,"kind":"host.state","host":"hcs","state":"built"}
 {"t":4900,"kind":"host.state","host":"gw-ag","state":"built"}
 {"t":5200,"kind":"host.output","host":"ms-a2","phase":"build","line":"error: attribute 'immich-machine-learning' missing"}
-{"t":5400,"kind":"host.state","host":"ms-a2","state":"failed","failure":"other","note":"eval error"}
+{"t":5400,"kind":"host.state","host":"ms-a2","state":"failed","note":"eval error"}
 {"t":5500,"kind":"log","host":"ms-a2","level":"error","message":"build failed: attribute 'immich-machine-learning' missing"}
 {"t":5700,"kind":"host.state","host":"gfx","state":"built"}
 {"t":5800,"kind":"host.state","host":"fd-01","state":"built"}
