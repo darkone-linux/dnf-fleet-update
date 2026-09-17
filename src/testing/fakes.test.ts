@@ -43,6 +43,44 @@ describe("FakeCommands", () => {
   });
 });
 
+describe("FakeCommands scripts", () => {
+  test("once: consumed, the next matching script answers later calls", async () => {
+    const context = fakeContext({
+      commands: [
+        { match: ["ping"], exitCode: 1, once: true },
+        { match: ["ping"], exitCode: 0 },
+      ],
+    });
+    const ping = () => context.commands.run({ argv: ["ping", "gw-ag"], ...BOUNDS });
+
+    expect((await ping()).exitCode).toBe(1);
+    expect((await ping()).exitCode).toBe(0);
+    expect((await ping()).exitCode).toBe(0);
+  });
+
+  test("gate holds the command; an abort ends it by SIGTERM; already aborted rejects", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const context = fakeContext({ commands: [{ match: ["nix", "copy"], gate }] });
+
+    const held = context.commands.run({ argv: ["nix", "copy"], ...BOUNDS });
+    const aborted = context.commands.run(
+      { argv: ["nix", "copy"], ...BOUNDS },
+      { signal: context.signal },
+    );
+    context.abort.abort(new Error("now"));
+
+    expect(await aborted).toMatchObject({ exitCode: null, signal: "SIGTERM" });
+    release();
+    expect(await held).toMatchObject({ exitCode: 0 });
+    await expect(
+      context.commands.run({ argv: ["nix", "copy"], ...BOUNDS }, { signal: context.signal }),
+    ).rejects.toThrow("now");
+  });
+});
+
 describe("FakeClock", () => {
   test("releases sleepers only once time reaches them", async () => {
     const { clock } = fakeContext();

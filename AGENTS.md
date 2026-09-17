@@ -104,7 +104,7 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `params.ts` (resolved options), `state.ts` (interface fold), `persist.ts` (`state.json` fold), `transitions.ts`, `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
 | `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `fleet.ts` (consumer data schemas), `query.ts` (`--on`), `waves.ts` (waves, current zone), `nix-output.ts` (eval and build log parsers), `recorder.ts` (stream → `var/deployments/`), `replay.ts` (scenario source) | model |
 | `src/engine/commands/` | argv builders (`CommandSpec`): workspace (git, flake, `just`), build (`nix-eval-jobs`, `nix build`), hosts (ssh, sudo as `nix`, activation, rollback) | model, engine |
-| `src/engine/steps/` | *planned* — one module per step, receives `EngineContext` | model, ports |
+| `src/engine/steps/` | one module per step (`update.ts`, `select.ts`), receives `RunContext` (`context.ts`: ports, parameters, `flow.ts` early ends, questions); `exec.ts` runs their commands | model, engine |
 | `src/adapters/` | real ports: `process.ts` (`CommandRunner`, one process group per command), `clock.ts`, `lock.ts` (flock(2) through `bun:ffi`), `store.ts` (`var/deployments/`), `localhost.ts`; *planned*: Matrix | model, ports |
 | `src/ai/` | *planned* — providers (Claude Agent SDK, opencode), guarded tools | model, engine |
 | `src/cli/` | `options.ts` (argv → run parameters, validation: exit `2`, `--resume` rules), `help.ts` | model, engine |

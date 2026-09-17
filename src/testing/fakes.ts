@@ -3,6 +3,9 @@
 // Deterministic by construction: no process, no timer, no network. Strict too:
 // an unscripted command or an unanswered question fails the test, never passes.
 
+import { DEFAULT_TIMEOUTS, DEFAULTS } from "../cli/options.ts";
+import { QuestionQueue, type RunContext } from "../engine/context.ts";
+import { RunFlow } from "../engine/flow.ts";
 import {
   type Clock,
   type CommandResult,
@@ -21,6 +24,7 @@ import {
   type RunStore,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
+import type { RunParams } from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
 
 /** Reply for the first command whose argv starts with `match`. */
@@ -30,21 +34,47 @@ export interface CommandScript {
   exitCode?: number;
   timedOut?: boolean;
   durationMs?: number;
+
+  /** Consumed by its first use: a later matching script answers the next calls. */
+  once?: boolean;
+
+  /** When the command starts: abort the run, move the clock. */
+  onRun?: (spec: CommandSpec) => void;
+
+  /** Holds the command until resolved; an abort meanwhile ends it by SIGTERM, like the runner. */
+  gate?: Promise<void>;
 }
 
 export class FakeCommands implements CommandRunner {
   readonly calls: CommandSpec[] = [];
+  private readonly used = new Set<CommandScript>();
 
   constructor(private readonly scripts: readonly CommandScript[] = []) {}
 
   async run(spec: CommandSpec, options: RunOptions = {}): Promise<CommandResult> {
+    const { signal, onLine } = options;
+    signal?.throwIfAborted();
     this.calls.push(spec);
-    const script = this.scripts.find((candidate) =>
-      candidate.match.every((arg, index) => spec.argv[index] === arg),
+    const script = this.scripts.find(
+      (candidate) =>
+        !this.used.has(candidate) &&
+        candidate.match.every((arg, index) => spec.argv[index] === arg),
     );
     if (!script) throw new Error(`unscripted command: ${spec.argv.join(" ")}`);
+    if (script.once) this.used.add(script);
 
-    for (const line of script.output ?? []) options.onLine?.(line);
+    script.onRun?.(spec);
+    for (const line of script.output ?? []) onLine?.(line);
+    if (script.gate !== undefined) {
+      const aborted = new Promise<void>((resolve) => {
+        signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+      await Promise.race([script.gate, aborted]);
+    }
+    if (signal?.aborted) {
+      return { exitCode: null, signal: "SIGTERM", timedOut: false, durationMs: 0 };
+    }
+
     const timedOut = script.timedOut ?? false;
     return {
       exitCode: timedOut ? null : (script.exitCode ?? 0),
@@ -213,4 +243,76 @@ export function fakeContext(
     signal: abort.signal,
     abort,
   };
+}
+
+/** Built-in defaults of an unattended full run; tests override what they exercise. */
+export function testParams(overrides: Partial<RunParams> = {}): RunParams {
+  return {
+    deploymentOrder: DEFAULTS.deploymentOrder,
+    criticalProfiles: DEFAULTS.criticalProfiles,
+    currentZoneBefore: true,
+    dnfFlake: true,
+    consumerFlake: true,
+    dnfMessage: DEFAULTS.dnfMessage,
+    consumerMessage: "chore(update): full fleet",
+    buildOnly: false,
+    resume: false,
+    interactive: false,
+    stopLoss: false,
+    ui: false,
+    sendReport: false,
+    aiModel: DEFAULTS.aiModel,
+    aiAnalysis: DEFAULTS.aiAnalysis,
+    aiErrorAction: DEFAULTS.aiErrorAction,
+    maxParallel: DEFAULTS.maxParallel,
+    rollbackTimeout: DEFAULTS.rollbackTimeout,
+    timeouts: DEFAULT_TIMEOUTS,
+    pingInterval: DEFAULTS.pingInterval,
+    ...overrides,
+  };
+}
+
+export interface FakeRunContext extends RunContext {
+  commands: FakeCommands;
+  clock: FakeClock;
+  events: RecordingChannel;
+  run: MemoryRunStore;
+  local: FakeLocalHost;
+}
+
+export interface FakeRunOptions {
+  commands?: CommandScript[];
+  answers?: Record<string, string>;
+  params?: Partial<RunParams>;
+  codev?: boolean;
+  hostname?: string;
+  addresses?: string[];
+}
+
+/** Workspace `/ws`, deployment host `deployer` outside the fleet unless told otherwise. */
+export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
+  const flow = new RunFlow();
+  return {
+    commands: new FakeCommands(options.commands),
+    clock: new FakeClock(),
+    events: new RecordingChannel(options.answers),
+    signal: flow.now,
+    flow,
+    params: testParams(options.params),
+    workspace: "/ws",
+    codev: options.codev ?? false,
+    local: new FakeLocalHost(options.hostname ?? "deployer", options.addresses ?? []),
+    run: new MemoryRunStore("20260917T020000Z-full"),
+    questions: new QuestionQueue(),
+    startedAt: 0,
+  };
+}
+
+/** Feed lines as `level message`, or `level host: message`. */
+export function feed(events: readonly Event[]): string[] {
+  return events.flatMap((event) =>
+    event.kind === "log"
+      ? [`${event.level} ${event.host === undefined ? "" : `${event.host}: `}${event.message}`]
+      : [],
+  );
 }
