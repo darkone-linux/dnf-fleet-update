@@ -316,3 +316,8 @@ export function feed(events: readonly Event[]): string[] {
       : [],
   );
 }
+
+/** Lets every pending promise chain settle; no timer, no wall clock. */
+export function flush(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}

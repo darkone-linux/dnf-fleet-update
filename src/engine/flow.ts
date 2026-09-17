@@ -3,10 +3,11 @@
 // `after wave`: the current wave, or step outside waves, finishes. `stop`:
 // activations finish, nothing new starts. `now`: every command is killed.
 
-export type Ending = "aborted" | "stop" | "rollback";
+/** `done`: nothing left to do before the report (`--build-only`, nothing built). */
+export type Ending = "done" | "aborted" | "stop" | "rollback";
 
 /** Exit `1` of `stop` wins over exit `5` of an abort requested later. */
-const RANK: Record<Ending, number> = { aborted: 0, stop: 1, rollback: 2 };
+const RANK: Record<Ending, number> = { done: 0, aborted: 1, stop: 2, rollback: 3 };
 
 export class RunFlow {
   private readonly nowController = new AbortController();
@@ -36,6 +37,11 @@ export class RunFlow {
       this.haltController.abort(new Error("run aborted"));
       this.nowController.abort(new Error("run aborted"));
     }
+  }
+
+  /** The run has nothing more to do: straight to the report. */
+  finish(): void {
+    this.end("done");
   }
 
   /** Decision on a lost or failed host. */

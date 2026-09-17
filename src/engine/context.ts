@@ -62,13 +62,21 @@ export function ask(
   question: string,
   options: readonly AskOption[],
 ): Promise<string> {
-  return context.questions.run(async () => {
-    emit(context, { kind: "ask", id, question, options: [...options] });
-    const value = await context.events.answer(id, context.signal);
-    if (!options.some((option) => option.value === value)) {
-      throw new Error(`answer "${value}" is not an option of ${id}`);
-    }
-    emit(context, { kind: "ask.close", id, value });
-    return value;
-  });
+  return context.questions.run(() => askHoldingQueue(context, id, question, options));
+}
+
+/** For a task already run by `context.questions`: deciding whether to ask is part of its turn. */
+export async function askHoldingQueue(
+  context: RunContext,
+  id: string,
+  question: string,
+  options: readonly AskOption[],
+): Promise<string> {
+  emit(context, { kind: "ask", id, question, options: [...options] });
+  const value = await context.events.answer(id, context.signal);
+  if (!options.some((option) => option.value === value)) {
+    throw new Error(`answer "${value}" is not an option of ${id}`);
+  }
+  emit(context, { kind: "ask.close", id, value });
+  return value;
 }
