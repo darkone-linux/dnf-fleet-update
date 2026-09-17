@@ -9,7 +9,7 @@ behaviour; this file owns code policy and routing.
 
 - TypeScript (strict) on Bun; interface on OpenTUI (`@opentui/react`).
 - Interface validated on recorded scenarios. Engine (native Nix commands, no
-  colmena) written and tested on fakes, not yet bound to the entry point.
+  colmena) tested on fakes, bound to the interface and the `--no-ui` output.
 - Published by tag (GitHub release); packaged by the framework
   (`dnf/pkgs/fleet-update/package.nix`), not here: § Framework contract.
 
@@ -105,13 +105,13 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `fleet.ts` (consumer data schemas), `query.ts` (`--on`), `waves.ts` (waves, current zone), `nix-output.ts` (eval and build log parsers), `recorder.ts` (stream → `var/deployments/`), `hosts.ts` (host table, transition guard), `presence.ts` (pings), `decisions.ts` (failed and lost hosts), `deploy.ts` (one host: copy, activation, reconnection), `rollback.ts` (forced fleet rollback), `pool.ts`, `report.ts`, `run.ts` (orchestration: lock, steps, exit code) | model |
 | `src/engine/commands/` | argv builders (`CommandSpec`): workspace (git, flake, `just`), build (`nix-eval-jobs`, `nix build`), hosts (ssh, sudo as `nix`, activation, rollback) | model, engine |
 | `src/engine/steps/` | one module per step (`update.ts`, `select.ts`, `build.ts`, `waves.ts` for test and switch), receives `RunContext` (`context.ts`: ports, parameters, `flow.ts` early ends, questions); `exec.ts` runs their commands | model, engine |
-| `src/adapters/` | real ports: `process.ts` (`CommandRunner`, one process group per command), `clock.ts`, `lock.ts` (flock(2) through `bun:ffi`), `store.ts` (`var/deployments/`), `localhost.ts`; *planned*: Matrix | model, ports |
+| `src/adapters/` | real ports: `process.ts` (`CommandRunner`, one process group per command), `clock.ts`, `lock.ts` (flock(2) through `bun:ffi`), `store.ts` (`var/deployments/`), `localhost.ts`, `channel.ts` (`EventChannel` within the process); *planned*: Matrix | model, ports |
 | `src/ai/` | *planned* — providers (Claude Agent SDK, opencode), guarded tools | model, engine |
 | `src/cli/` | `options.ts` (argv → run parameters, validation: exit `2`, `--resume` rules), `help.ts` | model, engine |
 | `src/ui/` | TUI: `App.tsx` (screen, keys, views), `panels.tsx` (components); presentation only | model |
-| `src/output/` | *planned* — `--no-ui` text output | model |
+| `src/output/` | `text.ts`: `--no-ui` text output, the feed without colours | model |
 | `src/testing/` | capture harness (`capture.tsx`), scenario replay (`mock.tsx`, `replay.ts`), port fakes | anything |
-| `src/main.tsx` | composition root: binds a run source to a consumer | anything |
+| `src/main.tsx` | composition root: options, real ports, engine bound to the interface or the text output, signals | anything |
 | `tests/` | integration tests; fixtures in `tests/fixtures/` | anything |
 | `mock/scenarios/` | recorded streams (`.jsonl`) | — |
 
