@@ -32,6 +32,19 @@ test("build failed, unattended: decided at the end of the build, excluded, the r
   );
 });
 
+test("--build-only: a failed build is not decided, the host keeps its reason", async () => {
+  const run = await simulateRun({
+    argv: ["--build-only", "--no-ui"],
+    behaviours: { "srv-ag": { buildError: "boom" } },
+  });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.events.filter((event) => event.kind === "ask")).toEqual([]);
+  expect(run.statuses).toMatchObject({ "srv-ag": "failed", "pc-ag": "remaining" });
+  expect(run.recorded?.report).toContain("| srv-ag | failed | boom |");
+  expect(run.sim.count("copy")).toBe(0);
+});
+
 test("build failed, interactive stop: nothing copied, exit 1", async () => {
   const run = await simulateRun({
     argv: [],

@@ -101,12 +101,21 @@ test("--build-only, interactive: no ends the run normally, yes goes on with the 
   expect(stopped.sim.count("copy")).toBe(0);
   expect(stopped.ui.end?.status).toBe("done");
 
+  // Announced before the build: the deploying steps are ruled out by the option.
+  expect(stopped.ui.steps.test.status).toBe("omitted");
+  expect(stopped.ui.steps.switch.status).toBe("omitted");
+  expect(stopped.recorded?.report).toMatch(/\| switch \| omitted \|/);
+
   const continued = await simulateRun({
     argv: ["--build-only"],
     answers: { build: "yes", switch: "yes" },
   });
   expect(continued.exitCode).toBe(0);
   expect(Object.values(continued.statuses)).toEqual(Array(6).fill("deployed"));
+
+  // A `yes` starts them after all: the rows leave `omitted` for their own end.
+  expect(continued.ui.steps.test.status).toBe("done");
+  expect(continued.ui.steps.switch.status).toBe("done");
 });
 
 test("a rollback decided wins over an abort now requested during it: exit 1", async () => {

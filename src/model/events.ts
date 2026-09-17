@@ -12,6 +12,12 @@ export const STEPS = ["update", "select", "build", "test", "switch", "report"] a
 
 export type StepId = (typeof STEPS)[number];
 
+/**
+ * How a step ended: `skipped` already done elsewhere (`--resume`), `aborted`
+ * cut by an abort `now`, `omitted` ruled out by the options (`--build-only`).
+ */
+export type StepEndStatus = "ok" | "error" | "skipped" | "aborted" | "omitted";
+
 export const STEP_LABELS: Record<StepId, string> = {
   update: "Update",
   select: "Select",
@@ -90,8 +96,7 @@ export type Event =
   | (Base & { kind: "host.presence"; host: string; online: boolean })
   | (Base & { kind: "step.start"; step: StepId; total?: number })
   | (Base & { kind: "step.progress"; step: StepId; done: number; total: number })
-  // `aborted`: cut by an abort `now`, closed by the run.
-  | (Base & { kind: "step.end"; step: StepId; status: "ok" | "error" | "skipped" | "aborted" })
+  | (Base & { kind: "step.end"; step: StepId; status: StepEndStatus })
   | (Base & { kind: "wave.start"; index: number; total: number; hosts: string[] })
   | (Base & {
       kind: "host.state";

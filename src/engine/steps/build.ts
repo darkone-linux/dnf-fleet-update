@@ -175,7 +175,11 @@ export async function build(
     if (!outcome.evaluationFailed) log(context, "error", "no host built");
     flow.stop("stop");
   }
-  for (const group of byReason(failed)) await decideFailure(context, hosts, group);
+  // `--build-only`: no test and no switch to protect, nothing to decide. Failed
+  // hosts stay `failed`, with their reason, in the report.
+  if (!params.buildOnly) {
+    for (const group of byReason(failed)) await decideFailure(context, hosts, group);
+  }
   endStep(context, "build", !flow.halt.aborted);
 
   // An abort after the step, or a stop: nothing left to confirm.

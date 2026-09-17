@@ -85,6 +85,7 @@ export const stepGlyph: Record<StepStatus, string> = {
   error: "✗",
   skipped: "✓",
   aborted: "✗",
+  omitted: "✗",
 };
 
 export const stepColor: Record<StepStatus, string> = {
@@ -96,6 +97,9 @@ export const stepColor: Record<StepStatus, string> = {
 
   // Red stays for errors: an abort is the user's choice.
   aborted: color.warn,
+
+  // Never planned: as quiet as a step still to come.
+  omitted: color.dim,
 };
 
 /** Steps: classic 6-dot braille spinner, one column, aligns with the text glyphs. */

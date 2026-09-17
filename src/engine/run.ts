@@ -196,6 +196,14 @@ export async function runFleetUpdate(
       },
     });
 
+    // `--build-only`: no test, no switch, said before the build starts. A `yes`
+    // to the question that follows the build starts them anyway.
+    if (params.value.buildOnly) {
+      for (const step of ["test", "switch"] as const) {
+        emit(context, { kind: "step.end", step, status: "omitted" });
+      }
+    }
+
     // `^C`, a signal or a `no` answer: said before the commands are killed.
     const leaveAborts = flow.onAbort((mode) => {
       const message = mode === "now" ? "aborting now" : "aborting after the current step or wave";

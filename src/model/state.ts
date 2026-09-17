@@ -13,10 +13,11 @@ import {
   type RunInfo,
   STEP_LABELS,
   STEPS,
+  type StepEndStatus,
   type StepId,
 } from "./events.ts";
 
-export type StepStatus = "todo" | "running" | "done" | "error" | "skipped" | "aborted";
+export type StepStatus = "todo" | "running" | "done" | "error" | "skipped" | "aborted" | "omitted";
 
 export interface StepRow {
   status: StepStatus;
@@ -89,7 +90,7 @@ export interface RunState {
 }
 
 /** Status of a step once `step.end` arrived. */
-export function endedStep(status: "ok" | "error" | "skipped" | "aborted"): StepStatus {
+export function endedStep(status: StepEndStatus): StepStatus {
   return status === "ok" ? "done" : status;
 }
 
