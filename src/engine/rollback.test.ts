@@ -1,12 +1,21 @@
 // Forced rollback on fakes: reverse wave order, phase undone, lost hosts left alone.
 
 import { describe, expect, test } from "bun:test";
-import { fakeRunContext, feed } from "../testing/fakes.ts";
-import { fleetSelection, storePath } from "../testing/fleet.ts";
+import { drive, fakeRunContext, feed } from "../testing/fakes.ts";
+import { fleetSelection, remote, storePath } from "../testing/fleet.ts";
 import { HostTable } from "./hosts.ts";
 import { rollbackFleet } from "./rollback.ts";
 
 const ORIGIN = { system: storePath("origin"), profile: storePath("origin") };
+
+function tested(hosts: HostTable, name: string): void {
+  for (const state of ["building", "built", "copying", "testing", "tested"] as const) {
+    const detail =
+      state === "built" ? { path: storePath(name) } : state === "testing" ? { origin: ORIGIN } : {};
+    hosts.set(name, state, detail);
+  }
+  hosts.get(name).activated = "test";
+}
 
 describe("rollbackFleet", () => {
   test("activated hosts in reverse wave order, the phase they reached undone", async () => {
@@ -57,28 +66,37 @@ describe("rollbackFleet", () => {
   });
 
   test("a failed rollback leaves the host failed, with the reason", async () => {
-    const context = fakeRunContext({ commands: [{ match: ["sudo"], exitCode: 255 }] });
+    const context = fakeRunContext({ commands: [{ match: ["sudo"], exitCode: 1 }] });
     const selection = fleetSelection();
     const hosts = new HostTable(context, selection);
-    for (const state of ["building", "built", "copying", "testing", "tested"] as const) {
-      hosts.set(
-        "lt-cp",
-        state,
-        state === "built"
-          ? { path: storePath("lt-cp") }
-          : state === "testing"
-            ? { origin: ORIGIN }
-            : {},
-      );
-    }
-    hosts.get("lt-cp").activated = "test";
+    tested(hosts, "lt-cp");
 
     await rollbackFleet(context, hosts, selection);
 
     expect(hosts.get("lt-cp")).toMatchObject({
       state: "failed",
-      note: "rollback failed: exit 255",
+      note: "rollback failed: exit 1",
     });
+  });
+
+  test("session dropped by the rollback itself: the result file read once reconnected", async () => {
+    const context = fakeRunContext({
+      commands: [
+        { match: remote("lt-cp", "rc=$?"), exitCode: 255 },
+        { match: remote("lt-cp", "[ -f"), exitCode: 255, once: true },
+        { match: remote("lt-cp", "[ -f"), output: [{ stream: "stdout", line: "0" }] },
+      ],
+    });
+    const selection = fleetSelection();
+    const hosts = new HostTable(context, selection);
+    tested(hosts, "lt-cp");
+
+    await drive(context.clock, rollbackFleet(context, hosts, selection), 15_000);
+
+    expect(hosts.get("lt-cp").state).toBe("reverted");
+    const settle = context.commands.calls.at(-1)?.argv.at(-1) ?? "";
+    expect(settle).toContain(`fleet-update-${context.run.id}-rollback.rc`);
+    expect(settle).not.toContain("systemctl stop");
   });
 
   test("nothing activated: nothing to roll back", async () => {

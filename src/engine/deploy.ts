@@ -8,89 +8,19 @@ import {
   type Phase,
   parseOrigin,
   readOrigin,
-  SETTLE_PENDING,
   setProfile,
-  settleActivation,
   type Target,
 } from "./commands/host.ts";
 import { emit, log, type RunContext } from "./context.ts";
 import { decideFailure, decideLost } from "./decisions.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
 import type { HostTable } from "./hosts.ts";
-import type { CommandResult, OutputLine } from "./ports.ts";
+import type { OutputLine } from "./ports.ts";
 import type { Presence } from "./presence.ts";
-
-/** `ssh` could not connect, or lost the session. */
-const SSH_FAILURE = 255;
-
-/** `timeout` expired on the command it bounds. */
-const TIMEOUT_EXPIRED = 124;
+import { settle, transportFailed } from "./settle.ts";
 
 /** `switch-to-configuration`: activation done, some units failed. */
 const UNITS_FAILED = 4;
-
-function transportFailed(result: CommandResult): boolean {
-  return (
-    result.timedOut ||
-    result.exitCode === null ||
-    result.exitCode === SSH_FAILURE ||
-    result.exitCode === TIMEOUT_EXPIRED
-  );
-}
-
-type Settled =
-  | { kind: "result"; code: number }
-
-  /** The session ended normally, no result file: the activation never ran. */
-  | { kind: "missing" }
-  | { kind: "failed"; detail: string }
-  | { kind: "lost" }
-  | { kind: "aborted" };
-
-/**
- * Attempts until the timer expiry minus `ssh` (disabled: during `activation`),
- * one every `pingInterval` (spec § Exécution, retour arrière automatique).
- */
-async function settle(
-  context: RunContext,
-  target: Target,
-  phase: Phase,
-  armed: boolean,
-  dropped: boolean,
-): Promise<Settled> {
-  const { params, clock } = context;
-  const { timeouts } = params;
-  const window = armed ? params.rollbackTimeout - timeouts.ssh : timeouts.activation;
-  const deadline = clock.now() + Math.max(0, window) * 1000;
-  const command = settleActivation(context.run.id, phase, armed, timeouts);
-
-  for (;;) {
-    const attempt = await execute(context, onHost(target, command, timeouts));
-    if (context.signal.aborted) return { kind: "aborted" };
-    if (succeeded(attempt.result)) {
-      const code = Number(attempt.stdout[0]?.trim());
-      if (Number.isInteger(code)) return { kind: "result", code };
-      return { kind: "failed", detail: `unreadable activation result: ${attempt.stdout[0]}` };
-    }
-
-    const pending = attempt.result.exitCode === SETTLE_PENDING;
-    if (pending && !dropped) return { kind: "missing" };
-    if (!pending && !transportFailed(attempt.result)) {
-      return {
-        kind: "failed",
-        detail: `rollback timer not cancelled: ${describeFailure(attempt)}`,
-      };
-    }
-
-    const left = deadline - clock.now();
-    if (left <= 0) return { kind: "lost" };
-    try {
-      await clock.sleep(Math.min(params.pingInterval * 1000, left), context.signal);
-    } catch {
-      return { kind: "aborted" };
-    }
-  }
-}
 
 async function failed(
   context: RunContext,

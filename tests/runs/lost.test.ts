@@ -134,3 +134,17 @@ test("unreachable when its copy starts: lost before activation, no wait, exclude
   expect(run.clock.now()).toBeLessThan(ATTEMPTS_END);
   expect(run.recorded?.report).toContain("| pc-ag | excluded | unreachable: copy failed: exit 1:");
 });
+
+test("--stop-loss: a gateway's rollback drops its own session, its result read, reverted", async () => {
+  const run = await simulateRun({
+    argv: ["--no-ui", "--stop-loss"],
+    behaviours: { "srv-ag": { activation: { test: 2 } }, "gw-ag": { rollbackDrops: true } },
+  });
+
+  expect(run.exitCode).toBe(1);
+  expect(run.statuses["gw-ag"]).toBe("reverted");
+  expect(run.sim.commands.filter((c) => c.host === "gw-ag").at(-1)).toMatchObject({
+    kind: "settle",
+    detail: "rollback",
+  });
+});

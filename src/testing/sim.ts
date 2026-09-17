@@ -28,6 +28,9 @@ export interface HostBehaviour {
   /** Unreachable from its activation of this phase until its rollback timer fires. */
   dropsOn?: Phase;
   rollbackExit?: number;
+
+  /** The session of a forced rollback drops; the result file is written all the same. */
+  rollbackDrops?: boolean;
 }
 
 export type SimKind =
@@ -73,7 +76,8 @@ export interface SimHook {
 export interface HostSide {
   system: string;
   profile: string;
-  results: Map<Phase, number>;
+  /** Result files by name: `test`, `switch`, `rollback`. */
+  results: Map<string, number>;
   timers: Map<Phase, number>;
   dropped: boolean;
 
@@ -111,7 +115,7 @@ const ok = (durationMs = 0): CommandResult => ({
 
 const exit = (exitCode: number): CommandResult => ({ ...ok(), exitCode });
 
-const PHASE_OF_RESULT = /fleet-update-[a-zA-Z0-9_-]+-(test|switch)\.rc/;
+const RESULT_NAME = /fleet-update-[a-zA-Z0-9_-]+-(test|switch|rollback)\.rc/;
 const ACTIVATED_PHASE = /switch-to-configuration'? (test|switch)/;
 const ON_ACTIVE = /--on-active=(\d+)/;
 
@@ -274,23 +278,16 @@ export class SimFleet implements CommandRunner {
       };
     }
     if (inner.includes("readlink")) return { kind: "origin", host, at };
+    const result = RESULT_NAME.exec(inner)?.[1];
     if (inner.includes("[ -f")) {
-      const phase = PHASE_OF_RESULT.exec(inner)?.[1] as Phase | undefined;
-      return {
-        kind: "settle",
-        host,
-        phase,
-        detail: inner.includes("systemctl stop") ? "armed" : "",
-        at,
-      };
+      const armed = inner.includes("systemctl stop") ? "armed" : "";
+      const phase = result === "test" || result === "switch" ? result : undefined;
+      return { kind: "settle", host, phase, detail: `${result} ${armed}`.trim(), at };
     }
     if (inner.includes("rc=$?")) {
       const phase = ACTIVATED_PHASE.exec(inner)?.[1] as Phase | undefined;
+      if (result === "rollback") return { kind: "rollback", host, phase, at };
       return { kind: "activate", host, phase, detail: ON_ACTIVE.exec(inner)?.[1], at };
-    }
-    if (inner.includes("systemd-run")) {
-      const phase = ACTIVATED_PHASE.exec(inner)?.[1] as Phase | undefined;
-      return { kind: "rollback", host, phase, at };
     }
     if (inner.includes("nix-env")) {
       const path = /\/nix\/store\/[0-9a-z]{32}-[a-zA-Z0-9+._?=-]+/.exec(
@@ -431,13 +428,12 @@ export class SimFleet implements CommandRunner {
         return exit(code);
       }
       case "settle": {
-        const phase = command.phase;
-        if (phase === undefined) throw new Error(`settle without phase on ${name}`);
-        const code = side.results.get(phase);
+        const [result = "", armed] = (command.detail ?? "").split(" ");
+        const code = side.results.get(result);
         if (code === undefined) return exit(3);
         out(String(code));
-        if (command.detail === "armed" && side.timers.delete(phase)) {
-          side.history.push(`timer cancelled ${phase}`);
+        if (armed === "armed" && side.timers.delete(result as Phase)) {
+          side.history.push(`timer cancelled ${result}`);
         }
         return ok();
       }
@@ -447,7 +443,8 @@ export class SimFleet implements CommandRunner {
         const code = behaviour.rollbackExit ?? 0;
         if (code === 0) this.revert(name, phase);
         side.history.push(`rollback ${phase} ${code}`);
-        return exit(code);
+        side.results.set("rollback", code);
+        return exit(behaviour.rollbackDrops ? 255 : code);
       }
       default:
         throw new Error(`unsimulated host command: ${command.kind}`);

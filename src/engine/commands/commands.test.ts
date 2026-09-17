@@ -20,7 +20,7 @@ import {
   rollbackUnit,
   SETTLE_PENDING,
   setProfile,
-  settleActivation,
+  settleResult,
 } from "./host.ts";
 import { buildHost, evalHosts, selectExpression } from "./nix.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
@@ -241,13 +241,18 @@ describe("activation", () => {
     ]);
   });
 
-  test("forced rollback: the same reactivation under systemd-run, at once", () => {
-    const lines = scriptLines(rollbackNow(ORIGIN, "test", T).argv);
-    expect(lines).toEqual([`${OLD}/bin/switch-to-configuration test`]);
+  test("forced rollback: the same reactivation under systemd-run, at once, its result kept", () => {
+    const lines = scriptLines(rollbackNow(RUN, ORIGIN, "test", T).argv);
+    expect(lines).toEqual([
+      `${OLD}/bin/switch-to-configuration test`,
+      "rc=$?",
+      `echo "$rc" > /run/fleet-update-${RUN}-rollback.rc`,
+      'exit "$rc"',
+    ]);
   });
 
   test("settle: result printed, timer of the same run and phase stopped", () => {
-    const armed = settleActivation(RUN, "switch", true, T);
+    const armed = settleResult(RUN, "switch", true, T);
     expect(armed).toMatchObject({ root: true, seconds: 30 });
     expect(armed.argv.slice(0, 2)).toEqual(["sh", "-c"]);
     expect(armed.argv[2]!.split(" && ")).toEqual([
@@ -255,11 +260,15 @@ describe("activation", () => {
       `cat /run/fleet-update-${RUN}-switch.rc`,
       `systemctl stop fleet-update-rollback-${RUN}-switch.timer`,
     ]);
-    expect(settleActivation(RUN, "test", false, T).argv[2]!.split(" && ")).toHaveLength(2);
+    expect(settleResult(RUN, "test", false, T).argv[2]!.split(" && ")).toHaveLength(2);
+    expect(settleResult(RUN, "rollback", false, T).argv[2]).toBe(
+      `[ -f /run/fleet-update-${RUN}-rollback.rc ] || exit ${SETTLE_PENDING} && cat /run/fleet-update-${RUN}-rollback.rc`,
+    );
+    expect(() => settleResult(RUN, "rollback", true, T)).toThrow("arms no timer");
   });
 
   test("settle on a real shell: pending without the file, the code once written", () => {
-    const script = settleActivation(RUN, "test", false, T).argv[2]!;
+    const script = settleResult(RUN, "test", false, T).argv[2]!;
     const dir = mkdtempSync(join(tmpdir(), "fleet-update-settle-"));
     const local = script.replaceAll("/run/", `${dir}/`);
     try {

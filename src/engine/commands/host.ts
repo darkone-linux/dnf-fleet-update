@@ -160,10 +160,13 @@ export function rollbackScript(origin: HostOrigin, phase: Phase): string {
   ].join(" && ");
 }
 
-/** Exit code of the activation, kept for a reconnection after a dropped session. */
-export function resultFile(runId: string, phase: Phase): string {
+/** Command whose exit code a host keeps: an activation, or a forced rollback. */
+export type ResultName = Phase | "rollback";
+
+/** Exit code kept on the host for a reconnection after a dropped session. */
+export function resultFile(runId: string, name: ResultName): string {
   assertSafe("run id", runId, RUN_ID);
-  return `/run/fleet-update-${runId}-${phase}.rc`;
+  return `/run/fleet-update-${runId}-${name}.rc`;
 }
 
 export interface Activation {
@@ -221,25 +224,43 @@ export function activate(
 export const SETTLE_PENDING = 3;
 
 /**
- * New connection after an activation: prints its exit code, then stops the
- * rollback timer when one was armed. Exit `SETTLE_PENDING`: no result yet.
+ * New connection after an activation or a forced rollback: prints its exit
+ * code, then stops the rollback timer of the activation when one was armed.
+ * Exit `SETTLE_PENDING`: no result yet.
  */
-export function settleActivation(
+export function settleResult(
   runId: string,
-  phase: Phase,
+  name: ResultName,
   armed: boolean,
   timeouts: Timeouts,
 ): HostCommand {
-  const file = shellQuote(resultFile(runId, phase));
+  const file = shellQuote(resultFile(runId, name));
   const lines = [`[ -f ${file} ] || exit ${SETTLE_PENDING}`, `cat ${file}`];
-  if (armed) lines.push(shellJoin(["systemctl", "stop", `${rollbackUnit(runId, phase)}.timer`]));
+  if (armed) {
+    if (name === "rollback") throw new Error("a forced rollback arms no timer");
+    lines.push(shellJoin(["systemctl", "stop", `${rollbackUnit(runId, name)}.timer`]));
+  }
   return { argv: ["sh", "-c", lines.join(" && ")], root: true, seconds: timeouts.ssh };
 }
 
-/** Forced rollback (spec § Exécution): the same reactivation, at once, under `systemd-run`. */
-export function rollbackNow(origin: HostOrigin, phase: Phase, timeouts: Timeouts): HostCommand {
+/**
+ * Forced rollback (spec § Exécution): the same reactivation, at once, under
+ * `systemd-run`, its result kept like an activation's.
+ */
+export function rollbackNow(
+  runId: string,
+  origin: HostOrigin,
+  phase: Phase,
+  timeouts: Timeouts,
+): HostCommand {
+  const script = [
+    rollbackScript(origin, phase),
+    "rc=$?",
+    `echo "$rc" > ${shellQuote(resultFile(runId, "rollback"))}`,
+    'exit "$rc"',
+  ].join("\n");
   return {
-    argv: [...SYSTEMD_RUN, "/bin/sh", "-c", rollbackScript(origin, phase)],
+    argv: [...SYSTEMD_RUN, "/bin/sh", "-c", script],
     root: true,
     seconds: timeouts.activation,
   };

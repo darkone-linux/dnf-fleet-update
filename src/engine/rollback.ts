@@ -1,35 +1,66 @@
 // Forced rollback of the fleet (spec § Erreurs et réparations, `rollback`):
-// activated hosts back to their origin, waves in reverse order.
+// activated hosts back to their origin, waves in reverse order. A session
+// dropped by the rollback itself is settled like an activation.
 
+import type { HostOrigin } from "../model/events.ts";
 import { canTransition } from "../model/transitions.ts";
-import { onHost, rollbackNow } from "./commands/host.ts";
+import { onHost, type Phase, rollbackNow } from "./commands/host.ts";
 import { emit, log, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
-import type { HostTable } from "./hosts.ts";
+import type { HostEntry, HostTable } from "./hosts.ts";
 import { pool } from "./pool.ts";
+import { settle, transportFailed } from "./settle.ts";
 import type { Selection } from "./steps/select.ts";
+
+/** Why it failed; `undefined` once back at its origin, or aborted `now`. */
+async function reactivateOrigin(
+  context: RunContext,
+  host: HostEntry,
+  origin: HostOrigin,
+  activated: Phase,
+): Promise<string | undefined> {
+  const { timeouts } = context.params;
+  const command = rollbackNow(context.run.id, origin, activated, timeouts);
+  const target = { host: host.name, local: host.local };
+  const execution = await execute(context, onHost(target, command, timeouts), {
+    onLine: ({ line }) =>
+      emit(context, { kind: "host.output", host: host.name, phase: "rollback", line }),
+  });
+  if (context.signal.aborted || succeeded(execution.result)) return undefined;
+  if (host.local || !transportFailed(execution.result)) {
+    return `rollback failed: ${describeFailure(execution)}`;
+  }
+
+  // Session dropped, a gateway restarting its network: the result file tells.
+  const settled = await settle(context, target, "rollback", false, true);
+  switch (settled.kind) {
+    case "aborted":
+      return undefined;
+    case "result":
+      return settled.code === 0 ? undefined : `rollback failed: exit ${settled.code}`;
+    case "missing":
+      return `rollback did not run: ${describeFailure(execution)}`;
+    case "failed":
+      return settled.detail;
+    case "lost":
+      return "unreachable after rollback";
+  }
+}
 
 async function rollbackHost(context: RunContext, hosts: HostTable, name: string): Promise<void> {
   const host = hosts.get(name);
   const { origin, activated } = host;
   if (origin === undefined || activated === undefined) return;
-
-  const command = rollbackNow(origin, activated, context.params.timeouts);
-  const target = { host: name, local: host.local };
-  const execution = await execute(context, onHost(target, command, context.params.timeouts), {
-    onLine: ({ line }) =>
-      emit(context, { kind: "host.output", host: name, phase: "rollback", line }),
-  });
+  const failure = await reactivateOrigin(context, host, origin, activated);
   if (context.signal.aborted) return;
 
-  if (succeeded(execution.result)) {
+  if (failure === undefined) {
     hosts.set(name, "reverted");
     log(context, "ok", "rolled back to its origin", name);
     return;
   }
-  const note = `rollback failed: ${describeFailure(execution)}`;
-  if (host.state !== "failed") hosts.set(name, "failed", { note });
-  log(context, "error", note, name);
+  if (host.state !== "failed") hosts.set(name, "failed", { note: failure });
+  log(context, "error", failure, name);
 }
 
 /** Head and gateways last: access to the other hosts depends on them. */
