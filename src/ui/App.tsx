@@ -4,7 +4,6 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Event, RunControl, RunSource } from "../model/events.ts";
-import { ExitCode } from "../model/exit-codes.ts";
 import { type Ask, initialState, reduce, visibleHosts } from "../model/state.ts";
 import { color } from "../model/theme.ts";
 import {
@@ -27,7 +26,7 @@ const ABORT_ASK: Ask = {
   id: "abort",
   question: "Abort the deployment?",
   options: [
-    { value: "wave", label: "after wave" },
+    { value: "after-wave", label: "after wave" },
     { value: "now", label: "now" },
     { value: "cancel", label: "cancel" },
   ],
@@ -43,9 +42,18 @@ export interface AppProps {
   preload?: Event[];
   initialView?: View;
   initialSelected?: number;
+
+  /** `q` once the run ended. Absent: the renderer is destroyed and the process exits. */
+  onQuit?: (exitCode: number) => void;
 }
 
-export function App({ source, preload, initialView = "main", initialSelected = 0 }: AppProps) {
+export function App({
+  source,
+  preload,
+  initialView = "main",
+  initialSelected = 0,
+  onQuit,
+}: AppProps) {
   const renderer = useRenderer();
   const { width, height } = useTerminalDimensions();
   const [state, dispatch] = useReducer(reduce, undefined, () =>
@@ -63,47 +71,40 @@ export function App({ source, preload, initialView = "main", initialSelected = 0
   const spinner = useSpinners();
 
   useEffect(() => {
-    if (!source) return;
-    control.current = source((event: Event) => dispatch(event));
-    return () => control.current?.stop();
+    if (source) control.current = source((event: Event) => dispatch(event));
   }, [source]);
 
   const hosts = visibleHosts(state);
   const host = hosts[Math.min(selected, Math.max(0, hosts.length - 1))];
 
-  // Engine question wins over a locally raised one: it blocks the stream.
-  const ask = state.ask ?? localAsk;
+  // The abort dialog is raised on purpose over a pending question, which stays pending.
+  const ask = localAsk ?? state.ask;
 
   // A new question always starts on its first button.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `ask.id` is the trigger, not an input.
   useEffect(() => setChoice(0), [ask?.id]);
 
-  const quit = () => {
-    control.current?.stop();
+  // Before the end, commands still run in their own process groups: abort first.
+  const quitOrAbort = () => {
+    if (!state.end) {
+      setLocalAsk(ABORT_ASK);
+      return;
+    }
+    if (onQuit) {
+      onQuit(state.end.exitCode);
+      return;
+    }
     renderer.destroy();
-    process.exit(state.end?.exitCode ?? 0);
+    process.exit(state.end.exitCode);
   };
 
   const answer = (value: string) => {
-    if (state.ask) {
+    if (!localAsk) {
       control.current?.respond(value);
       return;
     }
-    if (localAsk?.id === "abort") {
-      setLocalAsk(null);
-      if (value === "now" || value === "wave") {
-        dispatch({
-          t: Date.now(),
-          kind: "log",
-          level: "warn",
-          message: value === "now" ? "aborting now" : "aborting after current wave",
-        });
-        dispatch({ t: Date.now(), kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
-        control.current?.stop();
-      }
-      return;
-    }
     setLocalAsk(null);
+    if (value === "now" || value === "after-wave") control.current?.abort(value);
   };
 
   /** alt+↓ / alt+↑: `↵` is taken by the buttons of a pending question. */
@@ -140,8 +141,12 @@ export function App({ source, preload, initialView = "main", initialSelected = 0
       if (key.name === "left") setChoice((value) => (value - 1 + count) % count);
       else if (key.name === "right") setChoice((value) => (value + 1) % count);
       else if (key.name === "return") answer(ask.options[choice]!.value);
-      else if (key.name === "escape") answer("cancel");
-      else if (key.ctrl && key.name === "c") answer("now");
+      // An engine question has no cancel: only its options are answers.
+      else if (key.name === "escape" && localAsk) answer("cancel");
+      else if (key.ctrl && key.name === "c") {
+        if (localAsk) answer("now");
+        else quitOrAbort();
+      }
       return;
     }
 
@@ -159,7 +164,7 @@ export function App({ source, preload, initialView = "main", initialSelected = 0
     }
 
     if (key.ctrl && key.name === "c") {
-      setLocalAsk(ABORT_ASK);
+      quitOrAbort();
       return;
     }
 
@@ -170,7 +175,10 @@ export function App({ source, preload, initialView = "main", initialSelected = 0
 
     switch (key.name) {
       case "q":
-        quit();
+        quitOrAbort();
+        return;
+      case "p":
+        if (!state.end) control.current?.ping();
         return;
       case "tab":
         setFocus((current) => (current === "feed" ? "hosts" : "feed"));

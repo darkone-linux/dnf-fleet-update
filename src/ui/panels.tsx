@@ -506,12 +506,13 @@ export function Footer({ state }: { state: RunState }) {
 /** Help callout, raised by `?` and dismissed by Esc. */
 export function HelpCallout() {
   const keys: [string, string][] = [
-    ["q", "close the current view, quit at the root"],
+    ["q", "close the current view; at the root, abort, or quit once ended"],
     ["⇥", "switch focus feed ↔ hosts"],
     ["↑↓", "scroll, or change host in the log view"],
     ["↵", "selected host → logs"],
     ["alt+↓↑", "expand / collapse the AI answer"],
     ["a", "AI dialog"],
+    ["p", "ping the tracked hosts now"],
     ["^C", "abort"],
     ["esc", "close this callout, leave the log view"],
   ];

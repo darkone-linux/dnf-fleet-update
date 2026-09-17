@@ -3,6 +3,8 @@
 // `after wave`: the current wave, or step outside waves, finishes. `stop`:
 // activations finish, nothing new starts. `now`: every command is killed.
 
+import type { AbortMode } from "../model/events.ts";
+
 /** `done`: nothing left to do before the report (`--build-only`, nothing built). */
 export type Ending = "done" | "aborted" | "stop" | "rollback";
 
@@ -31,7 +33,7 @@ export class RunFlow {
   }
 
   /** Also a `no` to a confirmation: resumable. */
-  abort(mode: "after-wave" | "now"): void {
+  abort(mode: AbortMode): void {
     this.end("aborted");
     if (mode === "now") {
       this.haltController.abort(new Error("run aborted"));

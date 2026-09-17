@@ -6,6 +6,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { type Event, parseEvent, type RunControl } from "../model/events.ts";
+import { ExitCode } from "../model/exit-codes.ts";
 
 const SCENARIO_DIR = fileURLToPath(new URL("../../mock/scenarios/", import.meta.url));
 
@@ -37,15 +38,15 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function startReplay(name: string, speed: number, emit: (event: Event) => void): RunControl {
   const events = loadScenario(name);
   let stopped = false;
+  let previous = 0;
   let resume: ((value: string) => void) | null = null;
 
   const run = async () => {
-    let previous = 0;
     for (const event of events) {
       if (stopped) return;
       await sleep(Math.min(MAX_GAP_MS, Math.max(0, event.t - previous) / speed));
-      previous = event.t;
       if (stopped) return;
+      previous = event.t;
       emit(event);
 
       if (event.kind === "ask") {
@@ -63,9 +64,18 @@ export function startReplay(name: string, speed: number, emit: (event: Event) =>
 
   return {
     respond: (value) => resume?.(value),
-    stop: () => {
+
+    // A recording cannot finish its wave: both modes end the replay at once.
+    abort: (mode) => {
+      if (stopped) return;
       stopped = true;
       resume?.("");
+      const message = mode === "now" ? "aborting now" : "aborting after current wave";
+      emit({ t: previous, kind: "log", level: "warn", message });
+      emit({ t: previous, kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
     },
+
+    // Presence is recorded: nothing to ping.
+    ping: () => {},
   };
 }

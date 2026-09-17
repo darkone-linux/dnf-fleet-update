@@ -147,14 +147,22 @@ export function parseEvent(line: string): Event {
   return value;
 }
 
+/** `after-wave`: the current wave, or step outside waves, finishes. `now`: every command is killed. */
+export type AbortMode = "after-wave" | "now";
+
 /**
- * Interface end of a run. A consumer answers through it and never imports the
- * engine: `main.tsx` binds the source, the replayer today, the engine next.
+ * Interface end of a run. A consumer acts through it and never imports the
+ * engine: `main.tsx` binds the engine, `testing/mock.tsx` a recorded scenario.
  */
 export interface RunControl {
-  /** Answers the pending `ask`: one at a time, it blocks the stream. */
+  /** Answers the pending `ask` with one of its option values. */
   respond: (value: string) => void;
-  stop: () => void;
+
+  /** `^C` dialog; the run still ends with its `run.end`. */
+  abort: (mode: AbortMode) => void;
+
+  /** `p`: pings the tracked hosts now. */
+  ping: () => void;
 }
 
 /** Starts a run that delivers its events, in order, to `emit`. */
