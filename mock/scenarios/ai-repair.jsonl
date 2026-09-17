@@ -59,7 +59,6 @@
 {"t":15400,"kind":"ai.end","id":"a1"}
 {"t":15800,"kind":"ask","id":"repair","question":"Restart nginx.service on nlt?","options":[{"value":"yes","label":"yes"},{"value":"exclude","label":"exclude"},{"value":"stop","label":"stop"}]}
 {"t":16000,"kind":"log","host":"nlt","level":"info","message":"AI action: systemctl restart nginx.service"}
-{"t":16100,"kind":"host.state","host":"nlt","state":"testing"}
 {"t":16400,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: active (running)"}
 {"t":17100,"kind":"host.state","host":"nlt","state":"tested"}
 {"t":17200,"kind":"log","host":"nlt","level":"ok","message":"nginx recovered, activation order issue reported"}
@@ -68,7 +67,9 @@
 {"t":17700,"kind":"step.start","step":"switch","total":3}
 {"t":17900,"kind":"host.state","host":"gw-ag","state":"switching"}
 {"t":18100,"kind":"host.state","host":"gw-ag","state":"deployed"}
+{"t":18200,"kind":"host.state","host":"gfx","state":"switching"}
 {"t":18200,"kind":"host.state","host":"gfx","state":"deployed"}
+{"t":18300,"kind":"host.state","host":"nlt","state":"switching"}
 {"t":18300,"kind":"host.state","host":"nlt","state":"deployed"}
 {"t":18400,"kind":"step.progress","step":"switch","done":3,"total":3}
 {"t":18500,"kind":"step.end","step":"switch","status":"ok"}

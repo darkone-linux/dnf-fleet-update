@@ -54,9 +54,13 @@
 {"t":11600,"kind":"step.progress","step":"test","done":2,"total":2}
 {"t":11700,"kind":"step.end","step":"test","status":"ok"}
 {"t":11900,"kind":"step.start","step":"switch","total":4}
+{"t":12100,"kind":"host.state","host":"hcs","state":"switching"}
 {"t":12100,"kind":"host.state","host":"hcs","state":"deployed"}
+{"t":12200,"kind":"host.state","host":"gw-ag","state":"switching"}
 {"t":12200,"kind":"host.state","host":"gw-ag","state":"deployed"}
+{"t":12300,"kind":"host.state","host":"gfx","state":"switching"}
 {"t":12300,"kind":"host.state","host":"gfx","state":"deployed"}
+{"t":12400,"kind":"host.state","host":"fd-01","state":"switching"}
 {"t":12400,"kind":"host.state","host":"fd-01","state":"deployed"}
 {"t":12500,"kind":"step.progress","step":"switch","done":4,"total":4}
 {"t":12600,"kind":"step.end","step":"switch","status":"ok"}
