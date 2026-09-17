@@ -153,6 +153,11 @@ describe("build", () => {
     expect(feed(events).filter((line) => line.startsWith("error"))).toEqual([
       "error evaluation failed: exit 1: error: mismatch in field 'narHash' of input",
     ]);
+
+    // Known trap: said in plain language, the raw reason untouched.
+    expect(feed(events)).toContain(
+      "warn hint: nix-eval-jobs is not linked against the same Nix as the system: install the version matching nix --version",
+    );
     expect(context.flow.ending).toBe("stop");
     expect(events.at(-1)).toMatchObject({ kind: "step.end", step: "build", status: "error" });
   });

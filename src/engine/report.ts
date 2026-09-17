@@ -14,6 +14,9 @@ export interface ReportInput {
 
   /** Evaluation warnings, deduplicated. */
   warnings: readonly string[];
+
+  /** Known errors met, in plain language (spec § Erreurs et réparations). */
+  knownErrors: readonly string[];
 }
 
 export interface Report {
@@ -65,7 +68,7 @@ function table(headers: readonly string[], rows: readonly string[][]): string[] 
 }
 
 export function renderReport(input: ReportInput): Report {
-  const { state, status, exitCode, durationMs, warnings } = input;
+  const { state, status, exitCode, durationMs, warnings, knownErrors } = input;
   const hosts = state.hosts;
   const ending =
     status === "failed" ? "run stopped on error" : status === "aborted" ? "run aborted" : undefined;
@@ -127,6 +130,9 @@ export function renderReport(input: ReportInput): Report {
     markdown.push("", "## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`));
   }
 
+  if (knownErrors.length > 0) {
+    markdown.push("", "## Known errors", "", ...knownErrors.map((message) => `- ${message}`));
+  }
   if (warnings.length > 0) {
     markdown.push("", "## Evaluation warnings", "", ...warnings.map((warning) => `- ${warning}`));
   }

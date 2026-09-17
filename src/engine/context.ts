@@ -3,6 +3,7 @@
 import type { AskOption, Event, Level } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
 import type { RunFlow } from "./flow.ts";
+import type { KnownErrors } from "./known-errors.ts";
 import type { EngineContext, LocalHost, RunStore } from "./ports.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -33,6 +34,9 @@ export interface RunContext extends EngineContext {
   run: RunStore;
   flow: RunFlow;
   questions: QuestionQueue;
+
+  /** Known errors met by the run, for the report (spec § Erreurs et réparations). */
+  known: KnownErrors;
 
   /** `clock.now()` at the start of the run: `t` of every event counts from it. */
   startedAt: number;

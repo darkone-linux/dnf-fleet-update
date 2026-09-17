@@ -10,6 +10,7 @@ import { describeFailure, execute, succeeded } from "./exec.ts";
 import { type FleetDefaults, parseNetwork } from "./fleet.ts";
 import type { RunFlow } from "./flow.ts";
 import { HostTable } from "./hosts.ts";
+import { KnownErrors } from "./known-errors.ts";
 import type {
   Clock,
   CommandRunner,
@@ -181,6 +182,7 @@ export async function runFleetUpdate(
       local: ports.local,
       run,
       questions: new QuestionQueue(),
+      known: new KnownErrors(),
       startedAt,
     };
     emit(context, {
@@ -242,6 +244,7 @@ export async function runFleetUpdate(
       exitCode,
       durationMs: ports.clock.now() - startedAt,
       warnings: progress.warnings,
+      knownErrors: context.known.all(),
     });
     run.writeReport(report.markdown);
     emit(context, { kind: "step.end", step: "report", status: "ok" });

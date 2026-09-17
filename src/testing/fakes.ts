@@ -5,6 +5,7 @@
 
 import { QuestionQueue, type RunContext } from "../engine/context.ts";
 import { RunFlow } from "../engine/flow.ts";
+import { KnownErrors } from "../engine/known-errors.ts";
 import {
   type Clock,
   type CommandResult,
@@ -305,6 +306,7 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     local: new FakeLocalHost(options.hostname ?? "deployer", options.addresses ?? []),
     run: new MemoryRunStore("20260917T020000Z-full"),
     questions: new QuestionQueue(),
+    known: new KnownErrors(),
     startedAt: 0,
   };
 }

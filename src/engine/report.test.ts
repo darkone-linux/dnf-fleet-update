@@ -47,6 +47,7 @@ describe("renderReport", () => {
       exitCode: 5,
       durationMs: 65_040,
       warnings: [],
+      knownErrors: [],
     });
 
     expect(report.lines).toEqual([
@@ -63,6 +64,7 @@ describe("renderReport", () => {
       exitCode: 0,
       durationMs: 65_040,
       warnings: ["evaluation warning: x renamed"],
+      knownErrors: ["nix-eval-jobs is not linked against the same Nix as the system"],
     });
 
     expect(markdown).toContain("- Commits: consumer 0a1b2c3 chore(update): full fleet");
@@ -71,6 +73,9 @@ describe("renderReport", () => {
     expect(markdown).toContain("| test | 2/2 | gw-ag | 4s |");
     expect(markdown).toContain("| nlt | failed | build failed: x \\| y |");
     expect(markdown).toContain("## Hosts left in test\n\n- hcs\n- gw-ag");
+    expect(markdown).toContain(
+      "## Known errors\n\n- nix-eval-jobs is not linked against the same Nix as the system",
+    );
     expect(markdown.endsWith("- evaluation warning: x renamed\n")).toBe(true);
   });
 
@@ -83,6 +88,7 @@ describe("renderReport", () => {
       exitCode: 0,
       durationMs: 65_100,
       warnings: [],
+      knownErrors: [],
     });
 
     expect(markdown).toContain("| switch | todo |  |");

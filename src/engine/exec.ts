@@ -1,7 +1,8 @@
 // Commands of the steps: output kept, run log fed, failures described.
 
 import { shellJoin } from "./commands/shell.ts";
-import type { RunContext } from "./context.ts";
+import { log, type RunContext } from "./context.ts";
+import { knownError } from "./known-errors.ts";
 import type { CommandResult, CommandSpec, LogName, OutputLine } from "./ports.ts";
 
 export interface Execution {
@@ -37,7 +38,18 @@ export async function execute(
       onLine?.(line);
     },
   });
-  return { result, stdout, stderr };
+  const execution = { result, stdout, stderr };
+
+  // Known trap behind a failure: said in plain language, the reason untouched.
+  if (!succeeded(result)) hint(context, execution);
+  return execution;
+}
+
+function hint(context: RunContext, { stdout, stderr }: Execution): void {
+  const message = knownError([...stderr, ...stdout].join("\n"));
+  if (message !== undefined && context.known.add(message)) {
+    log(context, "warn", `hint: ${message}`);
+  }
 }
 
 export function succeeded(result: CommandResult): boolean {
