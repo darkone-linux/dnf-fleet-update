@@ -87,7 +87,6 @@ export interface SimOptions {
 
   /** The deployment host, when it is part of the fleet: commands run without ssh. */
   local?: string;
-  codev?: boolean;
 
   /** Uncommitted changes before the run. */
   dirty?: { consumer?: boolean; dnf?: boolean };

@@ -110,7 +110,7 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | `src/cli/` | `options.ts` (argv → run parameters, validation: exit `2`, `--resume` rules), `help.ts` | model, engine |
 | `src/ui/` | TUI: `App.tsx` (screen, keys, views), `panels.tsx` (components); presentation only | model |
 | `src/output/` | `text.ts`: `--no-ui` text output, the feed without colours | model |
-| `src/testing/` | capture harness (`capture.tsx`), scenario replay (`mock.tsx`, `replay.ts`), port fakes | anything |
+| `src/testing/` | capture harness (`capture.tsx`), scenario replay (`mock.tsx`, `replay.ts`), port fakes, simulated fleet (`sim.ts`) and whole runs (`runs.ts`) | anything |
 | `src/main.tsx` | composition root: options, real ports, engine bound to the interface or the text output, signals | anything |
 | `tests/` | integration tests; fixtures in `tests/fixtures/` | anything |
 | `mock/scenarios/` | recorded streams (`.jsonl`) | — |
@@ -141,6 +141,10 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 - Engine: `fakeContext()` (`src/testing/fakes.ts`) — commands scripted by argv
   prefix, manual clock, recorded events, scripted answers. Unscripted command
   or unanswered question = failure.
+- Whole runs: `simulateRun()` (`src/testing/runs.ts`) — real options, engine
+  and folds on the simulated fleet (`sim.ts`: per-host behaviour, host-side
+  system, profile, rollback timers). Invariants checked on every run; a
+  scenario in `tests/runs/` asserts its outcome only.
 - Never in tests: real nix, ssh, network, remote host, wall-clock sleep.
   Adapters: temp dirs and local programs only.
 - Scenarios are contract fixtures, folded by `src/model/state.test.ts`. New

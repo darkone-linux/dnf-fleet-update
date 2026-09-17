@@ -40,6 +40,7 @@ export interface RunCase extends Omit<SimOptions, "hooks"> {
 
   /** Default: an address of zone `ag`. */
   addresses?: string[];
+  codev?: boolean;
 
   /** Fake time moved per idle round. */
   stepMs?: number;
