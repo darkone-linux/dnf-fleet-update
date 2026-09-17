@@ -131,6 +131,27 @@ describe("runFleetUpdate", () => {
     expect(ports.lock.held).toBe(false);
   });
 
+  test("aborted now while reading network.nix: exit 5 before any run directory", async () => {
+    const flowHolder: { flow?: RunFlow } = {};
+    const { ports, flow, run, kinds, end } = harness({
+      commands: [
+        {
+          match: (argv) => argv.join(" ").endsWith("/network.nix"),
+          onRun: () => flowHolder.flow?.abort("now"),
+          gate: new Promise(() => {}),
+        },
+      ],
+    });
+    flowHolder.flow = flow;
+
+    expect(await run()).toBe(5);
+
+    expect(kinds()).toEqual(["run.end"]);
+    expect(end()).toMatchObject({ status: "aborted", exitCode: 5 });
+    expect(ports.store.runs).toEqual([]);
+    expect(ports.lock.held).toBe(false);
+  });
+
   test("uncommitted changes: exit 1, no step run, report written", async () => {
     const { ports, run, kinds, end } = harness({
       commands: [

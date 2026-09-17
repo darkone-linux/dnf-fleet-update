@@ -52,11 +52,16 @@ function early(ports: RunPorts, startedAt: number, event: EventInput): void {
 }
 
 /** Declared before the update: the parameters hold for the whole run. */
-async function fleetDefaults(ports: RunPorts, workspace: string): Promise<Result<FleetDefaults>> {
+async function fleetDefaults(
+  ports: RunPorts,
+  workspace: string,
+  signal: AbortSignal,
+): Promise<Result<FleetDefaults>> {
   const spec = readGenerated(workspace, "network.nix", DEFAULT_TIMEOUTS);
   const stdout: string[] = [];
   const stderr: string[] = [];
   const result = await ports.commands.run(spec, {
+    signal,
     onLine: (line) => (line.stream === "stdout" ? stdout : stderr).push(line.line),
   });
   if (!succeeded(result)) {
@@ -152,7 +157,11 @@ export async function runFleetUpdate(
   }
 
   try {
-    const defaults = await fleetDefaults(ports, request.workspace);
+    const defaults = await fleetDefaults(ports, request.workspace, flow.now);
+    if (flow.now.aborted) {
+      early(ports, startedAt, { kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
+      return ExitCode.Aborted;
+    }
     if (!defaults.ok) return refuse(defaults.error, ExitCode.Failed);
     const params = request.resolve(defaults.value);
     if (!params.ok) return refuse(params.error, ExitCode.InvalidOptions);

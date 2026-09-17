@@ -66,7 +66,7 @@ export class FakeCommands implements CommandRunner {
 
     script.onRun?.(spec);
     for (const line of script.output ?? []) onLine?.(line);
-    if (script.gate !== undefined) {
+    if (script.gate !== undefined && !signal?.aborted) {
       const aborted = new Promise<void>((resolve) => {
         signal?.addEventListener("abort", () => resolve(), { once: true });
       });
