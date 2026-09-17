@@ -106,7 +106,7 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | `src/engine/steps/` | *planned* — one module per step, receives `EngineContext` | model, ports |
 | `src/adapters/` | *planned* — real ports: process, nix, ssh, git, flock, store (`var/deployments/`), Matrix | model, ports |
 | `src/ai/` | *planned* — providers (Claude Agent SDK, opencode), guarded tools | model, engine |
-| `src/cli/` | *planned* — argv → options, validation (exit `2`) | model, engine |
+| `src/cli/` | `options.ts` (argv → run parameters, validation: exit `2`, `--resume` rules), `help.ts` | model, engine |
 | `src/ui/` | TUI: `App.tsx` (screen, keys, views), `panels.tsx` (components); presentation only | model |
 | `src/output/` | *planned* — `--no-ui` text output | model |
 | `src/testing/` | capture harness, port fakes | anything |
