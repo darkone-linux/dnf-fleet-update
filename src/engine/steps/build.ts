@@ -6,7 +6,7 @@ import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { decideFailure } from "../decisions.ts";
 import { describeFailure, execute, succeeded } from "../exec.ts";
 import type { HostTable } from "../hosts.ts";
-import { parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
+import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
 import type { Presence } from "../presence.ts";
 import { endStep } from "./step.ts";
 
@@ -21,9 +21,6 @@ export interface BuildOutcome {
 const EVAL_WARNING = /^(evaluation )?warning:/;
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
-
-/** First line only: nix errors carry a trace below. */
-const firstLine = (text: string) => text.trim().split("\n")[0] ?? "";
 
 async function buildOne(
   context: RunContext,
@@ -53,7 +50,7 @@ async function buildOne(
         case "warning":
           return output(`warning: ${entry.message}`);
         case "error":
-          lastError = firstLine(entry.message);
+          lastError = errorSummary(entry.message);
           for (const text of entry.message.split("\n")) output(text);
           return;
       }
@@ -104,7 +101,7 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
       }
       if (hosts.get(job.host).state !== "building") return;
       if (job.kind === "error") {
-        const note = firstLine(job.message);
+        const note = errorSummary(job.message);
         hosts.set(job.host, "failed", { note });
         log(context, "error", `evaluation failed: ${note}`, job.host);
         settled();

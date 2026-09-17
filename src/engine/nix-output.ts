@@ -59,6 +59,15 @@ export function parseEvalJob(line: string): EvalJob {
   return { kind: "invalid", line };
 }
 
+/** Cause of a nix error on one line: the last `error:` of its trace, else its first line. */
+export function errorSummary(message: string): string {
+  const lines = stripAnsi(message)
+    .split("\n")
+    .map((line) => line.trim());
+  const causes = lines.flatMap((line) => /^error:\s*(\S.*)$/.exec(line)?.[1] ?? []);
+  return causes.at(-1) ?? lines.find((line) => line !== "")?.replace(/^error:\s*/, "") ?? "";
+}
+
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
 
 export function stripAnsi(text: string): string {

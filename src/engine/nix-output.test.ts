@@ -1,7 +1,7 @@
 // Parsers against line shapes recorded from nix 2.34 and nix-eval-jobs 2.34 (spike).
 
 import { describe, expect, test } from "bun:test";
-import { parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "./nix-output.ts";
+import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "./nix-output.ts";
 
 const DRV = "/nix/store/mfm2y1k08lnq8cfqdjiz92bjzkzfn575-nixos-system-hcs-dnf-0.1.0-26.11.drv";
 const OUT = "/nix/store/jq1s2fmaq2pnv5f233sfkhmjm0lzqgcm-nixos-system-hcs-dnf-0.1.0-26.11";
@@ -139,6 +139,31 @@ test("store paths: real ones accepted, anything shell-meaningful refused", () =>
   ]) {
     expect({ path, ok: STORE_PATH.test(path) }).toEqual({ path, ok: false });
   }
+});
+
+describe("errorSummary", () => {
+  test("a nix trace: its last error line, the cause", () => {
+    const trace = [
+      "error:",
+      "       … while calling the 'derivationStrict' builtin",
+      "         at «nix-internal»/derivation-internal.nix:37:12:",
+      "",
+      "       … while evaluating the option `sops.package':",
+      "",
+      "       (stack trace truncated; use '--show-trace' to show the full, detailed trace)",
+      "",
+      "       error: Go 1.25 is end-of-life and 'go_1_25' has been removed.",
+    ].join("\n");
+
+    expect(errorSummary(trace)).toBe("Go 1.25 is end-of-life and 'go_1_25' has been removed.");
+  });
+
+  test("a one-line or first-line error: that line, prefix dropped", () => {
+    expect(errorSummary("error: builder for 'x.drv' failed with exit code 1;\n  last log")).toBe(
+      "builder for 'x.drv' failed with exit code 1;",
+    );
+    expect(errorSummary("\n  cannot connect to daemon\n")).toBe("cannot connect to daemon");
+  });
 });
 
 test("stripAnsi leaves plain text alone", () => {

@@ -92,7 +92,10 @@ describe("build", () => {
   test("evaluation error, build error, host without result: failed, then excluded unattended", async () => {
     const { context, hosts, presence, states } = setup([
       evaluation([
-        JSON.stringify({ attr: "hcs", error: "error: attribute 'x' missing\n  at trace" }),
+        JSON.stringify({
+          attr: "hcs",
+          error: "error:\n  … while evaluating the option `x':\n\n  error: attribute 'x' missing",
+        }),
         ...["gw-ag", "srv-ag", "pc-ag", "gw-cp"].map(evalLine),
       ]),
       {
@@ -106,8 +109,8 @@ describe("build", () => {
     await presence.stop();
 
     expect(states()).toMatchObject({ hcs: "excluded", "gw-ag": "excluded", "lt-cp": "excluded" });
-    expect(hosts.get("hcs").note).toBe("error: attribute 'x' missing");
-    expect(hosts.get("gw-ag").note).toBe("error: builder for x failed");
+    expect(hosts.get("hcs").note).toBe("attribute 'x' missing");
+    expect(hosts.get("gw-ag").note).toBe("builder for x failed");
     expect(hosts.get("lt-cp").note).toBe("not evaluated");
     expect(feed(context.events.events)).toContain("warn 3 builds ok, 3 failed");
     expect(context.flow.ending).toBeUndefined();

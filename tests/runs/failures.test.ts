@@ -17,15 +17,13 @@ test("build failed, unattended: decided at the end of the build, excluded, the r
   expect(run.recorded?.state?.steps.build.status).toBe("done");
   expect(run.feed).toEqual(
     expect.arrayContaining([
-      "error srv-ag: build failed: error: builder for 'foo.drv' failed with exit code 1",
+      "error srv-ag: build failed: builder for 'foo.drv' failed with exit code 1",
       "warn 5 builds ok, 1 failed",
       "warn srv-ag: excluded",
     ]),
   );
   const report = run.recorded?.report ?? "";
-  expect(report).toContain(
-    "| srv-ag | excluded | error: builder for 'foo.drv' failed with exit code 1 |",
-  );
+  expect(report).toContain("| srv-ag | excluded | builder for 'foo.drv' failed with exit code 1 |");
   expect(report).toContain(
     "## Evaluation warnings\n\n- evaluation warning: 'system' has been renamed\n",
   );
@@ -62,7 +60,7 @@ test("evaluation error: that host failed and excluded, the others built from the
   expect(run.sim.count("eval")).toBe(1);
   expect(run.sim.count("build", "lt-cp")).toBe(0);
   expect(run.statuses["lt-cp"]).toBe("excluded");
-  expect(run.feed).toContain("error lt-cp: evaluation failed: error: attribute 'foo' missing");
+  expect(run.feed).toContain("error lt-cp: evaluation failed: attribute 'foo' missing");
 });
 
 test("evaluation failed as a whole, interactive: one error, no question, exit 1", async () => {
