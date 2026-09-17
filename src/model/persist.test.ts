@@ -56,6 +56,16 @@ test("an aborted run stays unfinished, resumable from its current step", () => {
   expect(Object.values(statuses(state)).every((status) => status === "remaining")).toBe(true);
 });
 
+test("a step cut by an abort now: aborted, still the step to resume, hosts not done", () => {
+  const state = fold([
+    ...loadScenario("abort"),
+    { t: 28000, kind: "step.end", step: "build", status: "aborted" },
+  ]);
+  expect(state.steps.build).toMatchObject({ status: "aborted", endedAt: 28000 });
+  expect(state.currentStep).toBe("build");
+  expect(Object.values(statuses(state)).every((status) => status === "remaining")).toBe(true);
+});
+
 test("a known exclusion and a skipped update are kept", () => {
   const state = fold(loadScenario("offline"));
   expect(state.steps.update.status).toBe("skipped");

@@ -67,6 +67,8 @@ test("now during an activation: nothing settled, its timer kept, the host back a
   });
   expect(run.feed).toContain("warn aborting now");
   expect(run.recorded?.state?.end).toEqual({ status: "aborted", exitCode: 5 });
+  expect(run.recorded?.report).toMatch(/\| test \| aborted \|/);
+  expect(run.ui.hosts.find((host) => host.name === "gw-ag")?.interrupted).toBe(true);
 
   run.clock.advance(600_000);
   run.sim.tick();

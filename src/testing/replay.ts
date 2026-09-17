@@ -5,7 +5,7 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { type Event, parseEvent, type RunControl } from "../model/events.ts";
+import { type Event, parseEvent, type RunControl, type StepId } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
 
 const SCENARIO_DIR = fileURLToPath(new URL("../../mock/scenarios/", import.meta.url));
@@ -39,6 +39,7 @@ export function startReplay(name: string, speed: number, emit: (event: Event) =>
   const events = loadScenario(name);
   let stopped = false;
   let previous = 0;
+  let running: StepId | undefined;
   let resume: ((value: string) => void) | null = null;
 
   const run = async () => {
@@ -47,6 +48,8 @@ export function startReplay(name: string, speed: number, emit: (event: Event) =>
       await sleep(Math.min(MAX_GAP_MS, Math.max(0, event.t - previous) / speed));
       if (stopped) return;
       previous = event.t;
+      if (event.kind === "step.start") running = event.step;
+      if (event.kind === "step.end") running = undefined;
       emit(event);
 
       if (event.kind === "ask") {
@@ -72,6 +75,7 @@ export function startReplay(name: string, speed: number, emit: (event: Event) =>
       resume?.("");
       const message = mode === "now" ? "aborting now" : "aborting after current wave";
       emit({ t: previous, kind: "log", level: "warn", message });
+      if (running) emit({ t: previous, kind: "step.end", step: running, status: "aborted" });
       emit({ t: previous, kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
     },
 

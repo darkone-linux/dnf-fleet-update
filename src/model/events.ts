@@ -90,7 +90,8 @@ export type Event =
   | (Base & { kind: "host.presence"; host: string; online: boolean })
   | (Base & { kind: "step.start"; step: StepId; total?: number })
   | (Base & { kind: "step.progress"; step: StepId; done: number; total: number })
-  | (Base & { kind: "step.end"; step: StepId; status: "ok" | "error" | "skipped" })
+  // `aborted`: cut by an abort `now`, closed by the run.
+  | (Base & { kind: "step.end"; step: StepId; status: "ok" | "error" | "skipped" | "aborted" })
   | (Base & { kind: "wave.start"; index: number; total: number; hosts: string[] })
   | (Base & {
       kind: "host.state";

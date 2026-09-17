@@ -16,7 +16,7 @@ import {
   type StepId,
 } from "./events.ts";
 
-export type StepStatus = "todo" | "running" | "done" | "error" | "skipped";
+export type StepStatus = "todo" | "running" | "done" | "error" | "skipped" | "aborted";
 
 export interface StepRow {
   status: StepStatus;
@@ -38,6 +38,9 @@ export interface HostRow {
 
   /** Exclusion known before the run: hidden from the table. */
   known?: boolean;
+
+  /** Still in an active state when the run ended: its command was killed. */
+  interrupted?: boolean;
 
   /** Phase and last output line: the active region, not the feed. */
   phase?: string;
@@ -86,8 +89,8 @@ export interface RunState {
 }
 
 /** Status of a step once `step.end` arrived. */
-export function endedStep(status: "ok" | "error" | "skipped"): StepStatus {
-  return status === "ok" ? "done" : status === "skipped" ? "skipped" : "error";
+export function endedStep(status: "ok" | "error" | "skipped" | "aborted"): StepStatus {
+  return status === "ok" ? "done" : status;
 }
 
 export function initialState(): RunState {
@@ -287,7 +290,7 @@ export function reduce(state: RunState, event: Event): RunState {
       return state.ask?.id === event.id ? { ...state, ask: undefined } : state;
 
     // Report rendered in the feed (spec § Rendu). A question the run left
-    // unanswered, aborted `now`, has nothing left to wait for.
+    // unanswered, or a host still active, was cut by the end of the run.
     case "run.end": {
       const report = event.report ?? [];
       const level = END_LEVELS[event.status];
@@ -296,6 +299,11 @@ export function reduce(state: RunState, event: Event): RunState {
       );
       return {
         ...state,
+        hosts: state.hosts.map((host) =>
+          isActive(host.state)
+            ? { ...host, interrupted: true, phase: undefined, lastLine: undefined }
+            : host,
+        ),
         feed: [...state.feed, ...lines],
         ask: undefined,
         end: { status: event.status, exitCode: event.exitCode, report },
@@ -308,7 +316,7 @@ export function reduce(state: RunState, event: Event): RunState {
 }
 
 export function activeHosts(state: RunState): HostRow[] {
-  return state.hosts.filter((host) => isActive(host.state));
+  return state.hosts.filter((host) => isActive(host.state) && !host.interrupted);
 }
 
 const hidden = (host: HostRow): boolean => host.state === "excluded" && host.known === true;
@@ -323,14 +331,18 @@ export function excludedCount(state: RunState): number {
   return state.hosts.filter(hidden).length;
 }
 
-/** Progress state, or presence: `offline` when unreachable, `unknown` before any ping answer. */
-export type ShownState = HostState | "offline" | "unknown";
+/**
+ * Progress state, `interrupted` when cut by the end of the run, or presence:
+ * `offline` when unreachable, `unknown` before any ping answer.
+ */
+export type ShownState = HostState | "interrupted" | "offline" | "unknown";
 
-/** Spec § États affichés: exclusion > failure > error > presence > progress. */
+/** Spec § États affichés: exclusion > failure > error > interruption > presence > progress. */
 export function shownState(host: HostRow): ShownState {
   if (host.state === "excluded" || host.state === "failed" || host.state === "error") {
     return host.state;
   }
+  if (host.interrupted) return "interrupted";
   if (host.online === undefined) return "unknown";
   return host.online ? host.state : "offline";
 }

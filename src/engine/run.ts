@@ -215,6 +215,13 @@ export async function runFleetUpdate(
       leaveAborts();
     }
 
+    // Cut by `now`, or by an internal error: the step never ended on its own.
+    const cut = recorder.state.currentStep;
+    if (cut !== undefined && recorder.state.steps[cut].status === "running") {
+      const status = flow.now.aborted ? "aborted" : "error";
+      emit(context, { kind: "step.end", step: cut, status });
+    }
+
     const stopped = progress.failed || flow.ending === "stop" || flow.ending === "rollback";
     const aborted = flow.ending === "aborted" || flow.now.aborted;
     const status = stopped ? "failed" : aborted ? "aborted" : "done";

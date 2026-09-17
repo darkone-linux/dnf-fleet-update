@@ -7,6 +7,7 @@ import { expect, test } from "bun:test";
 import { listScenarios, loadScenario } from "../testing/replay.ts";
 import { type Event, type HostState, STEPS } from "./events.ts";
 import {
+  activeHosts,
   excludedCount,
   initialState,
   type RunState,
@@ -91,6 +92,22 @@ test("abort stops mid-build with nothing deployed", () => {
   expect(state.steps.build.status).toBe("running");
   expect(countState(state, "deployed")).toBe(0);
   expect(state.end).toBeUndefined();
+});
+
+test("abort now: the step cut shows aborted, hosts cut interrupted, out of the active region", () => {
+  const cut: Event[] = [
+    { t: 28000, kind: "step.end", step: "build", status: "aborted" },
+    { t: 28000, kind: "run.end", status: "aborted", exitCode: 5 },
+  ];
+  const state = [...loadScenario("abort"), ...cut].reduce(reduce, initialState());
+
+  expect(state.steps.build.status).toBe("aborted");
+  expect(state.hosts.filter((host) => host.state === "building")).not.toHaveLength(0);
+  expect(countState(state, "interrupted")).toBe(
+    state.hosts.filter((host) => host.state === "building").length,
+  );
+  expect(activeHosts(state)).toEqual([]);
+  expect(state.hosts.every((host) => host.lastLine === undefined)).toBe(true);
 });
 
 test("settled hosts drop their live output line", () => {

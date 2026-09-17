@@ -172,16 +172,17 @@ function invariants(outcome: RunOutcome, lock: FakeLock): string[] {
     );
   }
 
-  // Questions and steps close, unless everything was killed.
+  // Questions close, unless everything was killed; steps always do.
   if (!killed) {
     for (const event of events) {
       if (event.kind !== "ask") continue;
       const closed = events.some((other) => other.kind === "ask.close" && other.id === event.id);
       check(closed, `question ${event.id} closed`);
     }
-    for (const [step, row] of Object.entries(recorded?.state?.steps ?? {})) {
-      check(row.status !== "running", `step ${step} ended`);
-    }
+  }
+  for (const [step, row] of Object.entries(recorded?.state?.steps ?? {})) {
+    check(row.status !== "running", `step ${step} ended`);
+    check(killed || row.status !== "aborted", `step ${step} aborted without a kill`);
   }
   check(ui.ask === undefined && ui.end !== undefined, "interface: ended, no question left");
   for (const host of recorded?.state?.hosts ?? []) {

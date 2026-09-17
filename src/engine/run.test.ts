@@ -215,6 +215,9 @@ describe("runFleetUpdate", () => {
     expect(await run()).toBe(5);
 
     expect(feed(ports.events.events)).toContain("warn aborting now");
+    expect(ports.events.events).toContainEqual(
+      expect.objectContaining({ kind: "step.end", step: "build", status: "aborted" }),
+    );
     expect(end()).toMatchObject({ status: "aborted", exitCode: 5 });
     expect(ports.lock.held).toBe(false);
   });
@@ -234,6 +237,9 @@ describe("runFleetUpdate", () => {
     expect(await run()).toBe(1);
 
     expect(feed(ports.events.events)).toContain("error internal error: boom");
+    expect(ports.events.events).toContainEqual(
+      expect.objectContaining({ kind: "step.end", step: "update", status: "error" }),
+    );
     expect(end()).toMatchObject({ status: "failed", exitCode: 1 });
   });
 });

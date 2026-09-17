@@ -54,6 +54,7 @@ export const hostGlyph: Record<ShownState, string> = {
   failed: "🌧️",
   reverted: "🌫️",
   excluded: "⛔",
+  interrupted: "🌩️",
   offline: "💤",
   unknown: "❔",
 };
@@ -71,6 +72,7 @@ export const hostStateColor: Record<ShownState, string> = {
   failed: color.error,
   reverted: color.dim,
   excluded: color.dim,
+  interrupted: color.warn,
   offline: color.dim,
   unknown: color.dim,
 };
@@ -82,6 +84,7 @@ export const stepGlyph: Record<StepStatus, string> = {
   done: "✓",
   error: "✗",
   skipped: "✓",
+  aborted: "✗",
 };
 
 export const stepColor: Record<StepStatus, string> = {
@@ -90,6 +93,9 @@ export const stepColor: Record<StepStatus, string> = {
   done: color.ok,
   error: color.error,
   skipped: color.dim,
+
+  // Red stays for errors: an abort is the user's choice.
+  aborted: color.warn,
 };
 
 /** Steps: classic 6-dot braille spinner, one column, aligns with the text glyphs. */
