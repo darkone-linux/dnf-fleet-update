@@ -513,6 +513,7 @@ export function HelpCallout() {
     ["alt+↓↑", "expand / collapse the AI answer"],
     ["a", "AI dialog"],
     ["p", "ping the tracked hosts now"],
+    ["s", "stop now, stay to inspect"],
     ["^C", "abort"],
     ["esc", "close this callout, leave the log view"],
   ];

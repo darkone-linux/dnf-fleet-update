@@ -82,8 +82,10 @@ const ask: Event = {
   ],
 };
 
-test("^C opens the abort dialog, a second ^C aborts now", async () => {
-  const { setup, calls, frame } = await start();
+const aborted: Event = { t: 2, kind: "run.end", status: "aborted", exitCode: 5 };
+
+test("^C opens the abort dialog, a second ^C aborts now and quits once ended", async () => {
+  const { setup, calls, quits, emit, frame } = await start();
 
   act(() => setup.mockInput.pressCtrlC());
   expect(await frame()).toContain("Abort the deployment?");
@@ -93,6 +95,53 @@ test("^C opens the abort dialog, a second ^C aborts now", async () => {
   const shown = await frame();
   expect(shown).toContain("? help");
   expect(shown).not.toContain("Abort the deployment?");
+  expect(quits).toEqual([]);
+
+  emit(aborted);
+  await setup.renderOnce();
+  expect(quits).toEqual([5]);
+});
+
+test("now chosen in the abort dialog: quits once the run ended", async () => {
+  const { setup, calls, quits, emit } = await start();
+
+  act(() => setup.mockInput.pressKey("q"));
+  await setup.renderOnce();
+  act(() => setup.mockInput.pressArrow("right"));
+  await setup.renderOnce();
+  act(() => setup.mockInput.pressEnter());
+  expect(calls).toEqual(["abort now"]);
+  expect(quits).toEqual([]);
+
+  emit(aborted);
+  await setup.renderOnce();
+  expect(quits).toEqual([5]);
+});
+
+test("s asks first; yes stops now and stays open until q", async () => {
+  const { setup, calls, quits, emit, frame } = await start();
+
+  act(() => setup.mockInput.pressKey("s"));
+  expect(await frame()).toContain("Stop the deployment now?");
+  act(() => setup.mockInput.pressArrow("right"));
+  await setup.renderOnce();
+  act(() => setup.mockInput.pressEnter());
+  expect(calls).toEqual([]);
+
+  act(() => setup.mockInput.pressKey("s"));
+  await setup.renderOnce();
+  act(() => setup.mockInput.pressEnter());
+  expect(calls).toEqual(["abort now"]);
+
+  emit({ ...aborted, report: ["1 not done (h)"] });
+  const ended = await frame();
+  expect(ended).toContain("1 not done (h)");
+  expect(quits).toEqual([]);
+
+  act(() => setup.mockInput.pressKey("s"));
+  expect(await frame()).not.toContain("Stop the deployment now?");
+  act(() => setup.mockInput.pressKey("q"));
+  expect(quits).toEqual([5]);
 });
 
 test("after wave is chosen with the arrows", async () => {
@@ -120,7 +169,7 @@ test("q aborts while running, quits with the exit code once ended", async () => 
   expect(calls).toEqual([]);
 });
 
-test("an engine question takes only its options; ^C raises the abort dialog over it", async () => {
+test("an engine question takes only its options; ^C and s raise their dialog over it", async () => {
   const { setup, calls, emit, frame } = await start();
   emit(ask);
   expect(await frame()).toContain("Build done. Start the test?");
@@ -131,6 +180,12 @@ test("an engine question takes only its options; ^C raises the abort dialog over
 
   act(() => setup.mockInput.pressCtrlC());
   expect(await frame()).toContain("Abort the deployment?");
+  act(() => setup.mockInput.pressEscape());
+  await settle(setup);
+  expect(await frame()).toContain("Build done. Start the test?");
+
+  act(() => setup.mockInput.pressKey("s"));
+  expect(await frame()).toContain("Stop the deployment now?");
   act(() => setup.mockInput.pressEscape());
   await settle(setup);
   expect(await frame()).toContain("Build done. Start the test?");

@@ -32,6 +32,16 @@ const ABORT_ASK: Ask = {
   ],
 };
 
+/** `s`: killed like `now`, but the interface stays open for inspection. */
+const STOP_ASK: Ask = {
+  id: "stop",
+  question: "Stop the deployment now?",
+  options: [
+    { value: "stop", label: "yes" },
+    { value: "cancel", label: "no" },
+  ],
+};
+
 type View = "main" | "logs";
 
 export interface AppProps {
@@ -67,6 +77,7 @@ export function App({
   const [choice, setChoice] = useState(0);
   const [aiPrompt, setAiPrompt] = useState(false);
   const [help, setHelp] = useState(false);
+  const [quitOnEnd, setQuitOnEnd] = useState(false);
   const control = useRef<RunControl | null>(null);
   const spinner = useSpinners();
 
@@ -84,18 +95,30 @@ export function App({
   // biome-ignore lint/correctness/useExhaustiveDependencies: `ask.id` is the trigger, not an input.
   useEffect(() => setChoice(0), [ask?.id]);
 
-  // Before the end, commands still run in their own process groups: abort first.
-  const quitOrAbort = () => {
-    if (!state.end) {
-      setLocalAsk(ABORT_ASK);
-      return;
-    }
+  const quit = (exitCode: number) => {
     if (onQuit) {
-      onQuit(state.end.exitCode);
+      onQuit(exitCode);
       return;
     }
     renderer.destroy();
-    process.exit(state.end.exitCode);
+    process.exit(exitCode);
+  };
+
+  // Abort `now`: commands killed and report written, nothing left to watch.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `quit` reads only `onQuit` and the renderer, both stable.
+  useEffect(() => {
+    if (quitOnEnd && state.end) quit(state.end.exitCode);
+  }, [quitOnEnd, state.end]);
+
+  // Before the end, commands still run in their own process groups: abort first.
+  const quitOrAbort = () => {
+    if (state.end) quit(state.end.exitCode);
+    else setLocalAsk(ABORT_ASK);
+  };
+
+  /** Over a pending question too: it stays pending behind the dialog. */
+  const askStop = () => {
+    if (!state.end) setLocalAsk(STOP_ASK);
   };
 
   const answer = (value: string) => {
@@ -104,7 +127,9 @@ export function App({
       return;
     }
     setLocalAsk(null);
-    if (value === "now" || value === "after-wave") control.current?.abort(value);
+    if (value === "after-wave") control.current?.abort("after-wave");
+    if (value === "now" || value === "stop") control.current?.abort("now");
+    if (value === "now") setQuitOnEnd(true);
   };
 
   const moveSelection = (delta: number) =>
@@ -152,6 +177,9 @@ export function App({
       else if (key.ctrl && key.name === "c") {
         setView("main");
         quitOrAbort();
+      } else if (key.name === "s") {
+        setView("main");
+        askStop();
       }
       return;
     }
@@ -177,6 +205,8 @@ export function App({
       } else if (key.ctrl && key.name === "c") {
         if (localAsk) answer("now");
         else quitOrAbort();
+      } else if (key.name === "s" && !localAsk) {
+        askStop();
       }
       return;
     }
@@ -194,6 +224,9 @@ export function App({
     switch (key.name) {
       case "q":
         quitOrAbort();
+        return;
+      case "s":
+        askStop();
         return;
       case "p":
         if (!state.end) control.current?.ping();
