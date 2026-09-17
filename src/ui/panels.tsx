@@ -330,13 +330,16 @@ function StepRows({ state, spinner }: { state: RunState; spinner: string }) {
         const row = state.steps[step];
         const running = row.status === "running";
         const glyph = stepGlyph[row.status] === "" ? spinner : stepGlyph[row.status];
+
+        // Ruled out by the options (`--build-only`): name as dim as its cross.
+        const name = row.status === "omitted" ? color.dim : color.text;
         const background = running ? color.selection : color.panel;
         return (
           <box key={step} flexDirection="row" backgroundColor={background}>
             <text fg={stepColor[row.status]} bg={background}>
               {`${glyph} `}
             </text>
-            <text fg={running ? color.white : color.text} bg={background}>
+            <text fg={running ? color.white : name} bg={background}>
               {STEP_LABELS[step]}
             </text>
             <box flexGrow={1} backgroundColor={background} />
