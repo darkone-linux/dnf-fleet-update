@@ -44,6 +44,8 @@
 {"t":8410,"kind":"host.presence","host":"vbox-test","online":true}
 {"t":8411,"kind":"host.presence","host":"fl-01","online":true}
 {"t":8412,"kind":"host.presence","host":"lenovo","online":true}
+{"t":8413,"kind":"host.presence","host":"vbox-umi","online":false}
+{"t":8414,"kind":"host.presence","host":"alt","online":false}
 {"t":8492,"kind":"host.state","host":"gw-cp","state":"building"}
 {"t":8493,"kind":"host.state","host":"gw-lg","state":"building"}
 {"t":8494,"kind":"host.state","host":"ms-a2","state":"building"}

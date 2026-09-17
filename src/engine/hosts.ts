@@ -12,7 +12,9 @@ export interface HostEntry {
   profile: string;
   zone: string;
   state: HostState;
-  online: boolean;
+
+  /** Last ping answer; undefined until the first one, unreachable for the waves. */
+  online?: boolean;
 
   /** Guarded when lost: never excluded (spec § Erreurs et réparations). */
   gateway: boolean;
@@ -54,7 +56,6 @@ export class HostTable {
         profile: host.profile,
         zone: host.zone,
         state: "pending",
-        online: false,
         gateway: selection.gateways.has(host.name),
         local: host.name === selection.local,
         lost: false,
@@ -101,7 +102,7 @@ export class HostTable {
     emit(this.context, { kind: "host.state", host: name, state: entry.state, note });
   }
 
-  /** Emits only a change: every host starts unreachable. */
+  /** Emits the first answer, then only a change. */
   presence(name: string, online: boolean): void {
     const entry = this.get(name);
     if (entry.online === online) return;

@@ -33,7 +33,9 @@ export interface PersistedHost {
   profile: string;
   zone: string;
   state: HostState;
-  online: boolean;
+
+  /** Last ping answer; absent until the first one. */
+  online?: boolean;
   status: HostStatus;
   note?: string;
   path?: string;
@@ -92,7 +94,7 @@ export function initialPersisted(): PersistedState {
 }
 
 /**
- * Snapshot status: a built host unreachable now reads as offline, a tested one
+ * Snapshot status: a built host unreachable or never pinged reads as offline, a tested one
  * as tested (left in `test`).
  */
 export function hostStatus(host: Pick<PersistedHost, "state" | "online">): HostStatus {
@@ -185,7 +187,6 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
         profile: event.profile,
         zone: event.zone,
         state: "pending" as const,
-        online: false,
       };
       return { ...state, hosts: [...state.hosts, { ...host, status: hostStatus(host) }] };
     }

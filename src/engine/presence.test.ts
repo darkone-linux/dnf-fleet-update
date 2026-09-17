@@ -25,14 +25,14 @@ function setup(commands: CommandScript[]) {
 }
 
 describe("Presence", () => {
-  test("first round at once, the deployment host without a ping, changes only", async () => {
+  test("first round at once, the deployment host without a ping, every first answer", async () => {
     const { context, presence, changes } = setup([...answers("gw-ag", 0), ...answers("srv-ag", 1)]);
     presence.track(["gw-ag", "srv-ag", "pc-ag"]);
 
     presence.start();
     await flush();
 
-    expect(changes().sort()).toEqual(["gw-ag up", "pc-ag up"]);
+    expect(changes().sort()).toEqual(["gw-ag up", "pc-ag up", "srv-ag down"]);
     expect(context.commands.calls.map((call) => call.argv.at(-1))).toEqual(["gw-ag", "srv-ag"]);
     await presence.stop();
   });
@@ -42,15 +42,15 @@ describe("Presence", () => {
     presence.track(["srv-ag"]);
     presence.start();
     await flush();
-    expect(changes()).toEqual([]);
+    expect(changes()).toEqual(["srv-ag down"]);
 
     context.clock.advance(15_000);
     await flush();
-    expect(changes()).toEqual(["srv-ag up"]);
+    expect(changes()).toEqual(["srv-ag down", "srv-ag up"]);
 
     context.flow.requestPing();
     await flush();
-    expect(changes()).toEqual(["srv-ag up", "srv-ag down"]);
+    expect(changes()).toEqual(["srv-ag down", "srv-ag up", "srv-ag down"]);
     expect(context.commands.calls).toHaveLength(3);
     await presence.stop();
   });

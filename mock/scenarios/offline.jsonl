@@ -18,6 +18,9 @@
 {"t":3001,"kind":"host.presence","host":"gw-ag","online":true}
 {"t":3002,"kind":"host.presence","host":"gfx","online":true}
 {"t":3003,"kind":"host.presence","host":"fd-01","online":true}
+{"t":3004,"kind":"host.presence","host":"alt","online":false}
+{"t":3005,"kind":"host.presence","host":"vbox-test","online":false}
+{"t":3006,"kind":"host.presence","host":"vbox-umi","online":false}
 {"t":3100,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":3120,"kind":"host.state","host":"gfx","state":"building"}
 {"t":3140,"kind":"host.state","host":"fd-01","state":"building"}

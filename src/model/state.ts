@@ -30,8 +30,8 @@ export interface HostRow {
   zone: string;
   state: HostState;
 
-  /** Last ping answer: every host starts unreachable. */
-  online: boolean;
+  /** Last ping answer; undefined until the first one. */
+  online?: boolean;
   note?: string;
   path?: string;
   origin?: HostOrigin;
@@ -152,7 +152,6 @@ export function reduce(state: RunState, event: Event): RunState {
             profile: event.profile,
             zone: event.zone,
             state: "pending",
-            online: false,
             logs: [],
           },
         ],
@@ -324,13 +323,14 @@ export function excludedCount(state: RunState): number {
   return state.hosts.filter(hidden).length;
 }
 
-/** Progress state, or `offline` when unreachable. */
-export type ShownState = HostState | "offline";
+/** Progress state, or presence: `offline` when unreachable, `unknown` before any ping answer. */
+export type ShownState = HostState | "offline" | "unknown";
 
 /** Spec § États affichés: exclusion > failure > error > presence > progress. */
 export function shownState(host: HostRow): ShownState {
   if (host.state === "excluded" || host.state === "failed" || host.state === "error") {
     return host.state;
   }
+  if (host.online === undefined) return "unknown";
   return host.online ? host.state : "offline";
 }

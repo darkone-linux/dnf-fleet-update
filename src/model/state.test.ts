@@ -123,13 +123,15 @@ test("a skipped step still counts as settled", () => {
   expect(state.steps.update.status).toBe("skipped");
 });
 
-test("every host starts unreachable until a ping answers", () => {
-  expect(shownState(hostAfter([]).host)).toBe("offline");
+test("presence unknown until a ping answers, then reachable or not", () => {
+  expect(shownState(hostAfter([]).host)).toBe("unknown");
+  expect(shownState(hostAfter([hostState("building")]).host)).toBe("unknown");
+  expect(shownState(hostAfter([presence(false)]).host)).toBe("offline");
   expect(shownState(hostAfter([presence(true)]).host)).toBe("pending");
 });
 
 test("an unreachable host keeps the offline glyph while it builds", () => {
-  const { host } = hostAfter([hostState("building")]);
+  const { host } = hostAfter([presence(false), hostState("building")]);
   expect(host.state).toBe("building");
   expect(shownState(host)).toBe("offline");
 });

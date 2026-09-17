@@ -55,6 +55,7 @@ export const hostGlyph: Record<ShownState, string> = {
   reverted: "🌫️",
   excluded: "⛔",
   offline: "💤",
+  unknown: "❔",
 };
 
 export const hostStateColor: Record<ShownState, string> = {
@@ -71,6 +72,7 @@ export const hostStateColor: Record<ShownState, string> = {
   reverted: color.dim,
   excluded: color.dim,
   offline: color.dim,
+  unknown: color.dim,
 };
 
 /** Text glyphs, not emoji: one column each, so the step column never shifts. */

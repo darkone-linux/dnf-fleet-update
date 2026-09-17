@@ -56,13 +56,13 @@ test("tested, offline at the switch: left in test, listed in the report", async 
   expect(run.recorded?.report).toContain("## Hosts left in test\n\n- pc-ag");
 });
 
-test("every host starts unreachable and is shown once it answers", async () => {
+test("presence unknown until the first answer, an unreachable host reported once", async () => {
   const run = await simulateRun({ behaviours: { "gw-cp": { reachable: false } } });
 
   const presence = run.events.flatMap((event) =>
     event.kind === "host.presence" ? [`${event.host} ${event.online}`] : [],
   );
   expect(presence).toContain("hcs true");
-  expect(presence.filter((line) => line.startsWith("gw-cp"))).toEqual([]);
+  expect(presence.filter((line) => line.startsWith("gw-cp"))).toEqual(["gw-cp false"]);
   expect(run.ui.hosts.find((host) => host.name === "gw-cp")?.online).toBe(false);
 });
