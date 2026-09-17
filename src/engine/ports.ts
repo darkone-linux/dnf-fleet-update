@@ -4,7 +4,8 @@
 // `src/adapters/`, fakes in `src/testing/fakes.ts`. A step needing another
 // effect extends this file first, so tests never run nix, ssh or a network.
 
-import type { Event } from "../model/events.ts";
+import type { Event, RunInfo } from "../model/events.ts";
+import type { PersistedState } from "../model/persist.ts";
 
 /** One external program: nix, ssh, git, just, ping. */
 export interface CommandSpec {
@@ -77,4 +78,57 @@ export interface EngineContext {
 
   /** Abort `now` (`^C`) or SIGTERM: every pending command and wait ends. */
   signal: AbortSignal;
+}
+
+/** Host and phase in run file names: no path separator, no hidden file. */
+export const RUN_FILE_NAME = /^[a-zA-Z0-9_-]+$/;
+
+/** Host log (`<host>.<phase>`), or run log without host (`<phase>`). */
+export interface LogName {
+  host?: string;
+  phase: string;
+}
+
+/** One run directory: `var/deployments/<id>/` (spec § État et reprise). */
+export interface RunStore {
+  /** `<date>-<mode>`; also names the rollback units of the run. */
+  readonly id: string;
+
+  /** One line of `events.jsonl`. */
+  appendEvent(event: Event): void;
+
+  /** Replaces `state.json` atomically: an interrupted write leaves the previous one. */
+  writeState(state: PersistedState): void;
+
+  /** Throws on a name outside `RUN_FILE_NAME`: names come validated. */
+  appendLog(name: LogName, line: string): void;
+  writeReport(markdown: string): void;
+
+  /** `nix build --out-link` target: GC root of the host path while the run directory lives. */
+  outLink(host: string): string;
+}
+
+export interface DeploymentStore {
+  /** Throws when the directory already exists: the lock makes that a bug. */
+  create(mode: RunInfo["mode"]): RunStore;
+}
+
+export type LockAttempt = { kind: "acquired" } | { kind: "busy"; holder: string };
+
+/** `var/deployments/current.lock` (spec § Verrou). */
+export interface RunLock {
+  /** Non-blocking. `holder`: diagnostic content written by the holder, possibly empty. */
+  acquire(): LockAttempt;
+
+  /** Also released by the kernel when the process dies. */
+  release(): void;
+}
+
+/** The deployment host. */
+export interface LocalHost {
+  /** Short name: the fleet host of the same name is deployed without ssh. */
+  hostname(): string;
+
+  /** IPv4 addresses, loopback excluded: current zone detection. */
+  addresses(): string[];
 }

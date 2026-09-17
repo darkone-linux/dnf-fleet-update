@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { OutputLine } from "../engine/ports.ts";
-import { fakeContext } from "./fakes.ts";
+import { FakeLock, fakeContext, MemoryDeploymentStore } from "./fakes.ts";
 
 const BOUNDS = { timeoutMs: 1000, killGraceMs: 100 };
 
@@ -79,5 +79,32 @@ describe("RecordingChannel", () => {
     expect(events.events).toHaveLength(1);
     expect(await events.answer("switch")).toBe("yes");
     await expect(events.answer("repair")).rejects.toThrow("unanswered question: repair");
+  });
+});
+
+describe("MemoryDeploymentStore", () => {
+  test("one run per mode and date, logs named like their files", () => {
+    const store = new MemoryDeploymentStore();
+    const run = store.create("full");
+
+    run.appendLog({ host: "gw-ag", phase: "copy" }, "copying path");
+    run.appendLog({ phase: "clean" }, "formatting");
+
+    expect(run.id).toBe("20260917T020000Z-full");
+    expect([...run.logs.keys()]).toEqual(["gw-ag.copy", "clean"]);
+    expect(() => run.appendLog({ host: "../x", phase: "copy" }, "")).toThrow("unsafe log name");
+    expect(() => store.create("full")).toThrow("run exists");
+  });
+});
+
+describe("FakeLock", () => {
+  test("free, then held; busy with a holder", () => {
+    const lock = new FakeLock();
+
+    expect(lock.acquire()).toEqual({ kind: "acquired" });
+    expect(() => lock.acquire()).toThrow("already held");
+    lock.release();
+    expect(lock.acquire()).toEqual({ kind: "acquired" });
+    expect(new FakeLock("pid 42").acquire()).toEqual({ kind: "busy", holder: "pid 42" });
   });
 });

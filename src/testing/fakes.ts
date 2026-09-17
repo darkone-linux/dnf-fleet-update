@@ -3,17 +3,25 @@
 // Deterministic by construction: no process, no timer, no network. Strict too:
 // an unscripted command or an unanswered question fails the test, never passes.
 
-import type {
-  Clock,
-  CommandResult,
-  CommandRunner,
-  CommandSpec,
-  EngineContext,
-  EventChannel,
-  OutputLine,
-  RunOptions,
+import {
+  type Clock,
+  type CommandResult,
+  type CommandRunner,
+  type CommandSpec,
+  type DeploymentStore,
+  type EngineContext,
+  type EventChannel,
+  type LocalHost,
+  type LockAttempt,
+  type LogName,
+  type OutputLine,
+  RUN_FILE_NAME,
+  type RunLock,
+  type RunOptions,
+  type RunStore,
 } from "../engine/ports.ts";
-import type { Event } from "../model/events.ts";
+import type { Event, RunInfo } from "../model/events.ts";
+import type { PersistedState } from "../model/persist.ts";
 
 /** Reply for the first command whose argv starts with `match`. */
 export interface CommandScript {
@@ -104,6 +112,87 @@ export class RecordingChannel implements EventChannel {
     return value === undefined
       ? Promise.reject(new Error(`unanswered question: ${id}`))
       : Promise.resolve(value);
+  }
+}
+
+/** Run directory in memory; logs keyed like their file names, `<host>.<phase>` or `<phase>`. */
+export class MemoryRunStore implements RunStore {
+  readonly events: Event[] = [];
+  readonly logs = new Map<string, string[]>();
+  state: PersistedState | undefined;
+  report: string | undefined;
+
+  constructor(readonly id: string) {}
+
+  appendEvent(event: Event): void {
+    this.events.push(event);
+  }
+
+  writeState(state: PersistedState): void {
+    this.state = structuredClone(state);
+  }
+
+  appendLog(name: LogName, line: string): void {
+    const parts = name.host === undefined ? [name.phase] : [name.host, name.phase];
+    for (const part of parts) {
+      if (!RUN_FILE_NAME.test(part)) throw new Error(`unsafe log name: ${JSON.stringify(part)}`);
+    }
+    const key = parts.join(".");
+    this.logs.set(key, [...(this.logs.get(key) ?? []), line]);
+  }
+
+  writeReport(markdown: string): void {
+    this.report = markdown;
+  }
+
+  outLink(host: string): string {
+    return `/deployments/${this.id}/gcroots/${host}`;
+  }
+}
+
+/** Every run starts at the same date: a second run of the same mode is refused, like on disk. */
+export class MemoryDeploymentStore implements DeploymentStore {
+  readonly runs: MemoryRunStore[] = [];
+
+  create(mode: RunInfo["mode"]): MemoryRunStore {
+    const id = `20260917T020000Z-${mode}`;
+    if (this.runs.some((run) => run.id === id)) throw new Error(`run exists: ${id}`);
+    const run = new MemoryRunStore(id);
+    this.runs.push(run);
+    return run;
+  }
+}
+
+/** Free unless a holder is given: then always busy. */
+export class FakeLock implements RunLock {
+  held = false;
+
+  constructor(private readonly holder?: string) {}
+
+  acquire(): LockAttempt {
+    if (this.holder !== undefined) return { kind: "busy", holder: this.holder };
+    if (this.held) throw new Error("lock already held by this process");
+    this.held = true;
+    return { kind: "acquired" };
+  }
+
+  release(): void {
+    this.held = false;
+  }
+}
+
+export class FakeLocalHost implements LocalHost {
+  constructor(
+    private readonly name: string,
+    private readonly ipv4: readonly string[] = [],
+  ) {}
+
+  hostname(): string {
+    return this.name;
+  }
+
+  addresses(): string[] {
+    return [...this.ipv4];
   }
 }
 
