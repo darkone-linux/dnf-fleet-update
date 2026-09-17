@@ -12,37 +12,11 @@ import {
   AI_ERROR_ACTION,
   type AiAnalysis,
   type AiErrorAction,
+  DEFAULT_TIMEOUTS,
+  DEFAULTS,
   type RunParams,
-  type Timeouts,
 } from "../model/params.ts";
 import { fail, ok, type Result } from "../model/result.ts";
-
-export const DEFAULTS = {
-  deploymentOrder: "hcs:gateway:server:[others]:laptop",
-  criticalProfiles: "hcs:gateway:server",
-  dnfMessage: "chore(update): regular flake upgrade",
-  aiModel: "claude:opus@high",
-  aiAnalysis: "none",
-  aiErrorAction: "analysis",
-  maxParallel: 10,
-  rollbackTimeout: 600,
-  pingInterval: 15,
-} as const;
-
-/** Spec § Délais, seconds. */
-export const DEFAULT_TIMEOUTS: Timeouts = {
-  flakeUpdate: 120,
-  clean: 60,
-  commit: 60,
-  eval: 1200,
-  build: 10_800,
-  copy: 3600,
-  activation: 300,
-  ssh: 30,
-  ping: 5,
-  matrix: 30,
-  killGrace: 10,
-};
 
 /** As given on the command line: `undefined` or `false` when absent. */
 export interface CliOptions {
@@ -289,10 +263,4 @@ export function resumeParams(saved: RunParams, options: CliOptions): Result<Resu
     },
     filter: options.on,
   });
-}
-
-/** `run.start` mode and `var/deployments/<date>-<mode>/` suffix. */
-export function runMode(params: RunParams): "full" | "partial" | "resume" {
-  if (params.resume) return "resume";
-  return params.on === undefined ? "full" : "partial";
 }

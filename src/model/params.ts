@@ -61,3 +61,37 @@ export interface RunParams {
   /** Seconds between two pings of the tracked hosts. */
   pingInterval: number;
 }
+
+/** Built-in defaults of the options (spec § Options), last in the resolution order. */
+export const DEFAULTS = {
+  deploymentOrder: "hcs:gateway:server:[others]:laptop",
+  criticalProfiles: "hcs:gateway:server",
+  dnfMessage: "chore(update): regular flake upgrade",
+  aiModel: "claude:opus@high",
+  aiAnalysis: "none",
+  aiErrorAction: "analysis",
+  maxParallel: 10,
+  rollbackTimeout: 600,
+  pingInterval: 15,
+} as const;
+
+/** Spec § Délais, seconds. */
+export const DEFAULT_TIMEOUTS: Timeouts = {
+  flakeUpdate: 120,
+  clean: 60,
+  commit: 60,
+  eval: 1200,
+  build: 10_800,
+  copy: 3600,
+  activation: 300,
+  ssh: 30,
+  ping: 5,
+  matrix: 30,
+  killGrace: 10,
+};
+
+/** `run.start` mode and `var/deployments/<date>-<mode>/` suffix. */
+export function runMode(params: RunParams): "full" | "partial" | "resume" {
+  if (params.resume) return "resume";
+  return params.on === undefined ? "full" : "partial";
+}

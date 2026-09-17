@@ -108,28 +108,19 @@ export function parseHosts(json: unknown): Result<FleetHost[]> {
   return ok(hosts);
 }
 
-/** Both files at once: every host zone must exist. */
-export function parseFleet(hostsJson: unknown, networkJson: unknown): Result<Fleet> {
-  const hosts = parseHosts(hostsJson);
-  if (!hosts.ok) return hosts;
-
-  const parsed = networkSchema.safeParse(networkJson);
+/** `network.nix` alone: the fleet defaults are needed before the hosts. */
+export function parseNetwork(json: unknown): Result<Omit<Fleet, "hosts">> {
+  const parsed = networkSchema.safeParse(json);
   if (!parsed.success) return fail(`network.nix: ${z.prettifyError(parsed.error)}`);
   const network = parsed.data;
 
-  const zones = Object.entries(network.zones).map(([name, zone]) => ({
-    name,
-    ipPrefix: orUndefined(zone.ipPrefix),
-    gateway: orUndefined(zone.gateway?.hostname),
-  }));
-  const zoneNames = new Set(zones.map((zone) => zone.name));
-  const stray = hosts.value.find((host) => !zoneNames.has(host.zone));
-  if (stray) return fail(`hosts.nix: host ${stray.name} in unknown zone ${stray.zone}`);
-
   const declared = network.fleetUpdate;
   return ok({
-    hosts: hosts.value,
-    zones,
+    zones: Object.entries(network.zones).map(([name, zone]) => ({
+      name,
+      ipPrefix: orUndefined(zone.ipPrefix),
+      gateway: orUndefined(zone.gateway?.hostname),
+    })),
     domain: network.domain,
     defaults: {
       deploymentOrder: orUndefined(declared?.deploymentOrder),
@@ -138,4 +129,17 @@ export function parseFleet(hostsJson: unknown, networkJson: unknown): Result<Fle
       pingInterval: orUndefined(declared?.pingInterval),
     },
   });
+}
+
+/** Both files at once: every host zone must exist. */
+export function parseFleet(hostsJson: unknown, networkJson: unknown): Result<Fleet> {
+  const hosts = parseHosts(hostsJson);
+  if (!hosts.ok) return hosts;
+  const network = parseNetwork(networkJson);
+  if (!network.ok) return network;
+
+  const zoneNames = new Set(network.value.zones.map((zone) => zone.name));
+  const stray = hosts.value.find((host) => !zoneNames.has(host.zone));
+  if (stray) return fail(`hosts.nix: host ${stray.name} in unknown zone ${stray.zone}`);
+  return ok({ hosts: hosts.value, ...network.value });
 }

@@ -3,7 +3,6 @@
 // Deterministic by construction: no process, no timer, no network. Strict too:
 // an unscripted command or an unanswered question fails the test, never passes.
 
-import { DEFAULT_TIMEOUTS, DEFAULTS } from "../cli/options.ts";
 import { QuestionQueue, type RunContext } from "../engine/context.ts";
 import { RunFlow } from "../engine/flow.ts";
 import {
@@ -24,7 +23,7 @@ import {
   type RunStore,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
-import type { RunParams } from "../model/params.ts";
+import { DEFAULT_TIMEOUTS, DEFAULTS, type RunParams } from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
 
 /** Reply for the first command whose argv starts with `match`, or satisfies it. */

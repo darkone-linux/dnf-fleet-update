@@ -2,17 +2,8 @@
 
 import { describe, expect, test } from "bun:test";
 import type { FleetDefaults } from "../engine/fleet.ts";
-import type { RunParams } from "../model/params.ts";
-import {
-  type CliOptions,
-  DEFAULT_TIMEOUTS,
-  DEFAULTS,
-  parseAiModel,
-  parseCli,
-  resolveParams,
-  resumeParams,
-  runMode,
-} from "./options.ts";
+import { DEFAULT_TIMEOUTS, DEFAULTS, type RunParams, runMode } from "../model/params.ts";
+import { type CliOptions, parseAiModel, parseCli, resolveParams, resumeParams } from "./options.ts";
 
 const NO_FLEET: FleetDefaults = { timeouts: {} };
 
