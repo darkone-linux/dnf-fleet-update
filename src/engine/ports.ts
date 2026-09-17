@@ -16,8 +16,11 @@ export interface CommandSpec {
   env?: Readonly<Record<string, string>>;
   stdin?: string;
 
-  /** Past it the whole process tree is killed (spec § Verrou, process bloqué). */
-  timeoutMs?: number;
+  /** Past it the process group gets SIGTERM (spec § Délais): every command is bounded. */
+  timeoutMs: number;
+
+  /** SIGTERM (deadline or abort) to SIGKILL of the process group. */
+  killGraceMs: number;
 }
 
 export interface OutputLine {

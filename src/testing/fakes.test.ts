@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 import type { OutputLine } from "../engine/ports.ts";
 import { fakeContext } from "./fakes.ts";
 
+const BOUNDS = { timeoutMs: 1000, killGraceMs: 100 };
+
 describe("FakeCommands", () => {
   test("replies with the first script matching the argv prefix", async () => {
     const context = fakeContext({
@@ -15,7 +17,7 @@ describe("FakeCommands", () => {
     const lines: OutputLine[] = [];
 
     const result = await context.commands.run(
-      { argv: ["nix", "build", "/nix/store/x.drv^*"] },
+      { argv: ["nix", "build", "/nix/store/x.drv^*"], ...BOUNDS },
       { onLine: (line) => lines.push(line) },
     );
 
@@ -27,7 +29,7 @@ describe("FakeCommands", () => {
   test("a timeout reads as killed, not as an exit code", async () => {
     const context = fakeContext({ commands: [{ match: ["ssh"], timedOut: true }] });
 
-    const result = await context.commands.run({ argv: ["ssh", "nix@hcs"] });
+    const result = await context.commands.run({ argv: ["ssh", "nix@hcs"], ...BOUNDS });
 
     expect(result).toMatchObject({ exitCode: null, signal: "SIGKILL", timedOut: true });
   });
@@ -35,7 +37,7 @@ describe("FakeCommands", () => {
   test("an unscripted command fails the test", async () => {
     const context = fakeContext();
 
-    await expect(context.commands.run({ argv: ["git", "status"] })).rejects.toThrow(
+    await expect(context.commands.run({ argv: ["git", "status"], ...BOUNDS })).rejects.toThrow(
       "unscripted command: git status",
     );
   });

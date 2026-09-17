@@ -9,6 +9,7 @@ import { fail, ok, type Result } from "../../model/result.ts";
 import { HOSTNAME } from "../fleet.ts";
 import { STORE_PATH } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
+import { limits, sudoLimits } from "./limits.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
 
 export const SYSTEM_PROFILE = "/nix/var/nix/profiles/system";
@@ -46,14 +47,11 @@ const bounded = (seconds: number, timeouts: Timeouts): string[] => [
   String(seconds),
 ];
 
-/**
- * Deploy identity: `sudo -n -u nix -H timeout …` (spec § Exécution). The
- * runner timeout leaves room for `timeout` and its kill grace to act first.
- */
+/** Deploy identity: `sudo -n -u nix -H timeout …` (spec § Exécution). */
 export function asNix(argv: readonly string[], seconds: number, timeouts: Timeouts): CommandSpec {
   return {
     argv: ["sudo", "-n", "-u", "nix", "-H", ...bounded(seconds, timeouts), ...argv],
-    timeoutMs: (seconds + 2 * timeouts.killGrace) * 1000,
+    ...sudoLimits(seconds, timeouts),
   };
 }
 
@@ -74,10 +72,7 @@ export function onHost(target: Target, command: HostCommand, timeouts: Timeouts)
 
   if (target.local) {
     const [program, ...args] = inner as [string, ...string[]];
-    return {
-      argv: [program, ...args],
-      timeoutMs: (command.seconds + 2 * timeouts.killGrace) * 1000,
-    };
+    return { argv: [program, ...args], ...sudoLimits(command.seconds, timeouts) };
   }
   const ssh = ["ssh", ...sshOptions(timeouts), `nix@${target.host}`, shellJoin(inner)];
   return asNix(ssh, command.seconds + timeouts.ssh, timeouts);
@@ -88,7 +83,7 @@ export function ping(host: string, timeouts: Timeouts): CommandSpec {
   assertSafe("host", host, HOSTNAME);
   return {
     argv: ["ping", "-c", "1", "-W", String(timeouts.ping), host],
-    timeoutMs: (timeouts.ping + timeouts.killGrace) * 1000,
+    ...limits(timeouts.ping + timeouts.killGrace, timeouts),
   };
 }
 

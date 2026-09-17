@@ -2,30 +2,35 @@
 
 import type { Timeouts } from "../../model/params.ts";
 import type { CommandSpec } from "../ports.ts";
-
-const ms = (seconds: number) => seconds * 1000;
+import { limits } from "./limits.ts";
 
 export type GeneratedFile = "hosts.nix" | "network.nix" | "matrix.nix";
 
 export function gitStatus(repo: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["git", "-C", repo, "status", "--porcelain"], timeoutMs: ms(timeouts.commit) };
+  return {
+    argv: ["git", "-C", repo, "status", "--porcelain"],
+    ...limits(timeouts.commit, timeouts),
+  };
 }
 
 export function gitHead(repo: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["git", "-C", repo, "rev-parse", "HEAD"], timeoutMs: ms(timeouts.commit) };
+  return { argv: ["git", "-C", repo, "rev-parse", "HEAD"], ...limits(timeouts.commit, timeouts) };
 }
 
 /** Clean tree checked beforehand: only the update lands in the commit. */
 export function gitAddAll(repo: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["git", "-C", repo, "add", "--all"], timeoutMs: ms(timeouts.commit) };
+  return { argv: ["git", "-C", repo, "add", "--all"], ...limits(timeouts.commit, timeouts) };
 }
 
 export function gitCommit(repo: string, message: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["git", "-C", repo, "commit", "-m", message], timeoutMs: ms(timeouts.commit) };
+  return {
+    argv: ["git", "-C", repo, "commit", "-m", message],
+    ...limits(timeouts.commit, timeouts),
+  };
 }
 
 export function flakeUpdate(repo: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["nix", "flake", "update"], cwd: repo, timeoutMs: ms(timeouts.flakeUpdate) };
+  return { argv: ["nix", "flake", "update"], cwd: repo, ...limits(timeouts.flakeUpdate, timeouts) };
 }
 
 /** Codev: the consumer lock follows `dnf/` HEAD, even under `--no-consumer-flake`. */
@@ -33,7 +38,7 @@ export function realignDnfLock(workspace: string, timeouts: Timeouts): CommandSp
   return {
     argv: ["nix", "flake", "update", "dnf"],
     cwd: workspace,
-    timeoutMs: ms(timeouts.commit),
+    ...limits(timeouts.commit, timeouts),
   };
 }
 
@@ -42,7 +47,7 @@ export function justClean(workspace: string, timeouts: Timeouts): CommandSpec {
     argv: ["just", "clean"],
     cwd: workspace,
     env: { QUIET: "1" },
-    timeoutMs: ms(timeouts.clean),
+    ...limits(timeouts.clean, timeouts),
   };
 }
 
@@ -51,7 +56,7 @@ export function justGenerate(workspace: string, timeouts: Timeouts): CommandSpec
     argv: ["just", "generate"],
     cwd: workspace,
     env: { QUIET: "1" },
-    timeoutMs: ms(timeouts.commit),
+    ...limits(timeouts.commit, timeouts),
   };
 }
 
@@ -63,6 +68,6 @@ export function readGenerated(
 ): CommandSpec {
   return {
     argv: ["nix-instantiate", "--eval", "--strict", "--json", `${workspace}/var/generated/${file}`],
-    timeoutMs: ms(timeouts.commit),
+    ...limits(timeouts.commit, timeouts),
   };
 }

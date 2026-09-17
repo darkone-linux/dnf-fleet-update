@@ -4,6 +4,7 @@ import type { Timeouts } from "../../model/params.ts";
 import { HOSTNAME } from "../fleet.ts";
 import { STORE_PATH } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
+import { limits } from "./limits.ts";
 
 /** Measured peak: 5.9 GB per worker, 50 s for 14 hosts (spec § Exécution). */
 export const EVAL_WORKERS = 4;
@@ -39,7 +40,7 @@ export function evalHosts(
       "--max-memory-size",
       String(EVAL_MAX_MEMORY_MB),
     ],
-    timeoutMs: timeouts.eval * 1000,
+    ...limits(timeouts.eval, timeouts),
   };
 }
 
@@ -60,11 +61,11 @@ export function buildHost(drvPath: string, outLink: string, timeouts: Timeouts):
       outLink,
       "--print-out-paths",
     ],
-    timeoutMs: timeouts.build * 1000,
+    ...limits(timeouts.build, timeouts),
   };
 }
 
 /** Exit `0`: the path is still in the store (`--resume`). */
 export function pathInfo(path: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["nix", "path-info", path], timeoutMs: timeouts.commit * 1000 };
+  return { argv: ["nix", "path-info", path], ...limits(timeouts.commit, timeouts) };
 }

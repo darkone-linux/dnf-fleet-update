@@ -58,10 +58,11 @@ describe("shell quoting", () => {
 });
 
 describe("deploy identity", () => {
-  test("sudo as nix, bounded on the nix side, runner timeout after its kill grace", () => {
+  test("sudo as nix, bounded on the nix side, the runner acting only past it", () => {
     expect(asNix(["nix", "copy"], 60, T)).toEqual({
       argv: ["sudo", "-n", "-u", "nix", "-H", "timeout", "--kill-after=10", "60", "nix", "copy"],
       timeoutMs: 80_000,
+      killGraceMs: 20_000,
     });
   });
 
@@ -137,6 +138,10 @@ describe("placement", () => {
       "--set",
       NEW,
     ]);
+    expect(onHost(local, setProfile(NEW, T), T)).toMatchObject({
+      timeoutMs: 50_000,
+      killGraceMs: 20_000,
+    });
     expect(onHost(local, readOrigin(T), T).argv).toEqual([
       "timeout",
       "--kill-after=10",
@@ -152,6 +157,7 @@ describe("placement", () => {
     expect(ping("fd-01", T)).toEqual({
       argv: ["ping", "-c", "1", "-W", "5", "fd-01"],
       timeoutMs: 15_000,
+      killGraceMs: 10_000,
     });
   });
 
@@ -303,6 +309,7 @@ describe("workspace", () => {
       cwd: "/etc/nixos",
       env: { QUIET: "1" },
       timeoutMs: 60_000,
+      killGraceMs: 10_000,
     });
   });
 
