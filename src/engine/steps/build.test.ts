@@ -158,14 +158,17 @@ describe("build", () => {
   });
 
   test("--stop-loss: the first failed host rolls the fleet back, nothing more is decided", async () => {
-    const { context, hosts, presence } = setup([evaluation([])], { params: { stopLoss: true } });
+    const { context, hosts, presence } = setup(
+      [evaluation(["hcs", "gw-ag", "srv-ag", "pc-ag"].map(evalLine))],
+      { params: { stopLoss: true } },
+    );
 
     await build(context, hosts, presence);
     await presence.stop();
 
     expect(context.flow.ending).toBe("rollback");
     expect(feed(context.events.events).filter((line) => line.includes("rollback"))).toEqual([
-      "error hcs: fleet rollback",
+      "error fleet rollback: gw-cp, lt-cp",
     ]);
     expect(context.events.events.at(-1)).toMatchObject({ kind: "step.end", status: "error" });
   });
@@ -203,13 +206,42 @@ describe("build", () => {
     }
   });
 
-  test("nothing built: nothing to deploy", async () => {
-    const { context, hosts, presence } = setup([evaluation([])]);
+  test("nothing built: one error, no question per host, the run stops", async () => {
+    const { context, hosts, presence } = setup([evaluation([])], {
+      params: { interactive: true },
+    });
 
     await build(context, hosts, presence);
     await presence.stop();
 
-    expect(feed(context.events.events)).toContain("warn no host built: nothing to deploy");
-    expect(context.flow.ending).toBe("done");
+    const events = context.events.events;
+    expect(events.filter((event) => event.kind === "ask")).toEqual([]);
+    expect(feed(events).filter((line) => line.startsWith("error"))).toEqual([
+      ...NAMES.map((name) => `error ${name}: evaluation failed: no result`),
+      "error no host built",
+    ]);
+    expect(context.flow.ending).toBe("stop");
+    expect(events.at(-1)).toMatchObject({ kind: "step.end", status: "error" });
+  });
+
+  test("the same reason on several hosts: one decision for all of them", async () => {
+    const goEol = (attr: string) =>
+      JSON.stringify({ attr, error: "error: Go 1.25 is end-of-life" });
+    const { context, hosts, presence, states } = setup([
+      evaluation([
+        ...["hcs", "gw-ag", "gw-cp"].map(evalLine),
+        ...["srv-ag", "pc-ag", "lt-cp"].map(goEol),
+      ]),
+    ]);
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    expect(states()).toMatchObject({
+      "srv-ag": "excluded",
+      "pc-ag": "excluded",
+      "lt-cp": "excluded",
+    });
+    expect(feed(context.events.events)).toContain("warn excluded: srv-ag, pc-ag, lt-cp");
   });
 });

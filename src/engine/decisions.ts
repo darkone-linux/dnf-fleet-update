@@ -1,10 +1,10 @@
 // Decisions on failed and lost hosts (spec § Erreurs et réparations).
 //
-// Interactive: asked, one host at a time. Otherwise `exclude`, `revert` for an
-// activated host, or `rollback` under `--stop-loss`. Once the run halts,
-// nothing more is asked.
+// Interactive: asked, one question at a time, hosts failed for the same reason
+// together. Otherwise `exclude`, `revert` for an activated host, or `rollback`
+// under `--stop-loss`. Once the run halts, nothing more is asked.
 
-import type { AskOption } from "../model/events.ts";
+import type { AskOption, Level } from "../model/events.ts";
 import { askHoldingQueue, log, type RunContext } from "./context.ts";
 import { type HostTable, rollbackTarget } from "./hosts.ts";
 
@@ -28,20 +28,27 @@ const ACTIVATED_OPTIONS: readonly AskOption[] = [
   ...STOP,
 ];
 
-function apply(context: RunContext, hosts: HostTable, name: string, decision: Decision): void {
+/** At least one host: several share the reason of the first. */
+export type Hosts = readonly [string, ...string[]];
+
+function apply(context: RunContext, hosts: HostTable, names: Hosts, decision: Decision): void {
+  const say = (level: Level, message: string) => {
+    if (names.length === 1) log(context, level, message, names[0]);
+    else log(context, level, `${message}: ${names.join(", ")}`);
+  };
   switch (decision) {
     case "exclude":
     case "keep":
-      hosts.set(name, "excluded", { note: hosts.get(name).note });
-      log(context, "warn", decision === "keep" ? "excluded, left as it is" : "excluded", name);
+      for (const name of names) hosts.set(name, "excluded", { note: hosts.get(name).note });
+      say("warn", decision === "keep" ? "excluded, left as it is" : "excluded");
       return;
     case "revert":
-      log(context, "warn", "reverting to its origin", name);
+      say("warn", "reverting to its origin");
       return;
     case "stop":
     case "rollback":
       context.flow.stop(decision);
-      log(context, "error", decision === "stop" ? "run stopped" : "fleet rollback", name);
+      say("error", decision === "stop" ? "run stopped" : "fleet rollback");
       return;
   }
 }
@@ -53,7 +60,7 @@ function apply(context: RunContext, hosts: HostTable, name: string, decision: De
 function decide(
   context: RunContext,
   hosts: HostTable,
-  name: string,
+  names: Hosts,
   question: { id: string; text: string; options: readonly AskOption[] },
   unattended: Decision,
   before?: () => Promise<void>,
@@ -70,7 +77,7 @@ function decide(
       : options.length === 1
         ? (options[0]!.value as Decision)
         : ((await askHoldingQueue(context, question.id, question.text, options)) as Decision);
-    apply(context, hosts, name, decision);
+    apply(context, hosts, names, decision);
     return decision;
   });
 }
@@ -83,14 +90,20 @@ function decide(
 export function decideFailure(
   context: RunContext,
   hosts: HostTable,
-  name: string,
+  names: Hosts,
 ): Promise<Decision | undefined> {
-  const { note, activated } = hosts.get(name);
-  const text = `${name} failed${note === undefined ? "" : `: ${note}`}`;
+  const [first] = names;
+  const { note, activated } = hosts.get(first);
+  const reason = note === undefined ? "" : `: ${note}`;
+  const text =
+    names.length === 1
+      ? `${first} failed${reason}`
+      : `${names.length} hosts failed${reason} (${names.join(", ")})`;
   const options = activated === undefined ? OPTIONS : ACTIVATED_OPTIONS;
   const goOn = activated === undefined ? "exclude" : "revert";
   const unattended = context.params.stopLoss ? "rollback" : goOn;
-  return decide(context, hosts, name, { id: `failed-${name}`, text, options }, unattended);
+  const id = `failed-${names.join("+")}`;
+  return decide(context, hosts, names, { id, text, options }, unattended);
 }
 
 /**
@@ -108,7 +121,13 @@ export function decideLost(
   const text = `${name} unreachable`;
   if (!hosts.get(name).gateway) {
     const unattended = params.stopLoss ? "rollback" : "exclude";
-    return decide(context, hosts, name, { id: `lost-${name}`, text, options: OPTIONS }, unattended);
+    return decide(
+      context,
+      hosts,
+      [name],
+      { id: `lost-${name}`, text, options: OPTIONS },
+      unattended,
+    );
   }
 
   const options = STOP;
@@ -124,7 +143,7 @@ export function decideLost(
   return decide(
     context,
     hosts,
-    name,
+    [name],
     { id: `lost-${name}`, text, options },
     unattended,
     waitRollback,

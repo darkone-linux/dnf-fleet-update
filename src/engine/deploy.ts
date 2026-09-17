@@ -31,7 +31,7 @@ async function failed(
 ): Promise<void> {
   hosts.set(name, "failed", { note });
   log(context, "error", note, name);
-  const decision = await decideFailure(context, hosts, name);
+  const decision = await decideFailure(context, hosts, [name]);
 
   // Decided before a stop: a revert not started yet is a new operation.
   if (decision === "revert" && !context.flow.halt.aborted) await revertHost(context, hosts, name);

@@ -81,19 +81,52 @@ test("evaluation failed as a whole, interactive: one error, no question, exit 1"
   expect(run.recorded?.state?.steps.build.status).toBe("error");
 });
 
-test("nothing built: no test, no switch, the run is done", async () => {
+test("nothing built, interactive: no question per host, one error, exit 1", async () => {
   const behaviours = Object.fromEntries(
     ["hcs", "gw-ag", "srv-ag", "pc-ag", "gw-cp", "lt-cp"].map((name) => [
       name,
-      { buildError: "x" },
+      {
+        evalError:
+          "error:\n  … while evaluating `sops.package':\n\n  error: Go 1.25 is end-of-life",
+      },
     ]),
   );
-  const run = await simulateRun({ behaviours });
+  const run = await simulateRun({ argv: [], behaviours });
+
+  expect(run.exitCode).toBe(1);
+  expect(run.events.filter((event) => event.kind === "ask")).toEqual([]);
+  expect(run.feed).toContain("error no host built");
+  expect(run.feed).toContain("error hcs: evaluation failed: Go 1.25 is end-of-life");
+  expect(Object.values(run.statuses)).toEqual(Array(6).fill("failed"));
+  expect(run.recorded?.report).toContain("| hcs | failed | Go 1.25 is end-of-life |");
+});
+
+test("the same reason on several hosts, interactive: one question for all of them", async () => {
+  const run = await simulateRun({
+    argv: [],
+    answers: {
+      "failed-srv-ag+pc-ag+lt-cp": "exclude",
+      "failed-gw-cp": "exclude",
+      build: "yes",
+      switch: "yes",
+    },
+    behaviours: {
+      "srv-ag": { evalError: "error: Go 1.25 is end-of-life" },
+      "pc-ag": { evalError: "error: Go 1.25 is end-of-life" },
+      "lt-cp": { evalError: "error: Go 1.25 is end-of-life" },
+      "gw-cp": { buildError: "boom" },
+    },
+  });
 
   expect(run.exitCode).toBe(0);
-  expect(run.feed).toContain("warn no host built: nothing to deploy");
-  expect(run.recorded?.state?.steps.test.status).toBe("todo");
-  expect(run.ui.end?.report?.[0]).toBe("6 excluded (hcs, gw-ag, srv-ag, pc-ag, gw-cp, lt-cp)");
+  const questions = run.events.flatMap((event) => (event.kind === "ask" ? [event.question] : []));
+  expect(questions).toEqual([
+    "3 hosts failed: Go 1.25 is end-of-life (srv-ag, pc-ag, lt-cp)",
+    "gw-cp failed: boom",
+    "Build done. Start the test?",
+    "Test done. Switch 2 tested hosts?",
+  ]);
+  expect(run.statuses).toMatchObject({ hcs: "deployed", "lt-cp": "excluded", "gw-cp": "excluded" });
 });
 
 test("units failed at the test: left in test, not switched, the run is done", async () => {

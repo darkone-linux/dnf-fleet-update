@@ -3,9 +3,9 @@
 
 import { buildHost, evalHosts } from "../commands/nix.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
-import { decideFailure } from "../decisions.ts";
+import { decideFailure, type Hosts } from "../decisions.ts";
 import { describeFailure, execute, succeeded } from "../exec.ts";
-import type { HostTable } from "../hosts.ts";
+import type { HostEntry, HostTable } from "../hosts.ts";
 import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
 import type { Presence } from "../presence.ts";
 import { endStep } from "./step.ts";
@@ -133,6 +133,17 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
   return { warnings: [...warnings], evaluationFailed: failed && missing };
 }
 
+/** Failed hosts sharing a reason, in fleet order: one decision each. */
+function byReason(failed: readonly HostEntry[]): Hosts[] {
+  const groups = new Map<string | undefined, [string, ...string[]]>();
+  for (const { name, note } of failed) {
+    const group = groups.get(note);
+    if (group) group.push(name);
+    else groups.set(note, [name]);
+  }
+  return [...groups.values()];
+}
+
 /**
  * `undefined`: the run stops (aborted `now`). Failed hosts are decided at the
  * end of the build; the flow says whether the run goes on.
@@ -158,18 +169,19 @@ export async function build(
     log(context, "warn", `${outcome.warnings.length} evaluation warnings (logs/build.log)`);
   }
 
-  // Failed as a whole: its error already said, one stop rather than a question per host.
-  if (outcome.evaluationFailed) flow.stop("stop");
-  for (const host of failed) await decideFailure(context, hosts, host.name);
+  // Nothing to deploy: one stop rather than a question per host. Failed as a
+  // whole, the evaluation already said why.
+  if (outcome.evaluationFailed || built === 0) {
+    if (!outcome.evaluationFailed) log(context, "error", "no host built");
+    flow.stop("stop");
+  }
+  for (const group of byReason(failed)) await decideFailure(context, hosts, group);
   endStep(context, "build", !flow.halt.aborted);
 
   // An abort after the step, or a stop: nothing left to confirm.
   if (flow.ending !== undefined) return outcome;
 
-  if (built === 0) {
-    log(context, "warn", "no host built: nothing to deploy");
-    flow.finish();
-  } else if (params.interactive) {
+  if (params.interactive) {
     const question = params.buildOnly
       ? "Build done. Continue with the test?"
       : "Build done. Start the test?";
