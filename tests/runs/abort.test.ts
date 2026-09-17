@@ -120,3 +120,33 @@ test("a rollback decided wins over an abort now requested during it: exit 1", as
   expect(run.ui.end?.status).toBe("failed");
   expect(run.feed).toContain("warn aborting now");
 });
+
+test("after wave: failures of the step or wave still decided normally, then the run ends", async () => {
+  const duringBuild = await simulateRun({
+    argv: [],
+    answers: { "failed-srv-ag": "exclude" },
+    behaviours: { "srv-ag": { buildError: "boom" } },
+    hooks: (flow) => [{ kind: "build", host: "hcs", run: () => flow.abort("after-wave") }],
+  });
+  expect(duringBuild.exitCode).toBe(5);
+  expect(duringBuild.recorded?.state?.answers.map((answer) => answer.id)).toEqual([
+    "failed-srv-ag",
+  ]);
+
+  const duringWave = await simulateRun({
+    argv: ["--no-current-zone-before", "--deployment-order", "hcs:gateway:[others]"],
+    answers: { build: "yes", "lost-pc-ag": "exclude" },
+    behaviours: { "pc-ag": { dropsOn: "test" } },
+    hooks: (flow) => [
+      { kind: "activate", host: "srv-ag", phase: "test", run: () => flow.abort("after-wave") },
+    ],
+    stepMs: 5000,
+  });
+  expect(duringWave.exitCode).toBe(5);
+  expect(duringWave.statuses).toMatchObject({
+    "srv-ag": "tested",
+    "pc-ag": "excluded",
+    "lt-cp": "tested",
+  });
+  expect(duringWave.sim.count("profile")).toBe(0);
+});
