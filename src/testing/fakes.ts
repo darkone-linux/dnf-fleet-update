@@ -120,6 +120,7 @@ export class MemoryRunStore implements RunStore {
   readonly events: Event[] = [];
   readonly logs = new Map<string, string[]>();
   state: PersistedState | undefined;
+  stateWrites = 0;
   report: string | undefined;
 
   constructor(readonly id: string) {}
@@ -130,6 +131,7 @@ export class MemoryRunStore implements RunStore {
 
   writeState(state: PersistedState): void {
     this.state = structuredClone(state);
+    this.stateWrites += 1;
   }
 
   appendLog(name: LogName, line: string): void {
