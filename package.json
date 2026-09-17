@@ -14,7 +14,8 @@
   "dependencies": {
     "@opentui/core": "0.5.11",
     "@opentui/react": "0.5.11",
-    "react": "^19.2.0"
+    "react": "^19.2.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

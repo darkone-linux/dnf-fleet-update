@@ -102,7 +102,7 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | Path | Role | May import |
 |---|---|---|
 | `src/model/` | contract: `events.ts` (stream, `RunSource`, `RunControl`), `params.ts` (resolved options), `state.ts` (interface fold), `persist.ts` (`state.json` fold), `transitions.ts`, `exit-codes.ts`, `theme.ts` | `model/` only; no Node/Bun API |
-| `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `replay.ts` (scenario source) | model |
+| `src/engine/` | orchestration: `ports.ts` (side-effect contracts), `fleet.ts` (consumer data schemas), `replay.ts` (scenario source) | model |
 | `src/engine/steps/` | *planned* — one module per step, receives `EngineContext` | model, ports |
 | `src/adapters/` | *planned* — real ports: process, nix, ssh, git, flock, store (`var/deployments/`), Matrix | model, ports |
 | `src/ai/` | *planned* — providers (Claude Agent SDK, opencode), guarded tools | model, engine |
@@ -172,8 +172,8 @@ loses every colour. Three false alarms came from exactly that.
 - Biome pinned exactly: its formatting changes between patches. On Linux the
   Justfile selects its static musl binary (`BIOME_BINARY`): NixOS cannot start
   the glibc one.
-- Planned, added with their first importing code: `zod` (validation of outside
-  JSON, Agent SDK tool schemas), `@anthropic-ai/claude-agent-sdk` (AI v1).
+- `zod`: validation of outside JSON (generator output, nix JSON, `state.json`).
+- Planned, added with its first importing code: `@anthropic-ai/claude-agent-sdk` (AI v1).
 - `just audit` in CI: a high-severity advisory blocks merge and release.
 
 ## Hooks and CI
