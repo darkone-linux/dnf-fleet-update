@@ -107,6 +107,9 @@ export function App({
     if (value === "now" || value === "after-wave") control.current?.abort(value);
   };
 
+  const moveSelection = (delta: number) =>
+    setSelected((value) => Math.max(0, Math.min(hosts.length - 1, value + delta)));
+
   /** alt+↓ / alt+↑: `↵` is taken by the buttons of a pending question. */
   const setLastAiExpanded = (open: boolean) => {
     const last = [...state.feed].reverse().find((item) => item.kind === "ai");
@@ -136,30 +139,45 @@ export function App({
       return;
     }
 
-    if (ask) {
-      const count = ask.options.length;
-      if (key.name === "left") setChoice((value) => (value - 1 + count) % count);
-      else if (key.name === "right") setChoice((value) => (value + 1) % count);
-      else if (key.name === "return") answer(ask.options[choice]!.value);
-      // An engine question has no cancel: only its options are answers.
-      else if (key.name === "escape" && localAsk) answer("cancel");
-      else if (key.ctrl && key.name === "c") {
-        if (localAsk) answer("now");
-        else quitOrAbort();
-      }
-      return;
-    }
-
     if (help) {
       if (key.name === "escape" || key.sequence === "?") setHelp(false);
       return;
     }
 
-    // Log view: arrows walk the host list, both keys leave.
+    // Log view first: a pending question waits behind it, hidden.
     if (view === "logs") {
       if (key.name === "escape" || key.name === "q") setView("main");
-      else if (key.name === "up") setSelected((value) => Math.max(0, value - 1));
-      else if (key.name === "down") setSelected((value) => Math.min(hosts.length - 1, value + 1));
+      else if (key.name === "up") moveSelection(-1);
+      else if (key.name === "down") moveSelection(1);
+      else if (key.ctrl && key.name === "c") {
+        setView("main");
+        quitOrAbort();
+      }
+      return;
+    }
+
+    if (ask) {
+      const count = ask.options.length;
+      const onHosts = focus === "hosts";
+      if (key.name === "tab") {
+        // The host table and its logs stay reachable before answering.
+        setFocus(onHosts ? "feed" : "hosts");
+      } else if (onHosts && (key.name === "up" || key.name === "down")) {
+        moveSelection(key.name === "up" ? -1 : 1);
+      } else if (key.name === "left") {
+        setChoice((value) => (value - 1 + count) % count);
+      } else if (key.name === "right") {
+        setChoice((value) => (value + 1) % count);
+      } else if (key.name === "return") {
+        if (!onHosts) answer(ask.options[choice]!.value);
+        else if (host) setView("logs");
+      } else if (key.name === "escape" && localAsk) {
+        // An engine question has no cancel: only its options are answers.
+        answer("cancel");
+      } else if (key.ctrl && key.name === "c") {
+        if (localAsk) answer("now");
+        else quitOrAbort();
+      }
       return;
     }
 
@@ -187,10 +205,10 @@ export function App({
         setAiPrompt(true);
         return;
       case "up":
-        if (focus === "hosts") setSelected((value) => Math.max(0, value - 1));
+        if (focus === "hosts") moveSelection(-1);
         return;
       case "down":
-        if (focus === "hosts") setSelected((value) => Math.min(hosts.length - 1, value + 1));
+        if (focus === "hosts") moveSelection(1);
         return;
       case "return":
         if (focus === "hosts" && host) setView("logs");
@@ -248,10 +266,10 @@ export function App({
               })}
               <box flexGrow={1} backgroundColor={color.block} />
               <text fg={color.dim} bg={color.block}>
-                {"↔ choose  "}
+                {focus === "hosts" ? "⇥ back to answer  " : "↔ choose  "}
               </text>
               <text fg={color.white} bg={color.block}>
-                ↵ confirm
+                {focus === "hosts" ? "↵ host logs" : "↵ confirm"}
               </text>
             </box>
           </AccentBlock>

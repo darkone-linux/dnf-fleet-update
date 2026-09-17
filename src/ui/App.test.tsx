@@ -149,3 +149,40 @@ test("p pings the tracked hosts until the run ends", async () => {
   act(() => setup.mockInput.pressKey("p"));
   expect(calls).toEqual(["ping"]);
 });
+
+test("a pending question: host logs opened from the table, then back to answer", async () => {
+  const { setup, calls, emit, frame } = await start();
+  emit({ t: 1, kind: "host.add", host: "hcs", profile: "hcs", zone: "www" });
+  emit({
+    t: 1,
+    kind: "host.output",
+    host: "hcs",
+    phase: "build",
+    line: "error: Go 1.25 is end-of-life",
+  });
+  emit({
+    ...ask,
+    question: "hcs failed: Go 1.25 is end-of-life",
+    options: [
+      { value: "exclude", label: "exclude" },
+      { value: "stop", label: "stop" },
+    ],
+  });
+
+  act(() => setup.mockInput.pressTab());
+  expect(await frame()).toContain("↵ host logs");
+  act(() => setup.mockInput.pressEnter());
+  const logs = await frame();
+  expect(logs).toContain("hcs — logs");
+  expect(logs).toContain("error: Go 1.25 is end-of-life");
+  expect(logs).not.toContain("exclude");
+  expect(calls).toEqual([]);
+
+  act(() => setup.mockInput.pressEscape());
+  await settle(setup);
+  expect(await frame()).toContain("hcs failed: Go 1.25 is end-of-life");
+  act(() => setup.mockInput.pressTab());
+  await setup.renderOnce();
+  act(() => setup.mockInput.pressEnter());
+  expect(calls).toEqual(["respond exclude"]);
+});
