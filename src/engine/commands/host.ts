@@ -47,10 +47,28 @@ const bounded = (seconds: number, timeouts: Timeouts): string[] => [
   String(seconds),
 ];
 
-/** Deploy identity: `sudo -n -u nix -H timeout …` (spec § Exécution). */
+/** Login shell of `nix`, then the command with its arguments untouched. */
+const LOGIN_SHELL = ["/bin/sh", "-lc", 'exec "$0" "$@"'] as const;
+
+/**
+ * Deploy identity: `sudo -n -u nix -H timeout …` (spec § Exécution), through
+ * the login shell of `nix` for its PATH — `nix copy` resolves `ssh` there, and
+ * a `~/.local/bin/ssh` of the caller is unreadable to `nix`. `exec "$0" "$@"`
+ * where `sudo -i` would let that shell expand `$` and quotes of the command.
+ */
 export function asNix(argv: readonly string[], seconds: number, timeouts: Timeouts): CommandSpec {
   return {
-    argv: ["sudo", "-n", "-u", "nix", "-H", ...bounded(seconds, timeouts), ...argv],
+    argv: [
+      "sudo",
+      "-n",
+      "-u",
+      "nix",
+      "-H",
+      "--",
+      ...LOGIN_SHELL,
+      ...bounded(seconds, timeouts),
+      ...argv,
+    ],
     ...sudoLimits(seconds, timeouts),
   };
 }

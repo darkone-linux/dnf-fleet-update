@@ -206,7 +206,7 @@ in the same release train.
 | Fleet defaults | generator: `network.fleetUpdate.{deploymentOrder,criticalProfiles}` in `var/generated/network.nix`, only when declared, syntax checked | option > `network.fleetUpdate` > built-in default |
 | Unattended run | module: `fleet-update --no-ui <timer.extraArgs>`, `User` = project owner, `SuccessExitStatus=4`, `KillMode=mixed`, `TimeoutStartSec`, `restartIfChanged = false` | SIGTERM → children stopped, run `interrupted`; codes of `exit-codes.ts` |
 | Programs | package `PATH` suffix: `git`, `nix-eval-jobs`, `ssh`; host: `nix`; unit: `just`, `statix`, `deadnix`, `nixfmt`, `treefmt`, `dnf-generator`, `cargo`; `/run/wrappers/bin`: `sudo`, `ping` | argv names resolved from `PATH`, never a store path |
-| Deploy identity | key `~nix/.ssh/id_ed25519`, readable by `nix` only | ssh and `nix copy` through `sudo -u nix -H`, like `just apply` |
+| Deploy identity | key `~nix/.ssh/id_ed25519`, readable by `nix` only | ssh and `nix copy` through `sudo -u nix -H`, like `just apply`, in the login shell of `nix` (`/bin/sh -lc`): its PATH resolves `ssh` |
 | Toplevel | colmena and `nixosConfigurations` evaluate to the same path | build `nixosConfigurations.<host>.config.system.build.toplevel` |
 | `var/deployments/` | consumer `.gitignore`: `/var/*`, except `generated/` and `security/**/*.pub` | run state never dirties the tree check |
 | Version | `versionCheckHook` once `--version` exists; tags `vX.Y.Z` pinned by the train | `--version` prints `package.json` version, exit `0` |

@@ -31,6 +31,9 @@ const OLD = "/nix/store/0h15zmc3vn75j3w5b2yc4m0j2rxwdzlg-nixos-system-gw-ag-26.0
 const DRV = "/nix/store/mfm2y1k08lnq8cfqdjiz92bjzkzfn575-nixos-system-gw-ag-26.11.drv";
 const ORIGIN = { system: OLD, profile: OLD };
 
+/** Deploy identity, login shell included: the prefix of every command as `nix`. */
+const AS_NIX = ["sudo", "-n", "-u", "nix", "-H", "--", "/bin/sh", "-lc", 'exec "$0" "$@"'] as const;
+
 /** Words as `/bin/sh` splits the command line. */
 function shellWords(line: string): string[] {
   const out = Bun.spawnSync(["sh", "-c", `printf '%s\\0' ${line}`], { stdout: "pipe" });
@@ -65,7 +68,7 @@ describe("shell quoting", () => {
 describe("deploy identity", () => {
   test("sudo as nix, bounded on the nix side, the runner acting only past it", () => {
     expect(asNix(["nix", "copy"], 60, T)).toEqual({
-      argv: ["sudo", "-n", "-u", "nix", "-H", "timeout", "--kill-after=10", "60", "nix", "copy"],
+      argv: [...AS_NIX, "timeout", "--kill-after=10", "60", "nix", "copy"],
       timeoutMs: 80_000,
       killGraceMs: 20_000,
     });
@@ -73,11 +76,7 @@ describe("deploy identity", () => {
 
   test("nix copy of the built path", () => {
     expect(copyClosure("gw-ag", NEW, T).argv).toEqual([
-      "sudo",
-      "-n",
-      "-u",
-      "nix",
-      "-H",
+      ...AS_NIX,
       "timeout",
       "--kill-after=10",
       "3600",
@@ -99,12 +98,9 @@ describe("placement", () => {
 
   test("remote: ssh as nix, the host-side command bounded and quoted", () => {
     const spec = onHost(remote, setProfile(NEW, T), T);
-    expect(spec.argv.slice(0, 13)).toEqual([
-      "sudo",
-      "-n",
-      "-u",
-      "nix",
-      "-H",
+    const words = AS_NIX.length;
+    expect(spec.argv.slice(0, words + 8)).toEqual([
+      ...AS_NIX,
       "timeout",
       "--kill-after=10",
       "60",
@@ -114,8 +110,8 @@ describe("placement", () => {
       "-o",
       "ConnectTimeout=30",
     ]);
-    expect(spec.argv[13]).toBe("nix@gw-ag");
-    expect(shellWords(spec.argv[14]!)).toEqual([
+    expect(spec.argv[words + 8]).toBe("nix@gw-ag");
+    expect(shellWords(spec.argv[words + 9]!)).toEqual([
       "sudo",
       "-n",
       "timeout",
@@ -127,7 +123,7 @@ describe("placement", () => {
       "--set",
       NEW,
     ]);
-    expect(spec.argv).toHaveLength(15);
+    expect(spec.argv).toHaveLength(words + 10);
   });
 
   test("local: same command, no ssh, sudo only when root", () => {
