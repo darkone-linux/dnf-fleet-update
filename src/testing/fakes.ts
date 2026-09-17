@@ -27,9 +27,9 @@ import type { Event, RunInfo } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
 
-/** Reply for the first command whose argv starts with `match`. */
+/** Reply for the first command whose argv starts with `match`, or satisfies it. */
 export interface CommandScript {
-  match: readonly string[];
+  match: readonly string[] | ((argv: readonly string[]) => boolean);
   output?: readonly OutputLine[];
   exitCode?: number;
   timedOut?: boolean;
@@ -58,7 +58,9 @@ export class FakeCommands implements CommandRunner {
     const script = this.scripts.find(
       (candidate) =>
         !this.used.has(candidate) &&
-        candidate.match.every((arg, index) => spec.argv[index] === arg),
+        (typeof candidate.match === "function"
+          ? candidate.match(spec.argv)
+          : candidate.match.every((arg, index) => spec.argv[index] === arg)),
     );
     if (!script) throw new Error(`unscripted command: ${spec.argv.join(" ")}`);
     if (script.once) this.used.add(script);
@@ -320,4 +322,20 @@ export function feed(events: readonly Event[]): string[] {
 /** Lets every pending promise chain settle; no timer, no wall clock. */
 export function flush(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
+}
+
+/** Awaits `promise` while moving the clock by `stepMs`: retry loops and rollback waits. */
+export async function drive<T>(clock: FakeClock, promise: Promise<T>, stepMs: number): Promise<T> {
+  let settled = false;
+  const tracked = promise.finally(() => {
+    settled = true;
+  });
+
+  // Rejection observed here, delivered to the caller by the return below.
+  tracked.catch(() => undefined);
+  for (let round = 0; round < 10_000 && !settled; round += 1) {
+    await flush();
+    if (!settled) clock.advance(stepMs);
+  }
+  return tracked;
 }

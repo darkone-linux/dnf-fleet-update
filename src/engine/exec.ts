@@ -14,8 +14,8 @@ export interface ExecOptions {
   /** Receives `$ <command>`, then every output line. */
   log?: LogName;
 
-  /** Default: `now` of the run. */
-  signal?: AbortSignal;
+  /** Default: `now` of the run. `null`: runs even after an abort, bounded by its timeout. */
+  signal?: AbortSignal | null;
   onLine?: (line: OutputLine) => void;
 }
 
@@ -30,7 +30,7 @@ export async function execute(
   if (log) context.run.appendLog(log, `$ ${shellJoin(spec.argv)}`);
 
   const result = await context.commands.run(spec, {
-    signal: options.signal ?? context.signal,
+    signal: options.signal === null ? undefined : (options.signal ?? context.signal),
     onLine: (line) => {
       (line.stream === "stdout" ? stdout : stderr).push(line.line);
       if (log) context.run.appendLog(log, line.line);

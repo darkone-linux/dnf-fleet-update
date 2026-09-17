@@ -145,14 +145,6 @@ export function rollbackUnit(runId: string, phase: Phase): string {
   return `fleet-update-rollback-${runId}-${phase}`;
 }
 
-export interface Rollback {
-  runId: string;
-  origin: HostOrigin;
-
-  /** Seconds before the timer fires; `0` arms nothing. */
-  after: number;
-}
-
 /**
  * Reactivates the origin: `test` after a test; after a switch, profile set back
  * then `switch`. Binaries of the origin itself: a transient unit has no PATH
@@ -168,49 +160,97 @@ export function rollbackScript(origin: HostOrigin, phase: Phase): string {
   ].join(" && ");
 }
 
+/** Exit code of the activation, kept for a reconnection after a dropped session. */
+export function resultFile(runId: string, phase: Phase): string {
+  assertSafe("run id", runId, RUN_ID);
+  return `/run/fleet-update-${runId}-${phase}.rc`;
+}
+
+export interface Activation {
+  runId: string;
+  origin: HostOrigin;
+
+  /** Seconds before the rollback timer fires; `0` arms nothing (disabled, deployment host). */
+  rollbackAfter: number;
+}
+
+const SYSTEMD_RUN = ["systemd-run", "--wait", "--pipe", "--collect"] as const;
+
 /**
- * `systemd-run --wait --pipe --collect` survives a dropped ssh session. With a
- * rollback, the same unit arms the timer on exit whatever the activation result.
+ * `systemd-run --wait --pipe --collect` survives a dropped ssh session. The
+ * unit arms the rollback timer whatever the result, then writes the result
+ * file: once it exists, the timer does too.
  */
 export function activate(
   path: string,
   phase: Phase,
-  rollback: Rollback | undefined,
+  activation: Activation,
   timeouts: Timeouts,
 ): HostCommand {
   assertSafe("store path", path, STORE_PATH);
-  const run = ["systemd-run", "--wait", "--pipe", "--collect"] as const;
-  const switchTo = `${path}/bin/switch-to-configuration`;
+  const { runId, origin, rollbackAfter } = activation;
 
-  if (rollback === undefined || rollback.after === 0) {
-    return { argv: [...run, switchTo, phase], root: true, seconds: timeouts.activation };
-  }
-
-  const timer = shellJoin([
-    `${path}/sw/bin/systemd-run`,
-    `--on-active=${rollback.after}`,
-    `--unit=${rollbackUnit(rollback.runId, phase)}`,
-    "/bin/sh",
-    "-c",
-    rollbackScript(rollback.origin, phase),
-  ]);
-  const script = [`${shellQuote(switchTo)} ${phase}`, "rc=$?", timer, 'exit "$rc"'].join("\n");
-  return { argv: [...run, "/bin/sh", "-c", script], root: true, seconds: timeouts.activation };
+  const timer =
+    rollbackAfter === 0
+      ? []
+      : [
+          shellJoin([
+            `${path}/sw/bin/systemd-run`,
+            `--on-active=${rollbackAfter}`,
+            `--unit=${rollbackUnit(runId, phase)}`,
+            "/bin/sh",
+            "-c",
+            rollbackScript(origin, phase),
+          ]),
+        ];
+  const script = [
+    `${shellQuote(`${path}/bin/switch-to-configuration`)} ${phase}`,
+    "rc=$?",
+    ...timer,
+    `echo "$rc" > ${shellQuote(resultFile(runId, phase))}`,
+    'exit "$rc"',
+  ].join("\n");
+  return {
+    argv: [...SYSTEMD_RUN, "/bin/sh", "-c", script],
+    root: true,
+    seconds: timeouts.activation,
+  };
 }
 
-/** A new ssh connection made it: the host is reachable, the rollback is dropped. */
-export function cancelRollback(runId: string, phase: Phase, timeouts: Timeouts): HostCommand {
+/** Exit code of `settleActivation` while the result file is missing. */
+export const SETTLE_PENDING = 3;
+
+/**
+ * New connection after an activation: prints its exit code, then stops the
+ * rollback timer when one was armed. Exit `SETTLE_PENDING`: no result yet.
+ */
+export function settleActivation(
+  runId: string,
+  phase: Phase,
+  armed: boolean,
+  timeouts: Timeouts,
+): HostCommand {
+  const file = shellQuote(resultFile(runId, phase));
+  const lines = [`[ -f ${file} ] || exit ${SETTLE_PENDING}`, `cat ${file}`];
+  if (armed) lines.push(shellJoin(["systemctl", "stop", `${rollbackUnit(runId, phase)}.timer`]));
+  return { argv: ["sh", "-c", lines.join(" && ")], root: true, seconds: timeouts.ssh };
+}
+
+/** Forced rollback (spec § Exécution): the same reactivation, at once, under `systemd-run`. */
+export function rollbackNow(origin: HostOrigin, phase: Phase, timeouts: Timeouts): HostCommand {
   return {
-    argv: ["systemctl", "stop", `${rollbackUnit(runId, phase)}.timer`],
+    argv: [...SYSTEMD_RUN, "/bin/sh", "-c", rollbackScript(origin, phase)],
     root: true,
-    seconds: timeouts.ssh,
+    seconds: timeouts.activation,
   };
 }
 
 /**
- * Alert silencing flag. Exit `127` from `timeout`: command absent, the host is
- * not monitored.
+ * Alert silencing flag. Exit `COMMAND_NOT_FOUND` from `timeout`: command
+ * absent, the host is not monitored.
  */
 export function maintenance(on: boolean, timeouts: Timeouts): HostCommand {
   return { argv: ["dnf-maintenance", on ? "on" : "off"], root: true, seconds: timeouts.ssh };
 }
+
+export const COMMAND_NOT_FOUND = 127;

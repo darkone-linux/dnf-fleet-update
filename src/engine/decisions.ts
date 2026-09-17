@@ -29,6 +29,25 @@ function apply(context: RunContext, hosts: HostTable, name: string, decision: De
   }
 }
 
+function decide(
+  context: RunContext,
+  hosts: HostTable,
+  name: string,
+  question: { id: string; text: string; options: readonly AskOption[] },
+  unattended: Decision,
+  before?: () => Promise<void>,
+): Promise<Decision | undefined> {
+  return context.questions.run(async () => {
+    if (context.flow.halt.aborted) return undefined;
+    await before?.();
+    const decision = context.params.interactive
+      ? ((await askHoldingQueue(context, question.id, question.text, question.options)) as Decision)
+      : unattended;
+    apply(context, hosts, name, decision);
+    return decision;
+  });
+}
+
 /**
  * Host `failed` and still reachable: the rules of a lost host, without the
  * gateway guard. `undefined`: the run already halted, nothing decided.
@@ -38,21 +57,46 @@ export function decideFailure(
   hosts: HostTable,
   name: string,
 ): Promise<Decision | undefined> {
-  return context.questions.run(async () => {
-    if (context.flow.halt.aborted) return undefined;
-    const { params } = context;
-    const note = hosts.get(name).note;
-    const decision = params.interactive
-      ? ((await askHoldingQueue(
-          context,
-          `failed-${name}`,
-          `${name} failed${note === undefined ? "" : `: ${note}`}`,
-          OPTIONS,
-        )) as Decision)
-      : params.stopLoss
-        ? "rollback"
-        : "exclude";
-    apply(context, hosts, name, decision);
-    return decision;
-  });
+  const note = hosts.get(name).note;
+  const text = `${name} failed${note === undefined ? "" : `: ${note}`}`;
+  const unattended = context.params.stopLoss ? "rollback" : "exclude";
+  return decide(context, hosts, name, { id: `failed-${name}`, text, options: OPTIONS }, unattended);
+}
+
+/**
+ * Host unreachable after its wave started. Gateway guard: its automatic
+ * rollback waited for when a timer is about to fire, then `stop` or
+ * `rollback`, never `exclude`.
+ */
+export function decideLost(
+  context: RunContext,
+  hosts: HostTable,
+  name: string,
+  rollbackPending: boolean,
+): Promise<Decision | undefined> {
+  const { params } = context;
+  const text = `${name} unreachable`;
+  if (!hosts.get(name).gateway) {
+    const unattended = params.stopLoss ? "rollback" : "exclude";
+    return decide(context, hosts, name, { id: `lost-${name}`, text, options: OPTIONS }, unattended);
+  }
+
+  const options = OPTIONS.filter((option) => option.value !== "exclude");
+  const waitRollback = async () => {
+    if (!rollbackPending) return;
+    log(context, "warn", "gateway lost: waiting for its automatic rollback", name);
+
+    // Attempts stopped `ssh` seconds before the timer; the rollback takes up to `activation`.
+    const { ssh, activation } = params.timeouts;
+    await context.clock.sleep((ssh + activation) * 1000, context.signal);
+  };
+  const unattended = params.stopLoss ? "rollback" : "stop";
+  return decide(
+    context,
+    hosts,
+    name,
+    { id: `lost-${name}`, text, options },
+    unattended,
+    waitRollback,
+  );
 }

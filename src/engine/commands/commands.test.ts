@@ -2,20 +2,25 @@
 // verbatim; quoting checked by a real POSIX shell, never by eye.
 
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DEFAULT_TIMEOUTS as T } from "../../cli/options.ts";
 import {
   activate,
   asNix,
-  cancelRollback,
   copyClosure,
   maintenance,
   onHost,
   parseOrigin,
   ping,
   readOrigin,
+  rollbackNow,
   rollbackScript,
   rollbackUnit,
+  SETTLE_PENDING,
   setProfile,
+  settleActivation,
 } from "./host.ts";
 import { buildHost, evalHosts, selectExpression } from "./nix.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
@@ -170,31 +175,11 @@ describe("placement", () => {
 });
 
 describe("activation", () => {
-  test("without rollback: the spec command, verbatim", () => {
-    expect(activate(NEW, "switch", undefined, T)).toEqual({
-      argv: [
-        "systemd-run",
-        "--wait",
-        "--pipe",
-        "--collect",
-        `${NEW}/bin/switch-to-configuration`,
-        "switch",
-      ],
-      root: true,
-      seconds: 300,
-    });
-    const disabled = activate(NEW, "test", { runId: "r", origin: ORIGIN, after: 0 }, T);
-    expect(disabled.argv.at(-1)).toBe("test");
-  });
+  const RUN = "20260917T020000Z-full";
 
-  test("with rollback: activation, then the timer armed whatever the result", () => {
-    const command = activate(
-      NEW,
-      "test",
-      { runId: "20260917-040000-full", origin: ORIGIN, after: 600 },
-      T,
-    );
-    expect(command.argv.slice(0, 6)).toEqual([
+  /** Script of `systemd-run … /bin/sh -c <script>`, one line per item. */
+  const scriptLines = (argv: readonly string[]) => {
+    expect(argv.slice(0, 6)).toEqual([
       "systemd-run",
       "--wait",
       "--pipe",
@@ -202,23 +187,41 @@ describe("activation", () => {
       "/bin/sh",
       "-c",
     ]);
+    // Syntax only: `-n` reads the script without running it.
+    expect(Bun.spawnSync(["sh", "-n", "-c", argv[6]!]).exitCode).toBe(0);
+    return argv[6]!.split("\n");
+  };
 
-    const lines = command.argv[6]!.split("\n");
-    expect(lines).toHaveLength(4);
+  test("with rollback: activation, timer armed whatever the result, then the result file", () => {
+    const command = activate(NEW, "test", { runId: RUN, origin: ORIGIN, rollbackAfter: 600 }, T);
+    expect(command).toMatchObject({ root: true, seconds: 300 });
+
+    const lines = scriptLines(command.argv);
+    expect(lines).toHaveLength(5);
     expect(shellWords(lines[0]!)).toEqual([`${NEW}/bin/switch-to-configuration`, "test"]);
     expect(lines[1]).toBe("rc=$?");
     expect(shellWords(lines[2]!)).toEqual([
       `${NEW}/sw/bin/systemd-run`,
       "--on-active=600",
-      "--unit=fleet-update-rollback-20260917-040000-full-test",
+      `--unit=fleet-update-rollback-${RUN}-test`,
       "/bin/sh",
       "-c",
       `${OLD}/bin/switch-to-configuration test`,
     ]);
-    expect(lines[3]).toBe('exit "$rc"');
+    expect(lines[3]).toBe(`echo "$rc" > /run/fleet-update-${RUN}-test.rc`);
+    expect(lines[4]).toBe('exit "$rc"');
+  });
 
-    // Syntax only: `-n` reads the script without running it.
-    expect(Bun.spawnSync(["sh", "-n", "-c", command.argv[6]!]).exitCode).toBe(0);
+  test("rollback disabled or deployment host: no timer, the result file all the same", () => {
+    const lines = scriptLines(
+      activate(NEW, "switch", { runId: RUN, origin: ORIGIN, rollbackAfter: 0 }, T).argv,
+    );
+    expect(lines).toEqual([
+      `${NEW}/bin/switch-to-configuration switch`,
+      "rc=$?",
+      `echo "$rc" > /run/fleet-update-${RUN}-switch.rc`,
+      'exit "$rc"',
+    ]);
   });
 
   test("rolling back a switch restores the profile before switching", () => {
@@ -238,12 +241,35 @@ describe("activation", () => {
     ]);
   });
 
-  test("cancel stops the timer of the same run and phase", () => {
-    expect(cancelRollback("20260917-040000-full", "switch", T).argv).toEqual([
-      "systemctl",
-      "stop",
-      "fleet-update-rollback-20260917-040000-full-switch.timer",
+  test("forced rollback: the same reactivation under systemd-run, at once", () => {
+    const lines = scriptLines(rollbackNow(ORIGIN, "test", T).argv);
+    expect(lines).toEqual([`${OLD}/bin/switch-to-configuration test`]);
+  });
+
+  test("settle: result printed, timer of the same run and phase stopped", () => {
+    const armed = settleActivation(RUN, "switch", true, T);
+    expect(armed).toMatchObject({ root: true, seconds: 30 });
+    expect(armed.argv.slice(0, 2)).toEqual(["sh", "-c"]);
+    expect(armed.argv[2]!.split(" && ")).toEqual([
+      `[ -f /run/fleet-update-${RUN}-switch.rc ] || exit ${SETTLE_PENDING}`,
+      `cat /run/fleet-update-${RUN}-switch.rc`,
+      `systemctl stop fleet-update-rollback-${RUN}-switch.timer`,
     ]);
+    expect(settleActivation(RUN, "test", false, T).argv[2]!.split(" && ")).toHaveLength(2);
+  });
+
+  test("settle on a real shell: pending without the file, the code once written", () => {
+    const script = settleActivation(RUN, "test", false, T).argv[2]!;
+    const dir = mkdtempSync(join(tmpdir(), "fleet-update-settle-"));
+    const local = script.replaceAll("/run/", `${dir}/`);
+    try {
+      expect(Bun.spawnSync(["sh", "-c", local]).exitCode).toBe(SETTLE_PENDING);
+      Bun.spawnSync(["sh", "-c", `echo 4 > ${dir}/fleet-update-${RUN}-test.rc`]);
+      const done = Bun.spawnSync(["sh", "-c", local]);
+      expect([done.exitCode, done.stdout.toString()]).toEqual([0, "4\n"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("maintenance flag needs root", () => {
