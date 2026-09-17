@@ -135,15 +135,23 @@ describe("test waves", () => {
     expect(feed(context.events.events)).toContain("warn gw-ag: test: some units failed");
   });
 
-  test("activation failed on a reachable host: failed, excluded unattended", async () => {
-    const { context, selection, hosts, presence, states } = setup([
+  test("activation failed on a reachable host: reverted unattended, the next waves go on", async () => {
+    const { context, selection, hosts, presence, states, commandsOf } = setup([
       { match: remote("srv-ag", "[ -f"), output: [{ stream: "stdout", line: "2" }] },
     ]);
 
     await testWaves(context, hosts, presence, selection);
 
-    expect(states()).toMatchObject({ "srv-ag": "excluded", "lt-cp": "tested" });
+    expect(states()).toMatchObject({ "srv-ag": "reverted", "lt-cp": "tested" });
     expect(hosts.get("srv-ag").note).toBe("test failed: switch-to-configuration exit 2");
+    const rollback = commandsOf("srv-ag").filter((argv) => argv.at(-1)?.includes("rollback.rc"));
+    expect(rollback).toHaveLength(1);
+    expect(feed(context.events.events)).toEqual(
+      expect.arrayContaining([
+        "warn srv-ag: reverting to its origin",
+        "ok srv-ag: rolled back to its origin",
+      ]),
+    );
   });
 
   test("session dropped during the activation: the result is read once reconnected", async () => {
@@ -159,15 +167,18 @@ describe("test waves", () => {
     expect(context.clock.now()).toBeGreaterThanOrEqual(2 * PING_ROUND);
   });
 
-  test("activation never ran (session ended, no result): failed at once", async () => {
+  test("activation never ran (session ended, no result): failed at once, then reverted", async () => {
     const { context, selection, hosts, presence } = setup([
-      { match: remote("hcs", "rc=$?"), exitCode: 1 },
+      {
+        match: (argv) => remote("hcs", "-test.rc")(argv) && remote("hcs", "rc=$?")(argv),
+        exitCode: 1,
+      },
       { match: remote("hcs", "[ -f"), exitCode: 3 },
     ]);
 
     await testWaves(context, hosts, presence, selection);
 
-    expect(hosts.get("hcs").note).toBe("test did not run: exit 1");
+    expect(hosts.get("hcs")).toMatchObject({ state: "reverted", note: "test did not run: exit 1" });
     expect(context.clock.now()).toBe(0);
   });
 

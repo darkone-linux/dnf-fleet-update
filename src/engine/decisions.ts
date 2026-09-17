@@ -1,25 +1,42 @@
 // Decisions on failed and lost hosts (spec § Erreurs et réparations).
 //
-// Interactive: asked, one host at a time. Otherwise `exclude`, or `rollback`
-// under `--stop-loss`. Once the run halts, nothing more is asked.
+// Interactive: asked, one host at a time. Otherwise `exclude`, `revert` for an
+// activated host, or `rollback` under `--stop-loss`. Once the run halts,
+// nothing more is asked.
 
 import type { AskOption } from "../model/events.ts";
 import { askHoldingQueue, log, type RunContext } from "./context.ts";
 import type { HostTable } from "./hosts.ts";
 
-export type Decision = "exclude" | "stop" | "rollback";
+/** `revert` is carried out by the caller, outside the question queue. */
+export type Decision = "exclude" | "revert" | "keep" | "stop" | "rollback";
+
+const STOP: readonly AskOption[] = [
+  { value: "stop", label: "stop", description: "start nothing more, leave hosts as they are" },
+  { value: "rollback", label: "rollback", description: "stop, then bring activated hosts back" },
+];
 
 const OPTIONS: readonly AskOption[] = [
   { value: "exclude", label: "exclude", description: "go on without this host" },
-  { value: "stop", label: "stop", description: "start nothing more, leave hosts as they are" },
-  { value: "rollback", label: "rollback", description: "stop, then bring activated hosts back" },
+  ...STOP,
+];
+
+/** Activated host still reachable: back to its origin, or kept as it is for inspection. */
+const ACTIVATED_OPTIONS: readonly AskOption[] = [
+  { value: "revert", label: "revert", description: "back to its origin, go on without it" },
+  { value: "keep", label: "keep", description: "leave it as it is, go on without it" },
+  ...STOP,
 ];
 
 function apply(context: RunContext, hosts: HostTable, name: string, decision: Decision): void {
   switch (decision) {
     case "exclude":
+    case "keep":
       hosts.set(name, "excluded", { note: hosts.get(name).note });
-      log(context, "warn", "excluded", name);
+      log(context, "warn", decision === "keep" ? "excluded, left as it is" : "excluded", name);
+      return;
+    case "revert":
+      log(context, "warn", "reverting to its origin", name);
       return;
     case "stop":
     case "rollback":
@@ -50,17 +67,20 @@ function decide(
 
 /**
  * Host `failed` and still reachable: the rules of a lost host, without the
- * gateway guard. `undefined`: the run already halted, nothing decided.
+ * gateway guard; once activated, `revert` instead of `exclude`. `undefined`:
+ * the run already halted, nothing decided.
  */
 export function decideFailure(
   context: RunContext,
   hosts: HostTable,
   name: string,
 ): Promise<Decision | undefined> {
-  const note = hosts.get(name).note;
+  const { note, activated } = hosts.get(name);
   const text = `${name} failed${note === undefined ? "" : `: ${note}`}`;
-  const unattended = context.params.stopLoss ? "rollback" : "exclude";
-  return decide(context, hosts, name, { id: `failed-${name}`, text, options: OPTIONS }, unattended);
+  const options = activated === undefined ? OPTIONS : ACTIVATED_OPTIONS;
+  const goOn = activated === undefined ? "exclude" : "revert";
+  const unattended = context.params.stopLoss ? "rollback" : goOn;
+  return decide(context, hosts, name, { id: `failed-${name}`, text, options }, unattended);
 }
 
 /**
@@ -81,7 +101,7 @@ export function decideLost(
     return decide(context, hosts, name, { id: `lost-${name}`, text, options: OPTIONS }, unattended);
   }
 
-  const options = OPTIONS.filter((option) => option.value !== "exclude");
+  const options = STOP;
   const waitRollback = async () => {
     if (!rollbackPending) return;
     log(context, "warn", "gateway lost: waiting for its automatic rollback", name);

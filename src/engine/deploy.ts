@@ -17,6 +17,7 @@ import { describeFailure, execute, succeeded } from "./exec.ts";
 import type { HostTable } from "./hosts.ts";
 import type { OutputLine } from "./ports.ts";
 import type { Presence } from "./presence.ts";
+import { revertHost } from "./rollback.ts";
 import { settle, transportFailed } from "./settle.ts";
 
 /** `switch-to-configuration`: activation done, some units failed. */
@@ -30,7 +31,10 @@ async function failed(
 ): Promise<void> {
   hosts.set(name, "failed", { note });
   log(context, "error", note, name);
-  await decideFailure(context, hosts, name);
+  const decision = await decideFailure(context, hosts, name);
+
+  // Decided before a stop: a revert not started yet is a new operation.
+  if (decision === "revert" && !context.flow.halt.aborted) await revertHost(context, hosts, name);
 }
 
 /** Before the activation of this phase: unreachable means lost, no timer to wait for. */

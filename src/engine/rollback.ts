@@ -47,19 +47,29 @@ async function reactivateOrigin(
   }
 }
 
-async function rollbackHost(context: RunContext, hosts: HostTable, name: string): Promise<void> {
+/**
+ * Back to its origin: `reverted`, reason kept. On failure the host ends
+ * `failed`, both reasons in its note.
+ */
+export async function revertHost(
+  context: RunContext,
+  hosts: HostTable,
+  name: string,
+): Promise<void> {
   const host = hosts.get(name);
-  const { origin, activated } = host;
+  const { origin, activated, note } = host;
   if (origin === undefined || activated === undefined) return;
   const failure = await reactivateOrigin(context, host, origin, activated);
   if (context.signal.aborted) return;
 
   if (failure === undefined) {
-    hosts.set(name, "reverted");
+    hosts.set(name, "reverted", note === undefined ? {} : { note });
     log(context, "ok", "rolled back to its origin", name);
     return;
   }
-  if (host.state !== "failed") hosts.set(name, "failed", { note: failure });
+  if (host.state === "failed")
+    hosts.note(name, note === undefined ? failure : `${note}; ${failure}`);
+  else hosts.set(name, "failed", { note: failure });
   log(context, "error", failure, name);
 }
 
@@ -87,7 +97,7 @@ export async function rollbackFleet(
   log(context, "warn", `rolling back ${count} hosts`);
   for (const wave of waves) {
     await pool(wave, context.params.maxParallel, context.signal, (name) =>
-      rollbackHost(context, hosts, name),
+      revertHost(context, hosts, name),
     );
   }
 }

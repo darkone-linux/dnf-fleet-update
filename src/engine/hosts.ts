@@ -89,6 +89,13 @@ export class HostTable {
     });
   }
 
+  /** Same state, reason completed: a failed host whose revert failed too. */
+  note(name: string, note: string): void {
+    const entry = this.get(name);
+    entry.note = note;
+    emit(this.context, { kind: "host.state", host: name, state: entry.state, note });
+  }
+
   /** Emits only a change: every host starts unreachable. */
   presence(name: string, online: boolean): void {
     const entry = this.get(name);

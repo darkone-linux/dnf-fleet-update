@@ -130,3 +130,64 @@ test("forced rollback failing on a host: failed with its reason, the others reve
   expect(run.statuses).toMatchObject({ hcs: "failed", "gw-ag": "reverted" });
   expect(run.feed).toContain("error hcs: rollback failed: exit 1");
 });
+
+test("activation failed at the test, unattended: that host back to its origin, the run goes on", async () => {
+  const run = await simulateRun({ behaviours: { "srv-ag": { activation: { test: 2 } } } });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toMatchObject({
+    "srv-ag": "reverted",
+    "pc-ag": "deployed",
+    "lt-cp": "deployed",
+  });
+  expect(run.sim.host("srv-ag").history).toEqual([
+    "test 2",
+    "timer armed test",
+    "timer cancelled test",
+    "rollback test 0",
+  ]);
+  expect(run.ui.end?.report?.[0]).toBe("5 deployed, 1 rolled back (srv-ag)");
+  expect(run.recorded?.report).toContain(
+    "| srv-ag | reverted | test failed: switch-to-configuration exit 2 |",
+  );
+});
+
+test("activation failed at the switch: back to its origin, profile included", async () => {
+  const run = await simulateRun({ behaviours: { "gw-cp": { activation: { switch: 100 } } } });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses["gw-cp"]).toBe("reverted");
+  expect(run.sim.host("gw-cp")).toMatchObject({ system: ORIGIN_PATH, profile: ORIGIN_PATH });
+});
+
+test("activation failed, interactive: revert, keep, stop or rollback; keep leaves it as it is", async () => {
+  const run = await simulateRun({
+    argv: [],
+    answers: { build: "yes", "failed-pc-ag": "keep", switch: "yes" },
+    behaviours: { "pc-ag": { activation: { test: 2 } } },
+  });
+
+  expect(run.exitCode).toBe(0);
+  const ask = run.events.find((event) => event.kind === "ask" && event.id === "failed-pc-ag");
+  expect(ask?.kind === "ask" && ask.options.map((option) => option.value)).toEqual([
+    "revert",
+    "keep",
+    "stop",
+    "rollback",
+  ]);
+  expect(run.statuses["pc-ag"]).toBe("excluded");
+  expect(run.sim.count("rollback", "pc-ag")).toBe(0);
+  expect(run.feed).toContain("warn pc-ag: excluded, left as it is");
+});
+
+test("revert failing too: failed, both reasons kept, the run goes on", async () => {
+  const run = await simulateRun({
+    behaviours: { "srv-ag": { activation: { test: 2 }, rollbackExit: 1 } },
+  });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toMatchObject({ "srv-ag": "failed", "lt-cp": "deployed" });
+  expect(run.recorded?.report).toContain(
+    "| srv-ag | failed | test failed: switch-to-configuration exit 2; rollback failed: exit 1 |",
+  );
+});
