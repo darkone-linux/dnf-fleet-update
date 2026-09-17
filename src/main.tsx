@@ -21,9 +21,18 @@ import { ExitCode } from "./model/exit-codes.ts";
 import { textLines } from "./output/text.ts";
 import { App } from "./ui/App.tsx";
 
+// Set once the run has its directory: printed last, so the path is at hand
+// when the interface closes.
+let runDirectory: string | undefined;
+
+function leave(code: number): never {
+  if (runDirectory !== undefined) console.log(`report and logs: ${runDirectory}`);
+  process.exit(code);
+}
+
 function exitWith(message: string, code: ExitCode): never {
   console.error(`fleet-update: ${message}`);
-  process.exit(code);
+  return leave(code);
 }
 
 // Packaged next to `src/`: resolved from this file, never from the cwd.
@@ -53,13 +62,20 @@ const workspace = process.cwd();
 const deployments = join(workspace, "var", "deployments");
 const channel = new LiveChannel();
 const flow = new RunFlow();
+const store = new DirectoryStore(deployments);
 const ports: RunPorts = {
   commands: new ProcessRunner(),
   clock: new SystemClock(),
   events: channel,
   local: new SystemHost(),
   lock: new FlockLock(join(deployments, "current.lock")),
-  store: new DirectoryStore(deployments),
+  store: {
+    create: (mode) => {
+      const run = store.create(mode);
+      runDirectory = join(deployments, run.id);
+      return run;
+    },
+  },
 };
 const request: RunRequest = {
   workspace,
@@ -88,7 +104,7 @@ if (options.noUi) {
     for (const line of textLines(event)) console.log(line);
   });
   const exitCode = await runFleetUpdate(ports, request, flow).catch(crash);
-  process.exit(exitCode);
+  leave(exitCode);
 }
 
 // `^C` is the abort dialog, not an exit: the interface owns the shutdown path.
@@ -109,7 +125,7 @@ const source: RunSource = (emit) => {
       // A signal destroyed the renderer: nobody is left to press `q`.
       if (!signalled) return;
       renderer.destroy();
-      process.exit(exitCode);
+      leave(exitCode);
     },
     (error: unknown) => {
       renderer.destroy();
@@ -119,4 +135,13 @@ const source: RunSource = (emit) => {
   return control;
 };
 
-createRoot(renderer).render(<App source={source} />);
+// `onQuit`: the path is printed after the interface has released the terminal.
+createRoot(renderer).render(
+  <App
+    source={source}
+    onQuit={(exitCode) => {
+      renderer.destroy();
+      leave(exitCode);
+    }}
+  />,
+);

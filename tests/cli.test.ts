@@ -8,6 +8,7 @@ import { join } from "node:path";
 import packageJson from "../package.json";
 import { FlockLock } from "../src/adapters/lock.ts";
 import { ExitCode } from "../src/model/exit-codes.ts";
+import { NETWORK_JSON } from "../src/testing/fleet.ts";
 
 const MAIN = new URL("../src/main.tsx", import.meta.url).pathname;
 
@@ -77,6 +78,24 @@ test("--no-ui with the lock held elsewhere: text output, exit 4", () => {
   } finally {
     lock.release();
   }
+});
+
+// Only `network.nix` is needed to open the run directory; `git status` then
+// fails on a directory that is no repository, and the run stops there.
+test("--no-ui: the run directory is printed last, exit 1 on a dirty prerequisite", () => {
+  const root = emptyWorkspace();
+  const bin = join(root, "bin");
+  mkdirSync(bin);
+  const script = join(bin, "nix-instantiate");
+  writeFileSync(script, `#!/bin/sh\ncat <<'JSON'\n${JSON.stringify(NETWORK_JSON)}\nJSON\n`);
+  chmodSync(script, 0o755);
+
+  const result = run(["--no-ui"], root, { PATH: `${bin}:${process.env.PATH}` });
+
+  expect(result.code).toBe(ExitCode.Failed);
+  expect(result.stdout.trimEnd().split("\n").at(-1)).toMatch(
+    new RegExp(`^report and logs: ${join(root, "var", "deployments")}/\\d{8}T\\d{6}Z-full$`),
+  );
 });
 
 // The fake `nix-instantiate` stops its caller, as systemd would, mid-command.
