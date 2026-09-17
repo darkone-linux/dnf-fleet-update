@@ -24,10 +24,13 @@ import {
 import { ORIGIN_PATH, storePath } from "./fleet.ts";
 import { SimFleet, type SimHook, type SimOptions } from "./sim.ts";
 
+/** An answer, or what happens instead while the question stays open (an abort). */
+export type Answer = string | ((flow: RunFlow) => void);
+
 export interface RunCase extends Omit<SimOptions, "hooks"> {
   /** Default `--no-ui`. */
   argv?: string[];
-  answers?: Record<string, string>;
+  answers?: Record<string, Answer>;
 
   /** Built once the flow exists: a hook may abort the run. */
   hooks?: (flow: RunFlow) => SimHook[];
@@ -68,7 +71,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
   const clock = new FakeClock();
   const flow = new RunFlow();
   const sim = new SimFleet(clock, { ...runCase, hooks: runCase.hooks?.(flow) });
-  const events = new RecordingChannel(runCase.answers);
+  const events = new OpenQuestions(flow, runCase.answers);
   const store = new MemoryDeploymentStore();
   const lock = new FakeLock();
   const ports = {
@@ -119,6 +122,26 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
   return outcome;
 }
 
+/** A function answer runs, then the question waits for the run to be killed. */
+class OpenQuestions extends RecordingChannel {
+  constructor(
+    private readonly flow: RunFlow,
+    private readonly script: Readonly<Record<string, Answer>> = {},
+  ) {
+    super();
+  }
+
+  override answer(id: string, signal?: AbortSignal): Promise<string> {
+    const answer = this.script[id];
+    if (typeof answer === "string") return Promise.resolve(answer);
+    if (answer === undefined) return Promise.reject(new Error(`unanswered question: ${id}`));
+    return new Promise((_, reject) => {
+      signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+      answer(this.flow);
+    });
+  }
+}
+
 /** Bookkeeping every run must keep, whatever its scenario. */
 function invariants(outcome: RunOutcome, lock: FakeLock): string[] {
   const { events, recorded, exitCode, sim, flow, ui } = outcome;
@@ -160,6 +183,13 @@ function invariants(outcome: RunOutcome, lock: FakeLock): string[] {
     }
   }
   check(ui.ask === undefined && ui.end !== undefined, "interface: ended, no question left");
+  for (const host of recorded?.state?.hosts ?? []) {
+    const shown = ui.hosts.find((row) => row.name === host.name);
+    check(
+      shown?.state === host.state && shown.online === host.online,
+      `${host.name}: interface and state.json agree`,
+    );
+  }
 
   // Alert silencing always lifted.
   for (const name of sim.hosts.keys()) {
@@ -168,8 +198,8 @@ function invariants(outcome: RunOutcome, lock: FakeLock): string[] {
     check(maintenance.at(-1)?.detail === "off", `${name}: dnf-maintenance off last`);
   }
 
-  // What the engine believes matches the host.
-  for (const host of recorded?.state?.hosts ?? []) {
+  // What the engine believes matches the host; killed commands left it unknown.
+  for (const host of killed ? [] : (recorded?.state?.hosts ?? [])) {
     const side = sim.hosts.get(host.name);
     if (side === undefined) continue;
     const target = storePath(host.name);
