@@ -172,3 +172,23 @@ test("nominal records its plan and commits without touching the feed", () => {
     list.reduce(reduce, initialState()).feed.map((item) => item.message);
   expect(feed(events)).toEqual(feed(withoutStructured));
 });
+
+test("run end writes the report to the feed and closes a pending question", () => {
+  const events: Event[] = [
+    { t: 1, kind: "ask", id: "build", question: "Start the test?", options: [] },
+    {
+      t: 2,
+      kind: "run.end",
+      status: "aborted",
+      exitCode: 5,
+      report: ["1 not done (h)", "duration 2s"],
+    },
+  ];
+  const state = events.reduce(reduce, initialState());
+
+  expect(state.ask).toBeUndefined();
+  expect(state.feed.map((item) => [item.level, item.message])).toEqual([
+    ["warn", "1 not done (h)"],
+    ["warn", "duration 2s"],
+  ]);
+});

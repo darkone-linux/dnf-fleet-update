@@ -98,6 +98,12 @@ export function initialState(): RunState {
   return { steps, hosts: [], feed: [] };
 }
 
+const END_LEVELS: Record<RunEnd["status"], Level> = {
+  done: "ok",
+  failed: "error",
+  aborted: "warn",
+};
+
 let feedSeq = 0;
 
 function pushFeed(state: RunState, item: Omit<FeedItem, "id">): FeedItem[] {
@@ -281,11 +287,21 @@ export function reduce(state: RunState, event: Event): RunState {
     case "ask.close":
       return state.ask?.id === event.id ? { ...state, ask: undefined } : state;
 
-    case "run.end":
+    // Report rendered in the feed (spec § Rendu). A question the run left
+    // unanswered, aborted `now`, has nothing left to wait for.
+    case "run.end": {
+      const report = event.report ?? [];
+      const level = END_LEVELS[event.status];
+      const lines = report.map(
+        (message): FeedItem => ({ id: ++feedSeq, t: event.t, kind: "log", level, message }),
+      );
       return {
         ...state,
-        end: { status: event.status, exitCode: event.exitCode, report: event.report ?? [] },
+        feed: [...state.feed, ...lines],
+        ask: undefined,
+        end: { status: event.status, exitCode: event.exitCode, report },
       };
+    }
 
     default:
       return state;
