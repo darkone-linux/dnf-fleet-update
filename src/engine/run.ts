@@ -196,6 +196,11 @@ export async function runFleetUpdate(
       },
     });
 
+    // `^C`, a signal or a `no` answer: said before the commands are killed.
+    const leaveAborts = flow.onAbort((mode) => {
+      const message = mode === "now" ? "aborting now" : "aborting after the current step or wave";
+      log(context, "warn", message);
+    });
     const progress: Progress = { failed: false, warnings: [] };
     try {
       await steps(context, progress);
@@ -206,6 +211,8 @@ export async function runFleetUpdate(
         log(context, "error", `internal error: ${message}`);
         progress.failed = true;
       }
+    } finally {
+      leaveAborts();
     }
 
     const stopped = progress.failed || flow.ending === "stop" || flow.ending === "rollback";

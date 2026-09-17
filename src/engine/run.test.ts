@@ -214,6 +214,7 @@ describe("runFleetUpdate", () => {
 
     expect(await run()).toBe(5);
 
+    expect(feed(ports.events.events)).toContain("warn aborting now");
     expect(end()).toMatchObject({ status: "aborted", exitCode: 5 });
     expect(ports.lock.held).toBe(false);
   });

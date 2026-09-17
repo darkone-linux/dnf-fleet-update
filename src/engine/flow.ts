@@ -15,6 +15,7 @@ export class RunFlow {
   private readonly nowController = new AbortController();
   private readonly haltController = new AbortController();
   private readonly pingListeners = new Set<() => void>();
+  private readonly abortListeners = new Set<(mode: AbortMode) => void>();
   private current: Ending | undefined;
 
   /** Abort `now`, SIGTERM: every command and wait ends at once. */
@@ -35,6 +36,7 @@ export class RunFlow {
   /** Also a `no` to a confirmation: resumable. */
   abort(mode: AbortMode): void {
     this.end("aborted");
+    for (const listener of this.abortListeners) listener(mode);
     if (mode === "now") {
       this.haltController.abort(new Error("run aborted"));
       this.nowController.abort(new Error("run aborted"));
@@ -61,6 +63,12 @@ export class RunFlow {
   onPing(listener: () => void): () => void {
     this.pingListeners.add(listener);
     return () => this.pingListeners.delete(listener);
+  }
+
+  /** Called before the signals fire. Returns the unsubscribe function. */
+  onAbort(listener: (mode: AbortMode) => void): () => void {
+    this.abortListeners.add(listener);
+    return () => this.abortListeners.delete(listener);
   }
 
   private end(kind: Ending): void {

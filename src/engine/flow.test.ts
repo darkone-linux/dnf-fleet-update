@@ -44,4 +44,15 @@ describe("RunFlow", () => {
 
     expect(pings).toBe(1);
   });
+
+  test("abort requests reach subscribers before any signal fires", () => {
+    const flow = new RunFlow();
+    const heard: string[] = [];
+    flow.onAbort((mode) => heard.push(`${mode} ${flow.now.aborted}`));
+
+    flow.abort("after-wave");
+    flow.abort("now");
+
+    expect(heard).toEqual(["after-wave false", "now false"]);
+  });
 });
