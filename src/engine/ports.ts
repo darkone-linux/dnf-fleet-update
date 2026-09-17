@@ -89,6 +89,15 @@ export interface LogName {
   phase: string;
 }
 
+/** File name of a log, without extension; throws outside `RUN_FILE_NAME`. */
+export function logFileName(name: LogName): string {
+  const parts = name.host === undefined ? [name.phase] : [name.host, name.phase];
+  for (const part of parts) {
+    if (!RUN_FILE_NAME.test(part)) throw new Error(`unsafe log name: ${JSON.stringify(part)}`);
+  }
+  return parts.join(".");
+}
+
 /** One run directory: `var/deployments/<id>/` (spec § État et reprise). */
 export interface RunStore {
   /** `<date>-<mode>`; also names the rollback units of the run. */
@@ -100,7 +109,7 @@ export interface RunStore {
   /** Replaces `state.json` atomically: an interrupted write leaves the previous one. */
   writeState(state: PersistedState): void;
 
-  /** Throws on a name outside `RUN_FILE_NAME`: names come validated. */
+  /** Throws on a name outside `RUN_FILE_NAME` (`logFileName`): names come validated. */
   appendLog(name: LogName, line: string): void;
   writeReport(markdown: string): void;
 

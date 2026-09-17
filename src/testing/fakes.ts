@@ -14,8 +14,8 @@ import {
   type LocalHost,
   type LockAttempt,
   type LogName,
+  logFileName,
   type OutputLine,
-  RUN_FILE_NAME,
   type RunLock,
   type RunOptions,
   type RunStore,
@@ -133,11 +133,7 @@ export class MemoryRunStore implements RunStore {
   }
 
   appendLog(name: LogName, line: string): void {
-    const parts = name.host === undefined ? [name.phase] : [name.host, name.phase];
-    for (const part of parts) {
-      if (!RUN_FILE_NAME.test(part)) throw new Error(`unsafe log name: ${JSON.stringify(part)}`);
-    }
-    const key = parts.join(".");
+    const key = logFileName(name);
     this.logs.set(key, [...(this.logs.get(key) ?? []), line]);
   }
 
