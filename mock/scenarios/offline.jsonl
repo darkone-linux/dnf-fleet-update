@@ -47,6 +47,7 @@
 {"t":9100,"kind":"step.progress","step":"test","done":2,"total":2}
 {"t":9200,"kind":"step.end","step":"test","status":"ok"}
 {"t":9400,"kind":"step.start","step":"switch","total":3}
+{"t":9500,"kind":"log","level":"info","message":"switching 3 tested hosts"}
 {"t":9600,"kind":"host.state","host":"gw-ag","state":"switching"}
 {"t":9600,"kind":"host.state","host":"gw-ag","state":"deployed"}
 {"t":9700,"kind":"host.state","host":"gfx","state":"switching"}

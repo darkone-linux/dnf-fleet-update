@@ -29,6 +29,7 @@ export interface CliOptions {
   dnfMessage?: string;
   consumerMessage?: string;
   buildOnly: boolean;
+  skipTest: boolean;
   resume: boolean;
   nonInteractive: boolean;
   stopLoss: boolean;
@@ -73,6 +74,7 @@ const OPTIONS = {
   "dnf-message": text,
   "consumer-message": text,
   "build-only": flag,
+  "skip-test": flag,
   resume: flag,
   "non-interactive": flag,
   "stop-loss": flag,
@@ -115,7 +117,6 @@ export function parseCli(argv: readonly string[]): CliCommand {
 
   if (argv.includes("--help")) return { kind: "help" };
   if (argv.includes("--version")) return { kind: "version" };
-  if (argv.includes("--atomic-switch")) return invalid("--atomic-switch: not implemented yet");
 
   let parsed: ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>;
   try {
@@ -169,6 +170,7 @@ export function parseCli(argv: readonly string[]): CliCommand {
       dnfMessage: values["dnf-message"],
       consumerMessage: values["consumer-message"],
       buildOnly: values["build-only"] ?? false,
+      skipTest: values["skip-test"] ?? false,
       resume: values.resume ?? false,
       nonInteractive: values["non-interactive"] ?? false,
       stopLoss: values["stop-loss"] ?? false,
@@ -207,6 +209,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
       options.consumerMessage ??
       (options.on === undefined ? "chore(update): full fleet" : `chore(update): ${options.on}`),
     buildOnly: options.buildOnly,
+    skipTest: options.skipTest,
     resume: false,
     interactive: !options.nonInteractive && !options.noUi,
     stopLoss: options.stopLoss,
@@ -251,6 +254,7 @@ export function resumeParams(saved: RunParams, options: CliOptions): Result<Resu
       ...saved,
       resume: true,
       buildOnly: options.buildOnly,
+      skipTest: options.skipTest,
       interactive: !options.nonInteractive && !options.noUi,
       stopLoss: options.stopLoss,
       ui: !options.noUi,

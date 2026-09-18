@@ -125,7 +125,7 @@ async function steps(context: RunContext, progress: Progress) {
   try {
     const built = await build(context, hosts, presence);
     progress.warnings = built?.warnings ?? [];
-    if (goOn()) await testWaves(context, hosts, presence, selection);
+    if (goOn() && !context.params.skipTest) await testWaves(context, hosts, presence, selection);
     if (goOn()) await switchWaves(context, hosts, presence, selection);
   } finally {
     await presence.stop();
@@ -199,12 +199,14 @@ export async function runFleetUpdate(
     });
 
     // `--build-only`: no test, no switch, said before the build starts. A `yes`
-    // to the question that follows the build starts them anyway.
-    if (params.value.buildOnly) {
-      for (const step of ["test", "switch"] as const) {
-        emit(context, { kind: "step.end", step, status: "omitted" });
-      }
-    }
+    // to the question that follows the build starts them anyway. `--skip-test`:
+    // the test never runs, whatever the answer.
+    const omitted = params.value.buildOnly
+      ? (["test", "switch"] as const)
+      : params.value.skipTest
+        ? (["test"] as const)
+        : [];
+    for (const step of omitted) emit(context, { kind: "step.end", step, status: "omitted" });
 
     // `^C`, a signal or a `no` answer: said before the commands are killed.
     const leaveAborts = flow.onAbort((mode) => {

@@ -67,7 +67,7 @@ path is exercised, not simulated.
 | **Probe** | parallel pings, offline hosts set aside |
 | **Build** | every selected host, online or not, on the deployment machine |
 | **Test** | `switch-to-configuration test` wave by wave; the next wave starts once every host is OK or excluded |
-| **Switch** | every host validated in test |
+| **Switch** | every host validated in test, all at once (`--skip-test`: wave by wave) |
 | **Report** | final state, AI summary if enabled, Matrix message if `--send-report` |
 
 A git tree that is not clean, or a lock already held, stops the run before it
@@ -116,6 +116,7 @@ network:
 | Option | Description |
 |---|---|
 | `--build-only` | stop after the build (interactive: ask whether to go on) |
+| `--skip-test` | no test step: switch wave by wave, straight from the build |
 | `--resume` | resume the last unfinished deployment |
 | `--non-interactive` | no confirmation at key steps; guards only |
 

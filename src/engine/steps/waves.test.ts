@@ -344,7 +344,40 @@ describe("switch waves", () => {
     expect(context.commands.calls.some((call) => call.argv.join(" ").includes("ssh-ng://"))).toBe(
       false,
     );
+
+    // Tested hosts switch together: no wave, one line, a counter per host.
+    expect(kinds(context.events.events, "wave.start")).toEqual([]);
+    expect(feed(context.events.events)).toContain("info switching 5 tested hosts");
+    expect(kinds(context.events.events, "step.progress").at(-1)).toMatchObject({
+      done: 5,
+      total: 5,
+    });
     expect(context.events.events.at(-1)).toMatchObject({ kind: "step.end", step: "switch" });
+  });
+
+  test("--skip-test: built hosts copied at the switch, wave by wave, asked only once", async () => {
+    // Interactive without a scripted answer: an unanswered question fails the
+    // test — the build already asked, the switch must not ask again.
+    const { context, selection, hosts, presence, states, commandsOf } = setup(
+      [pingOf("lt-cp", 1)],
+      {
+        params: { skipTest: true, interactive: true },
+      },
+    );
+
+    await switchWaves(context, hosts, presence, selection);
+
+    expect(states()).toMatchObject({ hcs: "deployed", "gw-cp": "deployed", "lt-cp": "built" });
+    const waves = context.events.events.flatMap((event) =>
+      event.kind === "wave.start" ? [event.hosts.join(",")] : [],
+    );
+    expect(waves).toEqual(["hcs", "gw-ag", "srv-ag", "pc-ag", "gw-cp"]);
+    expect(feed(context.events.events)).toContain("warn offline, not switched: lt-cp");
+
+    // Nothing copied yet: the switch does what the test would have done first.
+    expect(commandsOf("gw-ag").filter((argv) => argv.includes("ssh-ng://nix@gw-ag"))).toHaveLength(
+      1,
+    );
   });
 
   test("interactive: confirmed first; no ends the run, hosts left in test", async () => {

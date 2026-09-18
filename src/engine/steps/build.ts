@@ -191,9 +191,11 @@ export async function build(
   if (flow.ending !== undefined) return outcome;
 
   if (params.interactive) {
+    // `--skip-test`: the switch is what follows, and the only question it gets.
+    const next = params.skipTest ? "switch" : "test";
     const question = params.buildOnly
-      ? "Build done. Continue with the test?"
-      : "Build done. Start the test?";
+      ? `Build done. Continue with the ${next}?`
+      : `Build done. Start the ${next}?`;
     if ((await ask(context, "build", question, YES_NO)) === "no") {
       if (params.buildOnly) flow.finish();
       else flow.abort("after-wave");

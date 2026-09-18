@@ -69,6 +69,7 @@ describe("parsing", () => {
       "--consumer-message",
       "chore(update): consumer",
       "--build-only",
+      "--skip-test",
       "--stop-loss",
       "--send-report",
       "--ai-model",
@@ -92,6 +93,7 @@ describe("parsing", () => {
       dnfMessage: "chore(update): dnf",
       consumerMessage: "chore(update): consumer",
       buildOnly: true,
+      skipTest: true,
       stopLoss: true,
       sendReport: true,
       aiModel: "opencode:ollama/qwen3:32b",
@@ -116,7 +118,6 @@ describe("parsing", () => {
 describe("validation", () => {
   const cases: [string[], string][] = [
     [["deploy"], "unexpected argument: deploy"],
-    [["--atomic-switch"], "--atomic-switch: not implemented yet"],
     [["--on", "gfx;reboot"], '--on: invalid term "gfx;reboot"'],
     [
       ["--deployment-order", "hcs::gateway"],

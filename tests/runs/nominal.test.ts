@@ -28,12 +28,34 @@ test("unattended: every host tested then switched, recorded, reported, exit 0", 
       "timer cancelled switch",
     ]);
   }
+  // Waves protect the test only: tested hosts switch together, counted one by
+  // one like the build.
   const waves = run.recorded?.state?.waves.map((wave) => `${wave.step} ${wave.hosts.join(",")}`);
-  expect(waves).toEqual([
-    ...["hcs", "gw-ag", "srv-ag", "pc-ag", "gw-cp", "lt-cp"].map((hosts) => `test ${hosts}`),
-    ...["hcs", "gw-ag", "srv-ag", "pc-ag", "gw-cp", "lt-cp"].map((hosts) => `switch ${hosts}`),
-  ]);
-  expect(run.recorded?.report).toContain("| switch | 6/6 | lt-cp |");
+  expect(waves).toEqual(ALL.map((host) => `test ${host}`));
+  expect(run.recorded?.report).toContain("| test | 6/6 | lt-cp |");
+  expect(run.feed).toContain("info switching 6 tested hosts");
+  expect(run.ui.steps.switch).toMatchObject({ status: "done", done: 6, total: 6 });
+});
+
+test("--skip-test: test omitted, hosts copied then switched wave by wave", async () => {
+  const run = await simulateRun({ argv: ["--no-ui", "--skip-test"] });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toEqual(every("deployed"));
+  expect(run.ui.steps.test.status).toBe("omitted");
+  expect(run.sim.count("copy")).toBe(ALL.length);
+  for (const name of ALL) {
+    expect(run.sim.host(name).history).toEqual([
+      "profile set",
+      "switch 0",
+      "timer armed switch",
+      "timer cancelled switch",
+    ]);
+  }
+
+  // Nothing proved beforehand: the switch takes the wave order of the test.
+  const waves = run.recorded?.state?.waves.map((wave) => `${wave.step} ${wave.hosts.join(",")}`);
+  expect(waves).toEqual(ALL.map((host) => `switch ${host}`));
 });
 
 test("interactive: build and switch confirmed, answers kept in state.json", async () => {

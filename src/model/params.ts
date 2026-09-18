@@ -42,6 +42,9 @@ export interface RunParams {
   dnfMessage: string;
   consumerMessage: string;
   buildOnly: boolean;
+
+  /** Step 4 skipped: the switch goes wave by wave, nothing proved beforehand. */
+  skipTest: boolean;
   resume: boolean;
   interactive: boolean;
   stopLoss: boolean;

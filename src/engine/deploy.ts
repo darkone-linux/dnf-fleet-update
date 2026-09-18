@@ -97,7 +97,9 @@ export async function deployHost(
     ({ line }: OutputLine) =>
       emit(context, { kind: "host.output", host: name, phase: outputPhase, line });
 
-  if (phase === "test") {
+  // `built`: nothing copied yet — the test phase, or a switch under
+  // `--skip-test`. A tested host already holds its closure.
+  if (host.state === "built") {
     hosts.set(name, "copying");
     if (!host.local) {
       const copy = await execute(context, copyClosure(name, path, timeouts), {

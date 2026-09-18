@@ -105,10 +105,11 @@ test("--stop-loss, lost during the switch: switched and tested hosts reverted by
     "gw-cp": "reverted",
     "lt-cp": "reverted",
   });
+  // Switch at once: every host had started its switch when the loss was decided.
   const rollbacks = run.sim.commands.filter((command) => command.kind === "rollback");
   expect(rollbacks.map((command) => `${command.host} ${command.phase}`)).toEqual([
-    "lt-cp test",
-    "gw-cp test",
+    "lt-cp switch",
+    "gw-cp switch",
     "srv-ag switch",
     "gw-ag switch",
     "hcs switch",

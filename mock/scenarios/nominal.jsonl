@@ -140,6 +140,7 @@
 {"t":24500,"kind":"step.end","step":"test","status":"ok"}
 {"t":24700,"kind":"ask","id":"switch","question":"12 hosts tested. Switch now?","options":[{"value":"yes","label":"yes"},{"value":"no","label":"no"}]}
 {"t":24800,"kind":"step.start","step":"switch","total":12}
+{"t":24850,"kind":"log","level":"info","message":"switching 12 tested hosts"}
 {"t":24900,"kind":"host.state","host":"hcs","state":"switching"}
 {"t":25000,"kind":"host.state","host":"hcs","state":"deployed"}
 {"t":25100,"kind":"host.state","host":"gw-ag","state":"switching"}

@@ -72,8 +72,7 @@ async function waves(
   phase: Phase,
 ): Promise<void> {
   const { flow } = context;
-  const from = phase === "test" ? "built" : "tested";
-  const eligible = (name: string) => hosts.get(name).state === from;
+  const eligible = (name: string) => hosts.get(name).state === startingState(context, phase);
   presence.track(hosts.all().flatMap((host) => (eligible(host.name) ? [host.name] : [])));
 
   // Empty waves are dropped at execution (spec § Vagues): the count only holds
@@ -117,10 +116,19 @@ async function waves(
 
   const left = carried.filter(eligible);
   presence.untrack(left);
-  if (left.length > 0 && !flow.halt.aborted) {
-    const outcome = phase === "test" ? "not tested" : "left in test";
-    log(context, "warn", `offline, ${outcome}: ${left.join(", ")}`);
-  }
+  if (left.length > 0 && !flow.halt.aborted) log(context, "warn", leftBehind(context, phase, left));
+}
+
+/** State a host must hold to enter the step: what the step before it left. */
+function startingState(context: RunContext, phase: Phase): "built" | "tested" {
+  return phase === "test" || context.params.skipTest ? "built" : "tested";
+}
+
+/** Hosts the step could not reach: where they are left says what to do with them. */
+function leftBehind(context: RunContext, phase: Phase, hosts: readonly string[]): string {
+  const outcome =
+    phase === "test" ? "not tested" : context.params.skipTest ? "not switched" : "left in test";
+  return `offline, ${outcome}: ${hosts.join(", ")}`;
 }
 
 export async function testWaves(
@@ -133,7 +141,48 @@ export async function testWaves(
   endStep(context, "test", !context.flow.halt.aborted);
 }
 
-/** Tested hosts only: a host in `error` stays in test (spec § État et reprise). */
+/**
+ * Every tested host at once (spec § Étapes): the test proved the configuration
+ * on each of them, wave order protects nothing more. `--max-parallel` still
+ * caps the hosts activated together.
+ */
+async function switchAtOnce(
+  context: RunContext,
+  hosts: HostTable,
+  presence: Presence,
+  candidates: readonly string[],
+): Promise<void> {
+  const { flow } = context;
+  emit(context, { kind: "step.start", step: "switch", total: candidates.length });
+  presence.track(candidates);
+  await presence.check(candidates);
+  presence.untrack(candidates);
+  if (flow.halt.aborted) return;
+
+  const members = candidates.filter((name) => hosts.get(name).online);
+  const left = candidates.filter((name) => !hosts.get(name).online);
+  if (left.length > 0) log(context, "warn", leftBehind(context, "switch", left));
+  if (members.length === 0) return;
+
+  log(context, "info", `switching ${members.length} tested hosts`);
+  let done = 0;
+  await silence(context, hosts, members, true);
+  try {
+    await pool(members, context.params.maxParallel, flow.halt, async (name) => {
+      await deployHost(context, hosts, presence, name, "switch");
+      done += 1;
+      emit(context, { kind: "step.progress", step: "switch", done, total: candidates.length });
+    });
+  } finally {
+    await silence(context, hosts, members, false);
+  }
+}
+
+/**
+ * Hosts left by the test, or by the build under `--skip-test`; a host in
+ * `error` stays where it is (spec § État et reprise). Waves only protect an
+ * untested configuration: with a test behind it, the switch goes at once.
+ */
 export async function switchWaves(
   context: RunContext,
   hosts: HostTable,
@@ -141,21 +190,31 @@ export async function switchWaves(
   selection: Selection,
 ): Promise<void> {
   const { params, flow } = context;
-  const tested = hosts.all().filter((host) => host.state === "tested");
-  if (tested.length === 0) {
-    log(context, "warn", "no tested host: nothing to switch");
+  const from = startingState(context, "switch");
+  const ready = hosts.all().filter((host) => host.state === from);
+  if (ready.length === 0) {
+    log(context, "warn", `no ${from} host: nothing to switch`);
     emit(context, { kind: "step.end", step: "switch", status: "skipped" });
     flow.finish();
     return;
   }
-  if (params.interactive) {
-    const question = `Test done. Switch ${tested.length} tested hosts?`;
+
+  // `--skip-test`: the build already asked, nothing happened since.
+  if (params.interactive && !params.skipTest) {
+    const question = `Test done. Switch ${ready.length} tested hosts?`;
     if ((await ask(context, "switch", question, YES_NO)) === "no") {
       flow.abort("after-wave");
       return;
     }
   }
 
-  await waves(context, hosts, presence, selection, "switch");
+  if (params.skipTest) await waves(context, hosts, presence, selection, "switch");
+  else
+    await switchAtOnce(
+      context,
+      hosts,
+      presence,
+      ready.map((host) => host.name),
+    );
   endStep(context, "switch", !flow.halt.aborted);
 }

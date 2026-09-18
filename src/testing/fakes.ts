@@ -258,6 +258,7 @@ export function testParams(overrides: Partial<RunParams> = {}): RunParams {
     dnfMessage: DEFAULTS.dnfMessage,
     consumerMessage: "chore(update): full fleet",
     buildOnly: false,
+    skipTest: false,
     resume: false,
     interactive: false,
     stopLoss: false,

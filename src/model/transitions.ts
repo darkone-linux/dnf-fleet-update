@@ -9,7 +9,8 @@ const NEXT: Record<HostState, readonly HostState[]> = {
   pending: ["building", "excluded"],
   building: ["built", "failed", "excluded"],
   built: ["copying", "excluded"],
-  copying: ["testing", "failed", "excluded"],
+  // `switching`: `--skip-test`, the copy leads straight to the activation.
+  copying: ["testing", "switching", "failed", "excluded"],
   testing: ["tested", "error", "failed", "excluded"],
 
   // `reverted`, `failed` from an activated host: forced rollback and its failure.
