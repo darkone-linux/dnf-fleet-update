@@ -10,7 +10,6 @@ import { LiveChannel } from "./adapters/channel.ts";
 import { SystemClock } from "./adapters/clock.ts";
 import { SystemHost } from "./adapters/localhost.ts";
 import { FlockLock } from "./adapters/lock.ts";
-import { MatrixClient } from "./adapters/matrix.ts";
 import { ProcessRunner } from "./adapters/process.ts";
 import { DirectoryStore } from "./adapters/store.ts";
 import { HELP } from "./cli/help.ts";
@@ -67,7 +66,6 @@ const ports: RunPorts = {
   events: channel,
   local: new SystemHost(),
   lock: new FlockLock(join(deployments, "current.lock")),
-  matrix: new MatrixClient(),
   store: {
     create: (mode) => {
       const run = store.create(mode);

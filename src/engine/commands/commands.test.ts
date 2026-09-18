@@ -24,7 +24,7 @@ import {
 } from "./host.ts";
 import { buildHost, evalHosts, selectExpression } from "./nix.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
-import { flakeUpdate, justClean, readGenerated, realignDnfLock } from "./workspace.ts";
+import { flakeUpdate, justClean, readGenerated, realignDnfLock, sendMessage } from "./workspace.ts";
 
 const NEW = "/nix/store/jq1s2fmaq2pnv5f233sfkhmjm0lzqgcm-nixos-system-gw-ag-26.11";
 const OLD = "/nix/store/0h15zmc3vn75j3w5b2yc4m0j2rxwdzlg-nixos-system-gw-ag-26.05";
@@ -351,6 +351,17 @@ describe("workspace", () => {
       argv: ["nix", "flake", "update", "--refresh"],
       cwd: "/etc/nixos/dnf",
       timeoutMs: 120_000,
+      killGraceMs: 10_000,
+    });
+  });
+
+  // Rooms and token stay in the framework recipe; the text never hits argv.
+  test("an alert message goes to the framework recipe, body on stdin", () => {
+    expect(sendMessage("/etc/nixos", "incidents", "**fleet-update**", T)).toEqual({
+      argv: ["just", "send-msg", "incidents"],
+      cwd: "/etc/nixos",
+      stdin: "**fleet-update**",
+      timeoutMs: 30_000,
       killGraceMs: 10_000,
     });
   });

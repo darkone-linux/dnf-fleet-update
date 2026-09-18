@@ -11,11 +11,9 @@ test("run done: the summary reaches the warnings room, exit 0", async () => {
   const run = await simulateRun({ argv: SENDING });
 
   expect(run.exitCode).toBe(ExitCode.Ok);
-  expect(run.matrix.messages.map((message) => message.room)).toEqual(["!warnings:example.org"]);
-  const [summary] = run.matrix.messages;
-  expect(summary?.homeserver).toBe("https://matrix.example.org");
-  expect(summary?.text).toContain("- 6 deployed");
-  expect(run.feed).toContain("ok report sent (1 to Matrix)");
+  expect(run.sim.messages.map((message) => message.room)).toEqual(["warnings"]);
+  expect(run.sim.messages[0]?.body).toContain("- 6 deployed");
+  expect(run.feed).toContain("ok report sent to Matrix");
 });
 
 test("critical host left out: a second message in the incidents room", async () => {
@@ -24,27 +22,23 @@ test("critical host left out: a second message in the incidents room", async () 
     behaviours: { "srv-ag": { reachable: false } },
   });
 
-  expect(run.matrix.messages.map((message) => message.room)).toEqual([
-    "!warnings:example.org",
-    "!incidents:example.org",
-  ]);
-  expect(run.matrix.messages[1]?.text).toContain("## Critical hosts not deployed");
-  expect(run.matrix.messages[1]?.text).toContain("- srv-ag (server):");
+  expect(run.sim.messages.map((message) => message.room)).toEqual(["warnings", "incidents"]);
+  expect(run.sim.messages[1]?.body).toContain("## Critical hosts not deployed");
+  expect(run.sim.messages[1]?.body).toContain("- srv-ag (server):");
 });
 
-test("rooms refuse the messages: run done, report not sent, exit 3", async () => {
-  const run = await simulateRun({ argv: SENDING, matrixRefusal: "429 Too Many Requests" });
+test("the recipe refuses the message: run done, report not sent, exit 3", async () => {
+  const run = await simulateRun({ argv: SENDING, sendMsgExit: 11 });
 
   expect(run.exitCode).toBe(ExitCode.ReportNotSent);
   expect(run.statuses.hcs).toBe("deployed");
-  expect(run.feed).toContain("error report not sent: !warnings:example.org: 429 Too Many Requests");
+  expect(run.feed.at(-1)).toStartWith("error report not sent: warnings: exit 11");
 });
 
-test("no matrix.nix in the workspace: exit 3, the run itself is untouched", async () => {
-  const run = await simulateRun({ argv: SENDING, matrixJson: null });
+test("alert rooms not configured here: exit 3, the run itself is untouched", async () => {
+  const run = await simulateRun({ argv: SENDING, sendMsgExit: 10 });
 
   expect(run.exitCode).toBe(ExitCode.ReportNotSent);
   expect(run.recorded?.report).toContain("- Status: done (exit 0)");
-  expect(run.feed.at(-1)).toStartWith("error report not sent: matrix.nix:");
-  expect(run.matrix.messages).toEqual([]);
+  expect(run.sim.messages).toHaveLength(1);
 });

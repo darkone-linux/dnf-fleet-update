@@ -13,7 +13,7 @@ import type {
   RunOptions,
 } from "../engine/ports.ts";
 import type { FakeClock } from "./fakes.ts";
-import { HOSTS_JSON, MATRIX_JSON, NETWORK_JSON, ORIGIN_PATH, storePath } from "./fleet.ts";
+import { HOSTS_JSON, NETWORK_JSON, ORIGIN_PATH, storePath } from "./fleet.ts";
 
 export interface HostBehaviour {
   /** Answers ping and ssh; a function reads the fake clock (ms). Default: always. */
@@ -44,7 +44,7 @@ export type SimKind =
   | "generate"
   | "path-info"
   | "generated"
-  | "secret"
+  | "send-msg"
   | "eval"
   | "build"
   | "ping"
@@ -103,9 +103,8 @@ export interface SimOptions {
   hostsJson?: unknown;
   networkJson?: unknown;
 
-  /** `null`: no `matrix.nix` in the workspace, as before `configure-alert-bot`. */
-  matrixJson?: unknown;
-  matrixToken?: string;
+  /** Exit code of `just send-msg`: `10` not configured here, `11` refused. */
+  sendMsgExit?: number;
   evalWarnings?: string[];
 
   /** `nix-eval-jobs` fails as a whole: this error, no line, exit `1`. */
@@ -133,6 +132,9 @@ export class SimFleet implements CommandRunner {
   readonly commands: SimCommand[] = [];
   readonly hosts = new Map<string, HostSide>();
   readonly commits: { repo: Repo; message: string }[] = [];
+
+  /** What `just send-msg` received: room and body (`--send-report`). */
+  readonly messages: { room: string; body: string }[] = [];
   private readonly pending = { consumer: false, dnf: false };
   private readonly used = new Set<SimHook>();
   private readonly collected = new Set<string>();
@@ -269,11 +271,13 @@ export class SimFleet implements CommandRunner {
     }
     if (program === "just" && argv[1] === "clean") return { kind: "clean", at };
     if (program === "just" && argv[1] === "generate") return { kind: "generate", at };
+    if (program === "just" && argv[1] === "send-msg") {
+      return { kind: "send-msg", detail: argv[2], at };
+    }
     if (program === "nix" && argv[1] === "path-info") {
       return { kind: "path-info", detail: argv[2], at };
     }
     if (program === "nix-instantiate") return { kind: "generated", detail: argv.at(-1), at };
-    if (program === "sops") return { kind: "secret", detail: argv.at(-1), at };
     if (program === "nix-eval-jobs") return { kind: "eval", at };
     if (program === "nix" && argv[1] === "build") {
       const host = /-nixos-system-([a-zA-Z0-9_-]+)\.drv\^\*$/.exec(argv[2] ?? "")?.[1];
@@ -363,17 +367,17 @@ export class SimFleet implements CommandRunner {
         if (file.endsWith("/hosts.nix")) out(JSON.stringify(this.options.hostsJson ?? HOSTS_JSON));
         else if (file.endsWith("/network.nix")) {
           out(JSON.stringify(this.options.networkJson ?? NETWORK_JSON));
-        } else if (file.endsWith("/matrix.nix")) {
-          if (this.options.matrixJson === null) return exit(1);
-          out(JSON.stringify(this.options.matrixJson ?? MATRIX_JSON));
         } else return exit(1);
         return ok();
       }
 
-      // `--send-report`: the bot token, as sops hands it over.
-      case "secret":
-        out(this.options.matrixToken ?? "syt_fake_token");
-        return ok();
+      // `--send-report`: the framework recipe, body on stdin.
+      case "send-msg": {
+        this.messages.push({ room: command.detail ?? "", body: spec.stdin ?? "" });
+        const code = this.options.sendMsgExit ?? 0;
+        if (code !== 0) err(`send-msg: exit ${code}`);
+        return exit(code);
+      }
       case "eval":
         return this.evaluate(spec, out, err);
       case "build":

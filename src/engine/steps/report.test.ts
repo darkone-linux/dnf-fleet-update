@@ -4,7 +4,6 @@ import { describe, expect, test } from "bun:test";
 import type { Event } from "../../model/events.ts";
 import { initialPersisted, persist } from "../../model/persist.ts";
 import { type CommandScript, fakeRunContext, feed } from "../../testing/fakes.ts";
-import { MATRIX_JSON, NETWORK_JSON } from "../../testing/fleet.ts";
 import type { ReportInput } from "../report.ts";
 import { report } from "./report.ts";
 
@@ -26,21 +25,13 @@ const FAILED_HCS = persist(STATE, {
   note: "build failed: disk full",
 });
 
-const generated = (file: string, value: unknown): CommandScript => ({
-  match: (argv) => argv[0] === "nix-instantiate" && argv.at(-1)?.endsWith(file) === true,
-  output: [{ stream: "stdout", line: JSON.stringify(value) }],
-});
+/** The framework recipe: rooms and token are none of the tool's business. */
+const SENDING: CommandScript[] = [{ match: ["just", "send-msg"] }];
 
-const SOPS: CommandScript = {
-  match: ["sops"],
-  output: [{ stream: "stdout", line: "syt_fake_token" }],
-};
-
-const SENDING: CommandScript[] = [
-  generated("matrix.nix", MATRIX_JSON),
-  generated("network.nix", NETWORK_JSON),
-  SOPS,
-];
+const sent = (context: { commands: { calls: { argv: readonly string[]; stdin?: string }[] } }) =>
+  context.commands.calls
+    .filter((call) => call.argv[1] === "send-msg")
+    .map((call) => ({ room: call.argv[2], text: call.stdin ?? "" }));
 
 function input(overrides: Partial<ReportInput> = {}): ReportInput {
   return {
@@ -62,7 +53,7 @@ describe("report", () => {
 
     expect(outcome.sent).toBe(true);
     expect(context.run.report).toContain("- Status: done (exit 0)");
-    expect(context.matrix.messages).toEqual([]);
+    expect(sent(context)).toEqual([]);
     expect(context.events.events.at(-1)).toMatchObject({ kind: "step.end", status: "ok" });
   });
 
@@ -72,17 +63,11 @@ describe("report", () => {
     const outcome = await report(context, input({ state: FAILED_HCS }));
 
     expect(outcome.sent).toBe(true);
-    expect(context.matrix.messages.map((message) => message.room)).toEqual([
-      "!warnings:example.org",
-      "!incidents:example.org",
-    ]);
-    const [summary, incident] = context.matrix.messages;
-    expect(summary?.homeserver).toBe("https://matrix.example.org");
-    expect(summary?.token).toBe("syt_fake_token");
-    expect(summary?.timeoutMs).toBe(30_000);
+    const [summary, incident] = sent(context);
+    expect([summary?.room, incident?.room]).toEqual(["warnings", "incidents"]);
     expect(summary?.text).toStartWith("**fleet-update 20260917T020000Z-full** — exit 0");
     expect(incident?.text).toContain("- hcs (hcs): failed — build failed: disk full");
-    expect(feed(context.events.events)).toContain("ok report sent (2 to Matrix)");
+    expect(feed(context.events.events)).toContain("ok report sent to Matrix");
   });
 
   test("stop: one message to the incidents room, titled by the error that ended the run", async () => {
@@ -94,35 +79,53 @@ describe("report", () => {
       "hcs: build failed: disk full",
     );
 
-    expect(context.matrix.messages.map((message) => message.room)).toEqual([
-      "!incidents:example.org",
-    ]);
-    expect(context.matrix.messages[0]?.text).toContain("error: hcs: build failed: disk full");
+    expect(sent(context).map((message) => message.room)).toEqual(["incidents"]);
+    expect(sent(context)[0]?.text).toContain("error: hcs: build failed: disk full");
   });
 
-  test("no matrix.nix: report written, run reported as not sent", async () => {
+  // Exit `10`: nothing is configured here, so the incidents room is not tried.
+  test("alert rooms not configured: report written, one refusal, nothing else tried", async () => {
     const context = fakeRunContext({
       params: { sendReport: true },
-      commands: [{ match: ["nix-instantiate"], exitCode: 1 }],
+      commands: [
+        {
+          match: ["just", "send-msg"],
+          exitCode: 10,
+          output: [{ stream: "stderr", line: "no warnings room in matrix.nix" }],
+        },
+      ],
     });
 
-    const outcome = await report(context, input());
+    const outcome = await report(context, input({ state: FAILED_HCS }));
 
     expect(outcome.sent).toBe(false);
     expect(context.run.report).toContain("- Status: done (exit 0)");
-    expect(feed(context.events.events).at(-1)).toStartWith("error report not sent: matrix.nix:");
+    expect(sent(context)).toHaveLength(1);
+    expect(feed(context.events.events).at(-1)).toBe(
+      "error report not sent: warnings: exit 10: no warnings room in matrix.nix",
+    );
     expect(context.events.events.at(-1)).toMatchObject({ kind: "step.end", status: "error" });
   });
 
-  test("room refuses the message: not sent", async () => {
-    const context = fakeRunContext({ params: { sendReport: true }, commands: SENDING });
-    context.matrix.refusal = "403 Forbidden";
+  // Exit `11`: that room refused, the other one is still worth a try.
+  test("room refuses the message: the next room is still tried", async () => {
+    const context = fakeRunContext({
+      params: { sendReport: true },
+      commands: [
+        {
+          match: ["just", "send-msg"],
+          exitCode: 11,
+          output: [{ stream: "stderr", line: "homeserver refused the message (HTTP 403)" }],
+        },
+      ],
+    });
 
-    const outcome = await report(context, input());
+    const outcome = await report(context, input({ state: FAILED_HCS }));
 
     expect(outcome.sent).toBe(false);
+    expect(sent(context).map((message) => message.room)).toEqual(["warnings", "incidents"]);
     expect(feed(context.events.events)).toContain(
-      "error report not sent: !warnings:example.org: 403 Forbidden",
+      "error report not sent: warnings: exit 11: homeserver refused the message (HTTP 403)",
     );
   });
 });

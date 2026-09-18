@@ -19,8 +19,6 @@ import {
   type LockHolder,
   type LogName,
   logFileName,
-  type MatrixMessage,
-  type MatrixSender,
   type OutputLine,
   type RunLock,
   type RunOptions,
@@ -30,7 +28,6 @@ import {
 import type { Event, RunInfo } from "../model/events.ts";
 import { DEFAULT_TIMEOUTS, DEFAULTS, type RunParams } from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
-import { fail, ok, type Result } from "../model/result.ts";
 
 /** Reply for the first command whose argv starts with `match`, or satisfies it. */
 export interface CommandScript {
@@ -246,17 +243,6 @@ export class FakeLock implements RunLock {
   }
 }
 
-/** Records what a room would have received; `refusal` makes every send fail. */
-export class FakeMatrix implements MatrixSender {
-  readonly messages: MatrixMessage[] = [];
-  refusal: string | undefined;
-
-  send(message: MatrixMessage): Promise<Result<void>> {
-    this.messages.push(message);
-    return Promise.resolve(this.refusal === undefined ? ok(undefined) : fail(this.refusal));
-  }
-}
-
 export class FakeLocalHost implements LocalHost {
   constructor(
     private readonly name: string,
@@ -328,7 +314,6 @@ export interface FakeRunContext extends RunContext {
   events: RecordingChannel;
   run: MemoryRunStore;
   local: FakeLocalHost;
-  matrix: FakeMatrix;
 }
 
 export interface FakeRunOptions {
@@ -353,7 +338,6 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     workspace: "/ws",
     codev: options.codev ?? false,
     local: new FakeLocalHost(options.hostname ?? "deployer", options.addresses ?? []),
-    matrix: new FakeMatrix(),
     run: new MemoryRunStore("20260917T020000Z-full"),
     questions: new QuestionQueue(),
     known: new KnownErrors(),

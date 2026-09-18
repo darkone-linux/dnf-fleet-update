@@ -1,36 +1,19 @@
-// Matrix messages of a run (spec § Rapport): rooms of the alert bot, and the
-// text each room receives. Pure: the sending is a port.
+// Matrix messages of a run (spec § Rapport): which room, and what it reads.
+//
+// Transport belongs to the framework (`just send-msg`): rooms, token and
+// homeserver stay there, the tool owns the text.
 
-import { z } from "zod";
 import type { ExitCode } from "../model/exit-codes.ts";
-import { fail, ok, type Result } from "../model/result.ts";
 
-/** Key of `usr/secrets/secrets.yaml` holding the bot token, as the alert bot writes it. */
-export const MATRIX_TOKEN = "alertmanager-matrix-token";
+/** Alert rooms of the framework, as `just send-msg` names them. */
+export type AlertRoom = "warnings" | "incidents";
 
-export interface MatrixRooms {
-  warnings: string;
-  incidents: string;
-}
-
-// `var/generated/matrix.nix`, written by `just configure-alert-bot`: not merged
-// into `network.nix`, so it is read on its own.
-const roomsSchema = z.object({
-  matrix: z.object({
-    warningsRoom: z.string().min(1),
-    incidentsRoom: z.string().min(1),
-  }),
-});
-
-export function parseRooms(json: unknown): Result<MatrixRooms> {
-  const parsed = roomsSchema.safeParse(json);
-  if (!parsed.success) return fail(`matrix.nix: ${z.prettifyError(parsed.error)}`);
-  const { warningsRoom, incidentsRoom } = parsed.data.matrix;
-  return ok({ warnings: warningsRoom, incidents: incidentsRoom });
-}
-
-/** Client API through the public vhost, like the alert bot setup. */
-export const homeserver = (domain: string) => `https://matrix.${domain}`;
+/** Exit codes of `just send-msg` (`dnf/just/scripts/send-msg.sh`). */
+export const SEND_MSG = {
+  /** No room, no token, missing program: the next room would fail the same way. */
+  notConfigured: 10,
+  refused: 11,
+} as const;
 
 export interface SummaryInput {
   runId: string;

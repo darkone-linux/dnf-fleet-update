@@ -19,7 +19,6 @@ import type {
   DeploymentStore,
   EventChannel,
   LocalHost,
-  MatrixSender,
   RunLock,
 } from "./ports.ts";
 import { Presence } from "./presence.ts";
@@ -39,7 +38,6 @@ export interface RunPorts {
   local: LocalHost;
   lock: RunLock;
   store: DeploymentStore;
-  matrix: MatrixSender;
 }
 
 export interface RunRequest {
@@ -264,7 +262,6 @@ export async function runFleetUpdate(
       workspace: request.workspace,
       codev: request.codev,
       local: ports.local,
-      matrix: ports.matrix,
       run,
       questions: new QuestionQueue(),
       known: new KnownErrors(),

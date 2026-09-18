@@ -18,7 +18,6 @@ import {
   FakeClock,
   FakeLocalHost,
   FakeLock,
-  FakeMatrix,
   feed,
   MemoryDeploymentStore,
   type MemoryRunStore,
@@ -48,9 +47,6 @@ export interface RunCase extends Omit<SimOptions, "hooks"> {
   /** Lock busy at the start: the takeover belongs to the run (spec § Verrou). */
   lock?: { holder: LockHolder; diesOn?: readonly ("SIGTERM" | "SIGKILL")[] };
 
-  /** Every Matrix message refused, with this reason (`--send-report`, exit `3`). */
-  matrixRefusal?: string;
-
   /** Fake time moved per idle round. */
   stepMs?: number;
 
@@ -76,9 +72,6 @@ export interface RunOutcome {
   clock: FakeClock;
   flow: RunFlow;
 
-  /** What `--send-report` handed to the rooms. */
-  matrix: FakeMatrix;
-
   /** Interface fold of the stream. */
   ui: RunState;
   states: Record<string, HostState>;
@@ -99,8 +92,6 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
   const events = new OpenQuestions(flow, runCase.answers);
   const store = previous?.store ?? new MemoryDeploymentStore();
   const lock = new FakeLock(runCase.lock?.holder, runCase.lock?.diesOn);
-  const matrix = new FakeMatrix();
-  matrix.refusal = runCase.matrixRefusal;
   const ports = {
     commands: sim,
     clock,
@@ -111,7 +102,6 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     ),
     lock,
     store,
-    matrix,
   };
   const request = {
     workspace: "/ws",
@@ -138,7 +128,6 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     sim,
     clock,
     flow,
-    matrix,
     ui: stream.reduce(reduce, initialState()),
     states: {},
     statuses: {},

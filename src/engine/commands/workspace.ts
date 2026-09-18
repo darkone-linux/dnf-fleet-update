@@ -1,6 +1,7 @@
 // Commands on the consumer workspace: git, flake inputs, `just`, generated data.
 
 import type { Timeouts } from "../../model/params.ts";
+import type { AlertRoom } from "../matrix.ts";
 import type { CommandSpec } from "../ports.ts";
 import { limits } from "./limits.ts";
 
@@ -66,13 +67,20 @@ export function justGenerate(workspace: string, timeouts: Timeouts): CommandSpec
 }
 
 /**
- * Secret of the consumer on stdout (spec § Rapport): `sops` finds the age key
- * of the user running the tool.
+ * One message to an alert room (spec § Rapport), body on stdin: the framework
+ * owns the rooms and the token, the tool owns the text.
  */
-export function readSecret(workspace: string, key: string, timeouts: Timeouts): CommandSpec {
+export function sendMessage(
+  workspace: string,
+  room: AlertRoom,
+  text: string,
+  timeouts: Timeouts,
+): CommandSpec {
   return {
-    argv: ["sops", "-d", "--extract", `["${key}"]`, `${workspace}/usr/secrets/secrets.yaml`],
-    ...limits(timeouts.commit, timeouts),
+    argv: ["just", "send-msg", room],
+    cwd: workspace,
+    stdin: text,
+    ...limits(timeouts.matrix, timeouts),
   };
 }
 

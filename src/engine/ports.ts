@@ -6,7 +6,6 @@
 
 import type { Event, RunInfo } from "../model/events.ts";
 import type { PersistedState } from "../model/persist.ts";
-import type { Result } from "../model/result.ts";
 
 /** One external program: nix, ssh, git, just, ping. */
 export interface CommandSpec {
@@ -164,25 +163,6 @@ export interface RunLock {
 
   /** Also released by the kernel when the process dies. */
   release(): void;
-}
-
-/** One message for a room of the Matrix alert bot (spec § Rapport). */
-export interface MatrixMessage {
-  /** Client API root, `https://matrix.<domain>`. */
-  homeserver: string;
-  room: string;
-
-  /** Access token of the bot; never logged, never recorded. */
-  token: string;
-
-  /** Markdown, sent as the body of an `m.text`. */
-  text: string;
-  timeoutMs: number;
-}
-
-/** The only network the tool speaks; a refusal is data, and exit `3`. */
-export interface MatrixSender {
-  send(message: MatrixMessage, signal?: AbortSignal): Promise<Result<void>>;
 }
 
 /** The deployment host. */

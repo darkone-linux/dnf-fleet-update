@@ -1,28 +1,7 @@
-// Rooms read from `matrix.nix` and the text each room receives.
+// Text each alert room receives.
 
 import { describe, expect, test } from "bun:test";
-import { MATRIX_JSON } from "../testing/fleet.ts";
-import { homeserver, parseRooms, summaryMessage } from "./matrix.ts";
-
-describe("parseRooms", () => {
-  test("both rooms of the alert bot", () => {
-    expect(parseRooms(MATRIX_JSON)).toEqual({
-      ok: true,
-      value: { warnings: "!warnings:example.org", incidents: "!incidents:example.org" },
-    });
-  });
-
-  test("a room missing is refused, never sent to the other", () => {
-    const parsed = parseRooms({ matrix: { warningsRoom: "!warnings:example.org" } });
-
-    expect(parsed.ok).toBe(false);
-    expect(parsed.ok === false && parsed.error).toStartWith("matrix.nix:");
-  });
-});
-
-test("client API of the public vhost", () => {
-  expect(homeserver("example.org")).toBe("https://matrix.example.org");
-});
+import { summaryMessage } from "./matrix.ts";
 
 describe("summaryMessage", () => {
   const base = {
