@@ -188,6 +188,10 @@ export function parseCli(argv: readonly string[]): CliCommand {
   };
 }
 
+/** Confirmations asked; `--no-ui` forces them off, whatever the terminal. */
+export const interactively = (options: CliOptions): boolean =>
+  !options.nonInteractive && !options.noUi;
+
 /** Parameters of a new run. Fleet defaults are outside data: checked again. */
 export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result<RunParams> {
   const deploymentOrder =
@@ -215,7 +219,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     skipTest: options.skipTest,
     skipSwitch: options.skipSwitch,
     resume: false,
-    interactive: !options.nonInteractive && !options.noUi,
+    interactive: interactively(options),
     stopLoss: options.stopLoss,
     ui: !options.noUi,
     sendReport: options.sendReport,
@@ -260,7 +264,7 @@ export function resumeParams(saved: RunParams, options: CliOptions): Result<Resu
       buildOnly: options.buildOnly,
       skipTest: options.skipTest,
       skipSwitch: options.skipSwitch,
-      interactive: !options.nonInteractive && !options.noUi,
+      interactive: interactively(options),
       stopLoss: options.stopLoss,
       ui: !options.noUi,
       sendReport: options.sendReport,

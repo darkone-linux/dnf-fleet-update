@@ -4,8 +4,9 @@
 // Every run is checked against the invariants below before a test sees it: a
 // scenario asserts its outcome, never the bookkeeping shared by all runs.
 
-import { parseCli, resolveParams, resumeParams } from "../cli/options.ts";
+import { interactively, parseCli, resolveParams, resumeParams } from "../cli/options.ts";
 import { RunFlow } from "../engine/flow.ts";
+import type { LockHolder } from "../engine/ports.ts";
 import { runFleetUpdate } from "../engine/run.ts";
 import type { Event, HostState } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
@@ -42,6 +43,9 @@ export interface RunCase extends Omit<SimOptions, "hooks"> {
   /** Default: an address of zone `ag`. */
   addresses?: string[];
   codev?: boolean;
+
+  /** Lock busy at the start: the takeover belongs to the run (spec § Verrou). */
+  lock?: { holder: LockHolder; diesOn?: readonly ("SIGTERM" | "SIGKILL")[] };
 
   /** Fake time moved per idle round. */
   stepMs?: number;
@@ -87,7 +91,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
   const sim = previous?.sim ?? new SimFleet(clock, { ...runCase, hooks: runCase.hooks?.(flow) });
   const events = new OpenQuestions(flow, runCase.answers);
   const store = previous?.store ?? new MemoryDeploymentStore();
-  const lock = new FakeLock();
+  const lock = new FakeLock(runCase.lock?.holder, runCase.lock?.diesOn);
   const ports = {
     commands: sim,
     clock,
@@ -103,11 +107,11 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     workspace: "/ws",
     codev: runCase.codev ?? false,
     version: "0.0.0-test",
+    interactive: interactively(cli.options),
     resolve: (defaults: Parameters<typeof resolveParams>[1]) =>
       resolveParams(cli.options, defaults),
-    ...(cli.options.resume
-      ? { resume: (saved: RunParams) => resumeParams(saved, cli.options) }
-      : {}),
+    resume: cli.options.resume,
+    resumeFrom: (saved: RunParams) => resumeParams(saved, cli.options),
   };
 
   // Directories the previous runs left: this run's own is the next one, and
@@ -179,8 +183,11 @@ function invariants(outcome: RunOutcome, lock: FakeLock): string[] {
   check(!lock.held, "lock released");
 
   if (recorded !== undefined) {
-    check(JSON.stringify(recorded.events) === JSON.stringify(events), "events.jsonl = the stream");
-    const folded = events.reduce(persist, initialPersisted());
+    // From `run.start`: what a takeover of the lock said came before the
+    // directory existed, so it is in the stream and nowhere else.
+    const started = events.slice(events.findIndex((event) => event.kind === "run.start"));
+    check(JSON.stringify(recorded.events) === JSON.stringify(started), "events.jsonl = the stream");
+    const folded = started.reduce(persist, initialPersisted());
     check(
       JSON.stringify(recorded.state) === JSON.stringify(folded),
       "state.json = fold of the stream",

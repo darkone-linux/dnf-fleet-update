@@ -16,6 +16,7 @@ import {
   type EventChannel,
   type LocalHost,
   type LockAttempt,
+  type LockHolder,
   type LogName,
   logFileName,
   type OutputLine,
@@ -207,17 +208,34 @@ export class MemoryDeploymentStore implements DeploymentStore {
   }
 }
 
-/** Free unless a holder is given: then always busy. */
+/**
+ * Free unless a holder is given: busy until a signal it answers to, listed in
+ * `diesOn`, has been sent.
+ */
 export class FakeLock implements RunLock {
   held = false;
+  readonly signals: string[] = [];
+  private holder: LockHolder | undefined;
 
-  constructor(private readonly holder?: string) {}
+  constructor(
+    holder?: LockHolder,
+    private readonly diesOn: readonly ("SIGTERM" | "SIGKILL")[] = [],
+  ) {
+    this.holder = holder;
+  }
 
   acquire(): LockAttempt {
     if (this.holder !== undefined) return { kind: "busy", holder: this.holder };
     if (this.held) throw new Error("lock already held by this process");
     this.held = true;
     return { kind: "acquired" };
+  }
+
+  stopHolder(pid: number, signal: "SIGTERM" | "SIGKILL"): boolean {
+    this.signals.push(`${signal} ${pid}`);
+    if (this.holder === undefined) return false;
+    if (this.diesOn.includes(signal)) this.holder = undefined;
+    return true;
   }
 
   release(): void {

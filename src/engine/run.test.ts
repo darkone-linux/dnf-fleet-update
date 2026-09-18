@@ -1,8 +1,9 @@
 // Whole runs on fakes: exit codes, what is recorded, the lock released.
 
 import { describe, expect, test } from "bun:test";
-import { parseCli, resolveParams } from "../cli/options.ts";
+import { interactively, parseCli, resolveParams, resumeParams } from "../cli/options.ts";
 import type { Event } from "../model/events.ts";
+import type { RunParams } from "../model/params.ts";
 import {
   type CommandScript,
   FakeClock,
@@ -23,6 +24,7 @@ import {
   remote,
 } from "../testing/fleet.ts";
 import { RunFlow } from "./flow.ts";
+import type { LockHolder } from "./ports.ts";
 import { runFleetUpdate } from "./run.ts";
 
 const NAMES = HOSTS_JSON.map((host) => host.hostname);
@@ -44,7 +46,8 @@ function harness(
     argv?: string[];
     commands?: CommandScript[];
     network?: unknown;
-    holder?: string;
+    holder?: LockHolder;
+    diesOn?: readonly ("SIGTERM" | "SIGKILL")[];
     answers?: Record<string, string>;
   } = {},
 ) {
@@ -61,7 +64,7 @@ function harness(
     clock: new FakeClock(),
     events: new RecordingChannel(options.answers),
     local: new FakeLocalHost("deployer", ["10.1.0.50"]),
-    lock: new FakeLock(options.holder),
+    lock: new FakeLock(options.holder, options.diesOn),
     store: new MemoryDeploymentStore(),
   };
   const flow = new RunFlow();
@@ -69,8 +72,11 @@ function harness(
     workspace: "/ws",
     codev: false,
     version: "0.2.0",
+    interactive: interactively(cli.options),
     resolve: (defaults: Parameters<typeof resolveParams>[1]) =>
       resolveParams(cli.options, defaults),
+    resume: cli.options.resume,
+    resumeFrom: (saved: RunParams) => resumeParams(saved, cli.options),
   };
   const run = () => runFleetUpdate(ports, request, flow);
   const kinds = () => ports.events.events.map((event) => event.kind);
@@ -106,13 +112,15 @@ describe("runFleetUpdate", () => {
   });
 
   test("lock held elsewhere: exit 4, nothing run, nothing recorded", async () => {
-    const { ports, run, kinds, end } = harness({ holder: '{"pid":42}' });
+    const { ports, run, kinds, end } = harness({
+      holder: { raw: '{"pid":42}', pid: 42, command: "bun main.tsx --no-ui" },
+    });
 
     expect(await run()).toBe(4);
 
     expect(kinds()).toEqual(["log", "run.end"]);
     expect(feed(ports.events.events)).toEqual([
-      'error another fleet-update run holds the lock: {"pid":42}',
+      "error another fleet-update run holds the lock: pid 42, bun main.tsx --no-ui",
     ]);
     expect(end()).toMatchObject({ status: "failed", exitCode: 4 });
     expect(ports.commands.calls).toEqual([]);

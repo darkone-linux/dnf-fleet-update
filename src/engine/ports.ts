@@ -133,12 +133,33 @@ export interface DeploymentStore {
   last(): SavedRun | undefined;
 }
 
-export type LockAttempt = { kind: "acquired" } | { kind: "busy"; holder: string };
+/** Who holds a busy lock (spec § Verrou): the file line, checked against `/proc`. */
+export interface LockHolder {
+  /** Diagnostic line of the lock file, empty when it holds none. */
+  raw: string;
+
+  /** Confirmed by `/proc/locks`; absent: nobody to stop. */
+  pid?: number;
+
+  /** `/proc/<pid>/cmdline`, arguments joined by spaces. */
+  command?: string;
+
+  /** Written by the holder, kept only when the file names the confirmed pid. */
+  startedAt?: string;
+}
+
+export type LockAttempt = { kind: "acquired" } | { kind: "busy"; holder: LockHolder };
 
 /** `var/deployments/current.lock` (spec § Verrou). */
 export interface RunLock {
-  /** Non-blocking. `holder`: diagnostic content written by the holder, possibly empty. */
+  /** Non-blocking. */
   acquire(): LockAttempt;
+
+  /**
+   * Signals the holder so the kernel releases the lock at its death; `false`
+   * when the process is already gone.
+   */
+  stopHolder(pid: number, signal: "SIGTERM" | "SIGKILL"): boolean;
 
   /** Also released by the kernel when the process dies. */
   release(): void;

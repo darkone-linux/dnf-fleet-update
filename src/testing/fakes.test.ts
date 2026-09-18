@@ -136,6 +136,8 @@ describe("MemoryDeploymentStore", () => {
 });
 
 describe("FakeLock", () => {
+  const holder = { raw: '{"pid":42}', pid: 42 };
+
   test("free, then held; busy with a holder", () => {
     const lock = new FakeLock();
 
@@ -143,6 +145,17 @@ describe("FakeLock", () => {
     expect(() => lock.acquire()).toThrow("already held");
     lock.release();
     expect(lock.acquire()).toEqual({ kind: "acquired" });
-    expect(new FakeLock("pid 42").acquire()).toEqual({ kind: "busy", holder: "pid 42" });
+    expect(new FakeLock(holder).acquire()).toEqual({ kind: "busy", holder });
+  });
+
+  test("the holder dies on the signals it answers to, and frees the lock", () => {
+    const lock = new FakeLock(holder, ["SIGKILL"]);
+
+    expect(lock.stopHolder(42, "SIGTERM")).toBe(true);
+    expect(lock.acquire()).toEqual({ kind: "busy", holder });
+    expect(lock.stopHolder(42, "SIGKILL")).toBe(true);
+    expect(lock.acquire()).toEqual({ kind: "acquired" });
+    expect(lock.stopHolder(42, "SIGTERM")).toBe(false);
+    expect(lock.signals).toEqual(["SIGTERM 42", "SIGKILL 42", "SIGTERM 42"]);
   });
 });

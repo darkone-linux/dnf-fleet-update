@@ -11,6 +11,7 @@ import { type FleetDefaults, parseNetwork } from "./fleet.ts";
 import type { RunFlow } from "./flow.ts";
 import { HostTable } from "./hosts.ts";
 import { KnownErrors } from "./known-errors.ts";
+import { takeLock } from "./lock.ts";
 import type {
   Clock,
   CommandRunner,
@@ -44,14 +45,20 @@ export interface RunRequest {
   codev: boolean;
   version: string;
 
+  /** Decided by `--no-ui` and `--non-interactive`, before the parameters exist. */
+  interactive: boolean;
+
   /** Options resolved against `network.fleetUpdate` (exit `2` on failure). */
   resolve: (defaults: FleetDefaults) => Result<RunParams>;
 
+  /** `--resume` asked for; taking the lock from a holder may add it. */
+  resume: boolean;
+
   /**
-   * `--resume`: the saved parameters, overridden by the options a resume
-   * accepts (spec § État et reprise). Absent: a new run.
+   * The saved parameters, overridden by the options a resume accepts
+   * (spec § État et reprise).
    */
-  resume?: (saved: RunParams) => Result<{ params: RunParams; filter?: string }>;
+  resumeFrom: (saved: RunParams) => Result<{ params: RunParams; filter?: string }>;
 }
 
 /** Last run read and validated, or the reason to refuse the resume (exit `2`). */
@@ -173,19 +180,35 @@ export async function runFleetUpdate(
     return exitCode;
   };
 
-  const lock = ports.lock.acquire();
-  if (lock.kind === "busy") {
-    const holder = lock.holder === "" ? "" : `: ${lock.holder}`;
-    return refuse(`another fleet-update run holds the lock${holder}`, ExitCode.Locked);
+  // Interactive takeover of a busy lock (spec § Verrou): its refusals and its
+  // questions are already in the stream, only the end of the run is left.
+  const taken = await takeLock({
+    lock: ports.lock,
+    events: ports.events,
+    clock: ports.clock,
+    startedAt,
+    interactive: request.interactive,
+    signal: flow.now,
+    canResume: () => !request.resume && lastRun(ports).ok,
+  });
+  if (taken.kind === "busy") {
+    early(ports, startedAt, { kind: "run.end", status: "failed", exitCode: ExitCode.Locked });
+    return ExitCode.Locked;
   }
 
   try {
+    if (taken.kind === "aborted") {
+      early(ports, startedAt, { kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
+      return ExitCode.Aborted;
+    }
+    const resume = request.resume || taken.resume;
+
     // `--resume` takes its parameters from the saved run, so `network.nix` is
     // not read again: the resumed run keeps the settings it started with.
     let saved: SavedState | undefined;
     let filter: string | undefined;
     let params: Result<RunParams>;
-    if (request.resume === undefined) {
+    if (!resume) {
       const defaults = await fleetDefaults(ports, request.workspace, flow.now);
       if (flow.now.aborted) {
         early(ports, startedAt, { kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
@@ -197,7 +220,7 @@ export async function runFleetUpdate(
       const last = lastRun(ports);
       if (!last.ok) return refuse(last.error, ExitCode.InvalidOptions);
       saved = last.value;
-      const resumed = request.resume(saved.params);
+      const resumed = request.resumeFrom(saved.params);
       params = resumed.ok ? ok(resumed.value.params) : resumed;
       filter = resumed.ok ? resumed.value.filter : undefined;
     }

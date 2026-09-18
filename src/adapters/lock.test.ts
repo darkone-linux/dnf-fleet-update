@@ -26,6 +26,20 @@ async function firstLine(stream: ReadableStream<Uint8Array>): Promise<string> {
   return text.split("\n")[0] ?? "";
 }
 
+/** Holds the lock on its argument and stays alive; written once, reused. */
+function holderScript(): string {
+  const script = join(temp, "holder.ts");
+  writeFileSync(
+    script,
+    [
+      `import { FlockLock } from ${JSON.stringify(join(import.meta.dir, "lock.ts"))};`,
+      "console.log(new FlockLock(process.argv[2]).acquire().kind);",
+      "setInterval(() => {}, 1000);",
+    ].join("\n"),
+  );
+  return script;
+}
+
 describe("FlockLock", () => {
   test("exclusive; the holder is described; the file outlives the release", () => {
     const path = lockPath();
@@ -35,8 +49,13 @@ describe("FlockLock", () => {
     expect(first.acquire()).toEqual({ kind: "acquired" });
     const attempt = second.acquire();
     expect(attempt.kind).toBe("busy");
-    expect(attempt.kind === "busy" && JSON.parse(attempt.holder)).toMatchObject({
+
+    // Same process on both ends: `/proc/locks` names it, `/proc/<pid>/cmdline`
+    // describes it, and the line it wrote is the one read back.
+    expect(attempt.kind === "busy" && attempt.holder).toMatchObject({
       pid: process.pid,
+      startedAt: expect.stringContaining("T"),
+      command: expect.any(String),
     });
     expect(() => first.acquire()).toThrow("already held");
 
@@ -65,16 +84,7 @@ describe("FlockLock", () => {
 
   test("the kernel releases it when the holder dies", async () => {
     const path = lockPath();
-    const script = join(temp, "holder.ts");
-    writeFileSync(
-      script,
-      [
-        `import { FlockLock } from ${JSON.stringify(join(import.meta.dir, "lock.ts"))};`,
-        "console.log(new FlockLock(process.argv[2]).acquire().kind);",
-        "setInterval(() => {}, 1000);",
-      ].join("\n"),
-    );
-    const holder = Bun.spawn([process.execPath, script, path], { stdout: "pipe" });
+    const holder = Bun.spawn([process.execPath, holderScript(), path], { stdout: "pipe" });
 
     try {
       expect(await firstLine(holder.stdout)).toBe("acquired");
@@ -84,6 +94,29 @@ describe("FlockLock", () => {
       holder.kill("SIGKILL");
       await holder.exited;
       expect(lock.acquire()).toEqual({ kind: "acquired" });
+      lock.release();
+    } finally {
+      holder.kill("SIGKILL");
+    }
+  });
+
+  test("another process: described by its pid, stopped by SIGTERM", async () => {
+    const path = lockPath();
+    const holder = Bun.spawn([process.execPath, holderScript(), path], { stdout: "pipe" });
+
+    try {
+      expect(await firstLine(holder.stdout)).toBe("acquired");
+      const lock = new FlockLock(path);
+      const attempt = lock.acquire();
+      expect(attempt.kind === "busy" && attempt.holder).toMatchObject({
+        pid: holder.pid,
+        command: expect.stringContaining(path),
+      });
+
+      expect(lock.stopHolder(holder.pid, "SIGTERM")).toBe(true);
+      await holder.exited;
+      expect(lock.acquire()).toEqual({ kind: "acquired" });
+      expect(lock.stopHolder(holder.pid, "SIGTERM")).toBe(false);
       lock.release();
     } finally {
       holder.kill("SIGKILL");

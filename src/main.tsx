@@ -13,7 +13,7 @@ import { FlockLock } from "./adapters/lock.ts";
 import { ProcessRunner } from "./adapters/process.ts";
 import { DirectoryStore } from "./adapters/store.ts";
 import { HELP } from "./cli/help.ts";
-import { parseCli, resolveParams, resumeParams } from "./cli/options.ts";
+import { interactively, parseCli, resolveParams, resumeParams } from "./cli/options.ts";
 import { RunFlow } from "./engine/flow.ts";
 import { type RunPorts, type RunRequest, runFleetUpdate } from "./engine/run.ts";
 import type { RunControl, RunSource } from "./model/events.ts";
@@ -82,10 +82,12 @@ const request: RunRequest = {
   workspace,
   codev: existsSync(join(workspace, "dnf", ".git")),
   version,
+  interactive: interactively(options),
   resolve: (defaults) => resolveParams(options, defaults),
+  resume: options.resume,
 
-  // `--resume`: the saved parameters lead, the options this run accepts override.
-  ...(options.resume ? { resume: (saved: RunParams) => resumeParams(saved, options) } : {}),
+  // Resuming: the saved parameters lead, the options this run accepts override.
+  resumeFrom: (saved: RunParams) => resumeParams(saved, options),
 };
 
 // SIGTERM (unit stop or timeout), SIGINT (`^C` under `--no-ui`), SIGHUP

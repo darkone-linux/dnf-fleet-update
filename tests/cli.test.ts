@@ -83,7 +83,9 @@ test("--no-ui with the lock held elsewhere: text output, exit 4", () => {
     const result = run(["--no-ui"], root);
 
     expect(result.code).toBe(ExitCode.Locked);
-    expect(result.stdout).toStartWith("00:00:00  another fleet-update run holds the lock: {");
+    expect(result.stdout).toStartWith(
+      `00:00:00  another fleet-update run holds the lock: pid ${process.pid}, started `,
+    );
   } finally {
     lock.release();
   }
