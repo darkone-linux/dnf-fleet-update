@@ -79,6 +79,7 @@ describe("report", () => {
     const [summary, incident] = context.matrix.messages;
     expect(summary?.homeserver).toBe("https://matrix.example.org");
     expect(summary?.token).toBe("syt_fake_token");
+    expect(summary?.timeoutMs).toBe(30_000);
     expect(summary?.text).toStartWith("**fleet-update 20260917T020000Z-full** — exit 0");
     expect(incident?.text).toContain("- hcs (hcs): failed — build failed: disk full");
     expect(feed(context.events.events)).toContain("ok report sent (2 to Matrix)");

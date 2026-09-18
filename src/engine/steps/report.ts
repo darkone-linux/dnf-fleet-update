@@ -92,7 +92,7 @@ async function sendMessages(
         room,
         token: token.value,
         text,
-        timeoutMs: context.params.timeouts.commit * 1000,
+        timeoutMs: context.params.timeouts.matrix * 1000,
       },
       context.signal,
     );
