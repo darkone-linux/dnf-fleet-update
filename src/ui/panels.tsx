@@ -384,23 +384,24 @@ function StepRows({
 
         // Ruled out by the options (`--build-only`): name as dim as its cross.
         const name = row.status === "omitted" ? color.dim : color.text;
-        const background = running ? color.selection : color.panel;
+
+        // No band on the running step: its spinner already names it.
         return (
-          <box key={step} flexDirection="row" backgroundColor={background}>
-            <text fg={stepColor[row.status]} bg={background}>
+          <box key={step} flexDirection="row" backgroundColor={color.panel}>
+            <text fg={stepColor[row.status]} bg={color.panel}>
               {`${glyph} `}
             </text>
-            <text fg={running ? color.white : name} bg={background}>
+            <text fg={running ? color.white : name} bg={color.panel}>
               {STEP_LABELS[step]}
             </text>
-            <box flexGrow={1} backgroundColor={background} />
+            <box flexGrow={1} backgroundColor={color.panel} />
             {step === STEPS[0] ? (
-              <text fg={color.magenta} bg={background}>
+              <text fg={color.magenta} bg={color.panel}>
                 {clock(elapsed)}
               </text>
             ) : null}
             {row.total > 0 ? (
-              <text fg={color.dim} bg={background}>
+              <text fg={color.dim} bg={color.panel}>
                 {`${progressBar(row.done, row.total)}  ${`${row.done}/${row.total}`.padStart(COUNTER_WIDTH)}`}
               </text>
             ) : null}
