@@ -107,7 +107,7 @@ describe("runFleetUpdate", () => {
     expect(recorded?.id).toBe("20260917T020000Z-full");
     expect(recorded?.events).toEqual(ports.events.events);
     expect(recorded?.state?.end).toEqual({ status: "done", exitCode: 0 });
-    expect(recorded?.report).toContain("# fleet-update report");
+    expect(recorded?.report).toContain("# Fleet Update Report");
     expect(ports.lock.held).toBe(false);
   });
 

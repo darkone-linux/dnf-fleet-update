@@ -327,6 +327,7 @@ export async function runFleetUpdate(
     const rendered = await report(
       context,
       {
+        runId: run.id,
         state: recorder.state,
         status,
         exitCode,

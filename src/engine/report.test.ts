@@ -38,11 +38,14 @@ const EVENTS: Event[] = [
   { t: 65_040, kind: "step.end", step: "test", status: "ok" },
 ];
 
+const RUN_ID = "20260917T020000Z-full";
+
 describe("renderReport", () => {
   const state = EVENTS.reduce(persist, initialPersisted());
 
   test("short lines for the end of the run", () => {
     const report = renderReport({
+      runId: RUN_ID,
       state,
       status: "aborted",
       exitCode: 5,
@@ -51,6 +54,12 @@ describe("renderReport", () => {
       knownErrors: [],
     });
 
+    expect(report.facts).toEqual([
+      "Started at 2026-09-17 02:00:00 UTC, duration: 1m05s",
+      "Options: full run, selection all, 10 in parallel",
+      "Hosts: 1 left in test (hcs), 1 with failed units (gw-ag), 1 failed (nlt)",
+      "Run aborted",
+    ]);
     expect(report.lines).toEqual([
       "1 left in test (hcs), 1 with failed units (gw-ag), 1 failed (nlt)",
       "duration 1m05s",
@@ -60,6 +69,7 @@ describe("renderReport", () => {
 
   test("markdown: header, steps, waves, hosts not deployed, hosts left in test, warnings", () => {
     const { markdown } = renderReport({
+      runId: RUN_ID,
       state,
       status: "done",
       exitCode: 0,
@@ -68,6 +78,9 @@ describe("renderReport", () => {
       knownErrors: ["nix-eval-jobs is not linked against the same Nix as the system"],
     });
 
+    expect(markdown).toStartWith("# Fleet Update Report\n\n- Status: done (exit 0)\n");
+    expect(markdown).toContain("- Started at 2026-09-17 02:00:00 UTC, duration: 1m05s");
+    expect(markdown).toContain("- Options: full run, selection all, 10 in parallel");
     expect(markdown).toContain("- Commits: consumer 0a1b2c3 chore(update): full fleet");
     expect(markdown).toContain("| test | done | 1m05s |");
     expect(markdown).toContain("| test | 1/2 | hcs | 1m01s |");
@@ -84,6 +97,7 @@ describe("renderReport", () => {
     const running = persist(state, { t: 65_100, kind: "step.start", step: "report" });
 
     const { markdown } = renderReport({
+      runId: RUN_ID,
       state: running,
       status: "done",
       exitCode: 0,
@@ -98,6 +112,7 @@ describe("renderReport", () => {
 
   test("incidents: critical hosts left out, in test only after a stop", () => {
     const done = renderReport({
+      runId: RUN_ID,
       state,
       status: "done",
       exitCode: 0,
@@ -106,6 +121,7 @@ describe("renderReport", () => {
       knownErrors: [],
     });
     const stopped = renderReport({
+      runId: RUN_ID,
       state,
       status: "failed",
       exitCode: 1,
@@ -116,7 +132,7 @@ describe("renderReport", () => {
 
     // `nlt` failed too, but `laptop` is not one of the critical profiles.
     expect(done.incident).toBe(
-      "## Critical hosts not deployed\n\n- gw-ag (gateway): error — some units failed\n",
+      "## Critical hosts not deployed\n\n- gw-ag (gateway): error, some units failed\n",
     );
     expect(stopped.incident?.endsWith("## Hosts left in test\n\n- hcs\n- gw-ag\n")).toBe(true);
   });
@@ -139,6 +155,7 @@ describe("renderReport", () => {
       },
     );
     const input = {
+      runId: RUN_ID,
       status: "done" as const,
       exitCode: 0 as const,
       durationMs: 1000,
@@ -147,7 +164,7 @@ describe("renderReport", () => {
     };
 
     expect(renderReport({ ...input, state: laptops }).incident).toBe(
-      "## Critical hosts not deployed\n\n- nlt (laptop): failed — build failed: x | y\n",
+      "## Critical hosts not deployed\n\n- nlt (laptop): failed, build failed: x | y\n",
     );
     const deployed = persist(laptops, {
       t: 100,

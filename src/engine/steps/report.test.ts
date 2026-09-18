@@ -35,6 +35,7 @@ const sent = (context: { commands: { calls: { argv: readonly string[]; stdin?: s
 
 function input(overrides: Partial<ReportInput> = {}): ReportInput {
   return {
+    runId: "20260917T020000Z-full",
     state: STATE,
     status: "done",
     exitCode: 0,
@@ -65,8 +66,8 @@ describe("report", () => {
     expect(outcome.sent).toBe(true);
     const [summary, incident] = sent(context);
     expect([summary?.room, incident?.room]).toEqual(["warnings", "incidents"]);
-    expect(summary?.text).toStartWith("**fleet-update 20260917T020000Z-full** — exit 0");
-    expect(incident?.text).toContain("- hcs (hcs): failed — build failed: disk full");
+    expect(summary?.text).toStartWith("**Fleet Update Report** (0)");
+    expect(incident?.text).toContain("- hcs (hcs): failed, build failed: disk full");
     expect(feed(context.events.events)).toContain("ok report sent to Matrix");
   });
 
@@ -80,7 +81,7 @@ describe("report", () => {
     );
 
     expect(sent(context).map((message) => message.room)).toEqual(["incidents"]);
-    expect(sent(context)[0]?.text).toContain("error: hcs: build failed: disk full");
+    expect(sent(context)[0]?.text).toContain("Error: hcs: build failed: disk full");
   });
 
   // Exit `10`: nothing is configured here, so the incidents room is not tried.

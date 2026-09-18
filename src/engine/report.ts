@@ -1,11 +1,14 @@
 // Run report (spec § Rapport et codes de sortie): short lines for `run.end`,
 // markdown for `report.md`. Pure: built from the `state.json` fold.
 
+import type { RunInfo } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULTS } from "../model/params.ts";
 import type { HostStatus, PersistedHost, PersistedState } from "../model/persist.ts";
 
 export interface ReportInput {
+  /** `20260917T020000Z-full`: also the only wall clock of the report. */
+  runId: string;
   state: PersistedState;
   status: "done" | "failed" | "aborted";
   exitCode: ExitCode;
@@ -22,10 +25,43 @@ export interface ReportInput {
 
 export interface Report {
   lines: string[];
+
+  /** Bullets of the Matrix summary, capitalized: when, options, hosts, ending. */
+  facts: string[];
   markdown: string;
 
   /** Incidents room message (spec § Rapport); absent when nothing needs one. */
   incident?: string;
+}
+
+/** First word only, and only a plain word: `nix-eval-jobs …` is a name, not a sentence. */
+export const capitalize = (text: string) =>
+  /^[a-z]+(\s|$)/.test(text) ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+
+/**
+ * `20260917T020000Z-full` → `2026-09-17 02:00:00 UTC`. Read from the run id:
+ * `Clock` is monotonic, the engine has no wall clock of its own.
+ */
+export function startedAt(runId: string): string | undefined {
+  const stamp = /^\d{8}T\d{6}Z/.exec(runId)?.[0];
+  if (stamp === undefined) return undefined;
+  const date = `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}`;
+  const time = `${stamp.slice(9, 11)}:${stamp.slice(11, 13)}:${stamp.slice(13, 15)}`;
+  return `${date} ${time} UTC`;
+}
+
+/** Options that explain what the run did, and nothing else: one line. */
+export function mainOptions(run: RunInfo | undefined): string {
+  if (run === undefined) return "unknown";
+  const params = run.params;
+  const parts = [`${run.mode} run`, `selection ${run.selection}`];
+  if (params?.buildOnly) parts.push("build only");
+  if (params?.skipTest) parts.push("test skipped");
+  if (params?.skipSwitch) parts.push("switch skipped");
+  if (params?.stopLoss) parts.push("stop loss");
+  if (params?.rollbackTimeout === 0) parts.push("no automatic rollback");
+  parts.push(`${run.maxParallel} in parallel`);
+  return parts.join(", ");
 }
 
 /** `27s`, `3m05s`, `1h02m`. */
@@ -81,7 +117,7 @@ const INCIDENT_STATUSES: readonly HostStatus[] = [
 ];
 
 const incidentLine = (host: PersistedHost) =>
-  `- ${host.name} (${host.profile}): ${host.status}${host.note === undefined ? "" : ` — ${host.note}`}`;
+  `- ${host.name} (${host.profile}): ${host.status}${host.note === undefined ? "" : `, ${host.note}`}`;
 
 /**
  * Message of the incidents room (spec § Rapport): critical hosts the run left
@@ -114,7 +150,7 @@ function incidentMessage(state: PersistedState, status: ReportInput["status"]): 
 }
 
 export function renderReport(input: ReportInput): Report {
-  const { state, status, exitCode, durationMs, warnings, knownErrors } = input;
+  const { runId, state, status, exitCode, durationMs, warnings, knownErrors } = input;
   const hosts = state.hosts;
   const ending =
     status === "failed" ? "run stopped on error" : status === "aborted" ? "run aborted" : undefined;
@@ -122,18 +158,25 @@ export function renderReport(input: ReportInput): Report {
   if (ending) lines.push(ending);
 
   const run = state.run;
+  const started = startedAt(runId);
+  const duration = formatDuration(durationMs);
+  const facts = [
+    started === undefined
+      ? `Duration: ${duration}`
+      : `Started at ${started}, duration: ${duration}`,
+    `Options: ${mainOptions(run)}`,
+    `Hosts: ${summary(hosts)}`,
+  ];
   const commits = state.commits.map(
     (commit) =>
       `${commit.repo === "dnf" ? "dnf/" : "consumer"} ${commit.rev.slice(0, 7)} ${commit.message}`,
   );
   const markdown = [
-    "# fleet-update report",
+    "# Fleet Update Report",
     "",
     `- Status: ${status} (exit ${exitCode})`,
-    `- Mode: ${run?.mode ?? "unknown"}, selection: ${run?.selection ?? "unknown"}`,
+    ...facts.map((fact) => `- ${fact}`),
     `- Commits: ${commits.length > 0 ? commits.join("; ") : "none"}`,
-    `- Duration: ${formatDuration(durationMs)}`,
-    `- Hosts: ${summary(hosts)}`,
     "",
     "## Steps",
     "",
@@ -185,6 +228,7 @@ export function renderReport(input: ReportInput): Report {
   const incident = incidentMessage(state, status);
   return {
     lines,
+    facts: ending === undefined ? facts : [...facts, capitalize(ending)],
     markdown: `${markdown.join("\n")}\n`,
     ...(incident === undefined ? {} : { incident }),
   };

@@ -4,6 +4,7 @@
 // homeserver stay there, the tool owns the text.
 
 import type { ExitCode } from "../model/exit-codes.ts";
+import { capitalize } from "./report.ts";
 
 /** Alert rooms of the framework, as `just send-msg` names them. */
 export type AlertRoom = "warnings" | "incidents";
@@ -16,11 +17,10 @@ export const SEND_MSG = {
 } as const;
 
 export interface SummaryInput {
-  runId: string;
   exitCode: ExitCode;
 
-  /** Short lines of the report: hosts, duration, how the run ended. */
-  lines: readonly string[];
+  /** Bullets of the report: when, options, hosts, how the run ended. */
+  facts: readonly string[];
   knownErrors: readonly string[];
 
   /** Last error of the feed: what ended the run, as the incidents room needs it. */
@@ -32,11 +32,12 @@ export interface SummaryInput {
  * incidents message adds the error that ended the run, when there is one.
  */
 export function summaryMessage(input: SummaryInput): string {
-  const parts = [`**fleet-update ${input.runId}** — exit ${input.exitCode}`];
-  if (input.error !== undefined) parts.push("", `error: ${input.error}`);
-  parts.push("", ...input.lines.map((line) => `- ${line}`));
+  const parts = [`**Fleet Update Report** (${input.exitCode})`];
+  if (input.error !== undefined) parts.push("", `Error: ${input.error}`);
+  parts.push("", ...input.facts.map((fact) => `- ${fact}`));
   if (input.knownErrors.length > 0) {
-    parts.push("", "Known errors:", ...input.knownErrors.map((message) => `- ${message}`));
+    const listed = input.knownErrors.map((message) => `- ${capitalize(message)}`);
+    parts.push("", "Known errors:", ...listed);
   }
   return parts.join("\n");
 }

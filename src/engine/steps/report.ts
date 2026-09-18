@@ -20,16 +20,14 @@ export interface ReportOutcome {
  * critical hosts of the report travel on their own (spec § Rapport).
  */
 function messages(
-  runId: string,
   report: Report,
   input: ReportInput,
   error?: string,
 ): { room: AlertRoom; text: string }[] {
   const stopped = input.status === "failed";
   const summary = summaryMessage({
-    runId,
     exitCode: input.exitCode,
-    lines: report.lines,
+    facts: report.facts,
     knownErrors: input.knownErrors,
     ...(stopped && error !== undefined ? { error } : {}),
   });
@@ -52,7 +50,7 @@ async function sendMessages(
   const { workspace, params } = context;
   let delivered = true;
 
-  for (const { room, text } of messages(context.run.id, report, input, error)) {
+  for (const { room, text } of messages(report, input, error)) {
     const spec = sendMessage(workspace, room, text, params.timeouts);
     const execution = await execute(context, spec, { signal: context.signal });
     if (succeeded(execution.result)) continue;

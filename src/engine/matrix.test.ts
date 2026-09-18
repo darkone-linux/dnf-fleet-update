@@ -5,15 +5,24 @@ import { summaryMessage } from "./matrix.ts";
 
 describe("summaryMessage", () => {
   const base = {
-    runId: "20260917T020000Z-full",
     exitCode: 0 as const,
-    lines: ["6 deployed", "duration 12m03s"],
+    facts: [
+      "Started at 2026-09-17 02:00:00 UTC, duration: 12m03s",
+      "Options: full run, selection all, 10 in parallel",
+      "Hosts: 6 deployed",
+    ],
     knownErrors: [],
   };
 
-  test("run, exit code and the short lines of the report", () => {
+  test("exit code in the title, then the facts of the report", () => {
     expect(summaryMessage(base)).toBe(
-      "**fleet-update 20260917T020000Z-full** — exit 0\n\n- 6 deployed\n- duration 12m03s",
+      [
+        "**Fleet Update Report** (0)",
+        "",
+        "- Started at 2026-09-17 02:00:00 UTC, duration: 12m03s",
+        "- Options: full run, selection all, 10 in parallel",
+        "- Hosts: 6 deployed",
+      ].join("\n"),
     );
   });
 
@@ -26,12 +35,13 @@ describe("summaryMessage", () => {
     });
 
     expect(message.split("\n")).toEqual([
-      "**fleet-update 20260917T020000Z-full** — exit 1",
+      "**Fleet Update Report** (1)",
       "",
-      "error: srv-ag: build failed: disk full",
+      "Error: srv-ag: build failed: disk full",
       "",
-      "- 6 deployed",
-      "- duration 12m03s",
+      "- Started at 2026-09-17 02:00:00 UTC, duration: 12m03s",
+      "- Options: full run, selection all, 10 in parallel",
+      "- Hosts: 6 deployed",
       "",
       "Known errors:",
       "- nix-eval-jobs is not linked against the same Nix as the system",
