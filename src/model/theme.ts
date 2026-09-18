@@ -52,7 +52,7 @@ export const hostGlyph: Record<ShownState, string> = {
   // A unit that did not start is a lighter failure than a broken host.
   error: "🌦️",
   failed: "🌧️",
-  reverted: "🌫️",
+  reverted: "🔄",
   excluded: "⛔",
   interrupted: "🌩️",
   offline: "💤",
