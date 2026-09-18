@@ -3,6 +3,7 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import type { Event } from "../model/events.ts";
+import { ExitCode } from "../model/exit-codes.ts";
 import { App } from "./App.tsx";
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
@@ -86,4 +87,45 @@ test("the phase of an active host is white, the output line dim", async () => {
 
   expect(hex("copy ")).toBe("ffffff");
   expect(hex("copying path")).toBe("7a7a7a");
+});
+
+// A wide run summary: the narrow footer has to give segments up.
+const SUMMARY: Event[] = [
+  {
+    t: 0,
+    kind: "run.start",
+    run: {
+      version: "0.3.0",
+      selection: "fl-*,fd-*",
+      mode: "resume",
+      codev: true,
+      aiModel: "claude:opus@high",
+      maxParallel: 10,
+    },
+  },
+  ...add("vbox-umi"),
+  { t: 0, kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted },
+];
+
+/** Footer row of a frame: the only one carrying the key hint. */
+async function footer(width: number): Promise<string> {
+  const setup = await testRender(<App preload={SUMMARY} />, { width, height: 30 });
+  current = setup;
+  await setup.waitForVisualIdle();
+  const row = setup
+    .captureCharFrame()
+    .split("\n")
+    .find((line) => line.includes("? help"));
+  return row ?? "";
+}
+
+test("the run summary keeps what fits, by falling priority", async () => {
+  expect(await footer(160)).toContain(
+    "resume · codev · claude:opus@high · 1 hosts · x10 · fl-*,fd-*",
+  );
+
+  // Parallelism goes first, then the selection.
+  expect(await footer(122)).toContain("resume · codev · claude:opus@high · 1 hosts · fl-*,fd-*");
+  expect(await footer(110)).toContain("resume · codev · claude:opus@high · 1 hosts ");
+  expect(await footer(100)).toContain("resume · codev · 1 hosts ");
 });

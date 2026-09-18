@@ -13,6 +13,7 @@ import {
   Footer,
   HelpCallout,
   HostLogs,
+  SIDEBAR_WIDTH,
   Sidebar,
   useSpinners,
 } from "./panels.tsx";
@@ -345,7 +346,7 @@ export function App({
 
         {help ? <HelpCallout /> : null}
 
-        <Footer state={state} />
+        <Footer state={state} width={width - SIDEBAR_WIDTH} />
       </box>
 
       <Sidebar

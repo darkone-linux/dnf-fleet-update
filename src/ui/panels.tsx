@@ -31,6 +31,13 @@ import {
 /** Text column: blocks reach it through border (1) + padding (2), lines through padding. */
 const GUTTER = 3;
 
+/** Steps and hosts column, fixed: the footer measures the width left to it. */
+export const SIDEBAR_WIDTH = 36;
+
+/** Tail of the footer, never dropped, and the gap kept before it. */
+const HELP_HINT = "? help";
+const HELP_GAP = 2;
+
 /**
  * Single ticker for every spinner on screen. Frozen under capture, where a
  * moving frame would never reach visual idle.
@@ -454,7 +461,7 @@ export function Sidebar({
   band: boolean;
 }) {
   return (
-    <box flexDirection="column" flexShrink={0} width={36} backgroundColor={color.panel}>
+    <box flexDirection="column" flexShrink={0} width={SIDEBAR_WIDTH} backgroundColor={color.panel}>
       <box marginTop={1} />
       <StepRows state={state} spinner={spinners.step} />
       <HostRows
@@ -473,19 +480,57 @@ export function Sidebar({
 // FOOTER
 // -----------------------------------------------------------------------------
 
+/** Keys of the run summary, in display order. */
+type FooterKey = "mode" | "codev" | "ai" | "hosts" | "parallel" | "selection";
+
+interface FooterSegment {
+  key: FooterKey;
+  text: string;
+  strong: boolean;
+}
+
+const SEPARATOR = " · ";
+
+/** Dropped first when the footer is too narrow; the operation always stays. */
+const FOOTER_DROP_ORDER: FooterKey[] = ["parallel", "selection", "ai", "codev", "hosts"];
+
+/** Columns the segments and their separators occupy. */
+function footerWidth(segments: FooterSegment[]): number {
+  const text = segments.reduce((total, segment) => total + segment.text.length, 0);
+  return text + Math.max(0, segments.length - 1) * SEPARATOR.length;
+}
+
+/**
+ * Segments that fit `room` columns, in display order. Nothing wraps: a short
+ * window shows fewer facts rather than broken ones.
+ */
+function fitFooter(segments: FooterSegment[], room: number): FooterSegment[] {
+  let kept = segments;
+  for (const key of FOOTER_DROP_ORDER) {
+    if (footerWidth(kept) <= room) break;
+    kept = kept.filter((segment) => segment.key !== key);
+  }
+  return kept;
+}
+
 /** One line: run summary alternating grey and white, then the only key hint. */
-export function Footer({ state }: { state: RunState }) {
+export function Footer({ state, width }: { state: RunState; width: number }) {
   const run = state.run;
-  const segments: { text: string; strong: boolean }[] = run
+  const segments: FooterSegment[] = run
     ? [
-        { text: run.mode, strong: true },
-        { text: run.codev ? "codev" : "release", strong: false },
-        { text: run.aiModel, strong: true },
-        { text: `${state.hosts.length} hosts`, strong: false },
-        { text: `x${run.maxParallel}`, strong: true },
-        { text: run.selection, strong: false },
+        { key: "mode", text: run.mode, strong: true },
+        { key: "codev", text: run.codev ? "codev" : "release", strong: false },
+        { key: "ai", text: run.aiModel, strong: true },
+        { key: "hosts", text: `${state.hosts.length} hosts`, strong: false },
+        { key: "parallel", text: `x${run.maxParallel}`, strong: true },
+        { key: "selection", text: run.selection, strong: false },
       ]
-    : [{ text: "starting…", strong: false }];
+    : [{ key: "mode", text: "starting…", strong: false }];
+
+  const end = state.end ? `${state.end.status} (${state.end.exitCode})  ` : "";
+
+  // Gutters, the end status and `? help` are never given up.
+  const shown = fitFooter(segments, width - 2 * GUTTER - end.length - HELP_HINT.length - HELP_GAP);
 
   return (
     <box
@@ -496,20 +541,15 @@ export function Footer({ state }: { state: RunState }) {
       paddingLeft={GUTTER}
       paddingRight={GUTTER}
     >
-      {segments.map((segment, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: fixed status segments, position is their identity.
-        <box key={index} flexDirection="row">
+      {shown.map((segment, index) => (
+        <box key={segment.key} flexDirection="row">
           {/* Separators stay grey whatever the segment they precede. */}
-          {index > 0 ? <text fg={color.dim}>{" · "}</text> : null}
+          {index > 0 ? <text fg={color.dim}>{SEPARATOR}</text> : null}
           <text fg={segment.strong ? color.white : color.dim}>{segment.text}</text>
         </box>
       ))}
       <box flexGrow={1} />
-      {state.end ? (
-        <text fg={state.end.exitCode === 0 ? color.ok : color.error}>
-          {`${state.end.status} (${state.end.exitCode})  `}
-        </text>
-      ) : null}
+      {end ? <text fg={state.end?.exitCode === 0 ? color.ok : color.error}>{end}</text> : null}
       <text fg={color.white}>?</text>
       <text fg={color.dim}> help</text>
     </box>
