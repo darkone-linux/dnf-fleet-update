@@ -3,7 +3,7 @@
 
 import { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULT_TIMEOUTS, type RunParams, runMode } from "../model/params.ts";
-import type { Result } from "../model/result.ts";
+import { fail, ok, type Result } from "../model/result.ts";
 import { gitStatus, readGenerated } from "./commands/workspace.ts";
 import { type EventInput, emit, log, QuestionQueue, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
@@ -22,6 +22,7 @@ import type {
 import { Presence } from "./presence.ts";
 import { Recorder, recordedChannel } from "./recorder.ts";
 import { renderReport } from "./report.ts";
+import { parseSavedState, type SavedState } from "./resume.ts";
 import { rollbackFleet } from "./rollback.ts";
 import { build } from "./steps/build.ts";
 import { select } from "./steps/select.ts";
@@ -45,6 +46,24 @@ export interface RunRequest {
 
   /** Options resolved against `network.fleetUpdate` (exit `2` on failure). */
   resolve: (defaults: FleetDefaults) => Result<RunParams>;
+
+  /**
+   * `--resume`: the saved parameters, overridden by the options a resume
+   * accepts (spec § État et reprise). Absent: a new run.
+   */
+  resume?: (saved: RunParams) => Result<{ params: RunParams; filter?: string }>;
+}
+
+/** Last run read and validated, or the reason to refuse the resume (exit `2`). */
+function lastRun(ports: RunPorts): Result<SavedState> {
+  const last = ports.store.last();
+  if (last === undefined) return fail("no deployment to resume");
+  if (last.state === undefined) return fail(`${last.id}: no state.json to resume from`);
+  const parsed = parseSavedState(last.id, last.state);
+  if (!parsed.ok) return fail(`${last.id}: ${parsed.error}`);
+  if (parsed.value.hosts.length === 0)
+    return fail(`${last.id}: no unfinished deployment to resume`);
+  return parsed;
 }
 
 /** Before the run directory exists: to the consumers only, nothing recorded. */
@@ -109,7 +128,9 @@ async function steps(context: RunContext, progress: Progress) {
   const goOn = () => !progress.failed && flow.ending === undefined && !context.signal.aborted;
 
   if (!(await cleanTrees(context))) progress.failed = true;
-  if (goOn() && !(await update(context))) progress.failed = !context.signal.aborted;
+  if (goOn() && !context.params.resume && !(await update(context))) {
+    progress.failed = !context.signal.aborted;
+  }
   if (!goOn()) return;
 
   const selection = await select(context);
@@ -159,13 +180,27 @@ export async function runFleetUpdate(
   }
 
   try {
-    const defaults = await fleetDefaults(ports, request.workspace, flow.now);
-    if (flow.now.aborted) {
-      early(ports, startedAt, { kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
-      return ExitCode.Aborted;
+    // `--resume` takes its parameters from the saved run, so `network.nix` is
+    // not read again: the resumed run keeps the settings it started with.
+    let saved: SavedState | undefined;
+    let filter: string | undefined;
+    let params: Result<RunParams>;
+    if (request.resume === undefined) {
+      const defaults = await fleetDefaults(ports, request.workspace, flow.now);
+      if (flow.now.aborted) {
+        early(ports, startedAt, { kind: "run.end", status: "aborted", exitCode: ExitCode.Aborted });
+        return ExitCode.Aborted;
+      }
+      if (!defaults.ok) return refuse(defaults.error, ExitCode.Failed);
+      params = request.resolve(defaults.value);
+    } else {
+      const last = lastRun(ports);
+      if (!last.ok) return refuse(last.error, ExitCode.InvalidOptions);
+      saved = last.value;
+      const resumed = request.resume(saved.params);
+      params = resumed.ok ? ok(resumed.value.params) : resumed;
+      filter = resumed.ok ? resumed.value.filter : undefined;
     }
-    if (!defaults.ok) return refuse(defaults.error, ExitCode.Failed);
-    const params = request.resolve(defaults.value);
     if (!params.ok) return refuse(params.error, ExitCode.InvalidOptions);
 
     const mode = runMode(params.value);
@@ -178,6 +213,9 @@ export async function runFleetUpdate(
       signal: flow.now,
       flow,
       params: params.value,
+      ...(saved === undefined
+        ? {}
+        : { resume: { saved, ...(filter === undefined ? {} : { filter }) } }),
       workspace: request.workspace,
       codev: request.codev,
       local: ports.local,
@@ -198,6 +236,11 @@ export async function runFleetUpdate(
         params: params.value,
       },
     });
+
+    // `--resume`: the update belongs to the run being picked up.
+    if (params.value.resume) {
+      emit(context, { kind: "step.end", step: "update", status: "skipped" });
+    }
 
     // Steps that will not run, said before the build starts. Only `--build-only`
     // can be taken back, by a `yes` to the question that follows the build.

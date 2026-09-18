@@ -45,6 +45,9 @@ export const NETWORK_JSON = {
   },
 };
 
+/** Revision the synthetic consumer sits on (`git rev-parse HEAD`). */
+export const CONSUMER_REV = "c".repeat(40);
+
 /** `nix-instantiate` of `var/generated/` in workspace `/ws`. */
 export function generatedScripts(
   hosts: unknown = HOSTS_JSON,
@@ -54,7 +57,12 @@ export function generatedScripts(
     match: ["nix-instantiate", "--eval", "--strict", "--json", `/ws/var/generated/${file}`],
     output: [{ stream: "stdout", line: JSON.stringify(value) }],
   });
-  return [read("hosts.nix", hosts), read("network.nix", network)];
+  // Revision read by the select step, for the report and a later `--resume`.
+  const head: CommandScript = {
+    match: ["git", "-C", "/ws", "rev-parse", "HEAD"],
+    output: [{ stream: "stdout", line: CONSUMER_REV }],
+  };
+  return [read("hosts.nix", hosts), read("network.nix", network), head];
 }
 
 /** Selection of the whole synthetic fleet from zone `ag`, as the select step returns it. */

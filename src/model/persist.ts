@@ -62,6 +62,9 @@ export interface PersistedState {
   schema: typeof PERSIST_SCHEMA;
   run?: RunInfo;
   commits: { repo: "dnf" | "consumer"; rev: string; message: string }[];
+
+  /** Revision built from, per repository: `--resume` reuses paths only if unchanged. */
+  revisions: { dnf?: string; consumer?: string };
   plan: string[][];
   steps: Record<StepId, PersistedStep>;
 
@@ -84,6 +87,7 @@ export function initialPersisted(): PersistedState {
   return {
     schema: PERSIST_SCHEMA,
     commits: [],
+    revisions: {},
     plan: [],
     steps,
     waves: [],
@@ -142,6 +146,9 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
         ...state,
         commits: [...state.commits, { repo: event.repo, rev: event.rev, message: event.message }],
       };
+
+    case "revision":
+      return { ...state, revisions: { ...state.revisions, [event.repo]: event.rev } };
 
     case "plan":
       return { ...state, plan: event.waves };

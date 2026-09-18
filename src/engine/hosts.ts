@@ -51,14 +51,31 @@ export class HostTable {
     selection: Selection,
   ) {
     for (const host of selection.hosts) {
+      // `--resume`: progress of the saved run, not a transition — the table
+      // starts where that run stopped (spec § État et reprise).
+      const restored = selection.restored?.get(host.name);
       this.entries.set(host.name, {
         name: host.name,
         profile: host.profile,
         zone: host.zone,
-        state: "pending",
+        state: restored?.state ?? "pending",
+        ...(restored?.path === undefined ? {} : { path: restored.path }),
+        ...(restored?.origin === undefined ? {} : { origin: restored.origin }),
         gateway: selection.gateways.has(host.name),
         local: host.name === selection.local,
         lost: false,
+      });
+    }
+
+    // Emitted once the table stands: the stream shows what was restored.
+    for (const entry of this.entries.values()) {
+      if (entry.state === "pending") continue;
+      emit(this.context, {
+        kind: "host.state",
+        host: entry.name,
+        state: entry.state,
+        ...(entry.path === undefined ? {} : { path: entry.path }),
+        ...(entry.origin === undefined ? {} : { origin: entry.origin }),
       });
     }
   }

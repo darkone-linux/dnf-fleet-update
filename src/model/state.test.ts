@@ -181,12 +181,15 @@ test("the built path and the origin survive later states", () => {
   expect(host.origin).toEqual(origin);
 });
 
-test("nominal records its plan and commits without touching the feed", () => {
+test("nominal records its plan, commits and revisions without touching the feed", () => {
   const events = loadScenario("nominal");
   expect(events.some((event) => event.kind === "plan")).toBe(true);
   expect(events.filter((event) => event.kind === "commit")).toHaveLength(2);
+  expect(events.filter((event) => event.kind === "revision")).toHaveLength(2);
 
-  const withoutStructured = events.filter((e) => e.kind !== "plan" && e.kind !== "commit");
+  const withoutStructured = events.filter(
+    (e) => e.kind !== "plan" && e.kind !== "commit" && e.kind !== "revision",
+  );
   const feed = (list: Event[]) =>
     list.reduce(reduce, initialState()).feed.map((item) => item.message);
   expect(feed(events)).toEqual(feed(withoutStructured));

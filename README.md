@@ -31,23 +31,29 @@ profiles and zones come from your configuration, nothing is hardcoded.
   session; an automatic rollback restores the previous system if the host stays
   unreachable.
 - 🔁 **Resumable.** Every event is written to `var/deployments/`; after an
-  interruption, `--resume` continues with the hosts left.
+  interruption, `--resume` picks up the hosts left, reusing what was built.
 - 🤖 **AI on call, on a leash.** AI (local or remote) analyses failures from deterministic
   evidence (`systemctl status`, `journalctl`, build logs) and can propose a
   repair. It only acts through the tool's own guarded actions (no free shell,
-  no free SSH) and every action is logged and confirmed.
+  no free SSH) and every action is logged and confirmed. Being built, see
+  [Status](#status).
 - 🖥️ **A terminal interface built for reading.** A feed of what happened,
   panels for what needs attention, and the state of every step and host at a
   glance. Open any host's logs without losing the overview.
-- ⏰ **Unattended too.** `--no-ui` produces plain text for a systemd timer,
-  with a Matrix report to the alert rooms and meaningful exit codes.
+- ⏰ **Unattended too.** `--no-ui` produces plain text for a systemd timer, with
+  meaningful exit codes (and, once built, a Matrix report to the alert rooms).
 - 🔒 **One run at a time.** A kernel `flock` that cannot be orphaned.
 
 ## Status
 
-**Alpha.** The interface is validated and runs today on recorded event streams;
-the engine behind it is being written. The options below are the specified
-contract, not yet implemented.
+**Alpha.** v0.3.0 updates, builds, tests and switches a real fleet end to end,
+from the DNF consumer project it runs in. Two parts of the contract below are
+specified and still being built — refused outright rather than half-done:
+
+| Not yet | Options | Today |
+|---|---|---|
+| Matrix report | `--send-report` | refused, exit `2` |
+| AI analysis and repair | `--ai-*` | accepted, no effect |
 
 ```bash
 nix develop            # or: nix-shell
@@ -55,8 +61,9 @@ just install
 just mock ai-repair    # nominal, offline, build-failure, ai-repair, abort
 ```
 
-The replay stops on every question and waits for your answer: the interactive
-path is exercised, not simulated.
+`just mock` replays a recorded event stream in the real interface. The replay
+stops on every question and waits for your answer: the interactive path is
+exercised, not simulated.
 
 ## How it works
 

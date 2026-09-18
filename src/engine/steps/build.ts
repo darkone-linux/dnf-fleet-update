@@ -14,6 +14,9 @@ export interface BuildOutcome {
   /** Evaluation warnings, deduplicated, for the report. */
   warnings: string[];
 
+  /** Hosts this run evaluated: `0` when a resume reused every path. */
+  evaluated: number;
+
   /** `nix-eval-jobs` failed and hosts got no result: nothing to decide per host. */
   evaluationFailed: boolean;
 }
@@ -71,7 +74,8 @@ async function buildOne(
 }
 
 async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<BuildOutcome> {
-  const names = hosts.all().map((host) => host.name);
+  // `--resume`: a host whose built path was reused is already `built`.
+  const names = hosts.all().flatMap((host) => (host.state === "pending" ? [host.name] : []));
   const total = names.length;
   const warnings = new Set<string>();
   const builds: Promise<void>[] = [];
@@ -80,6 +84,9 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
     done += 1;
     emit(context, { kind: "step.progress", step: "build", done, total });
   };
+
+  // Nothing to evaluate: a resume where every path was reused.
+  if (total === 0) return { warnings: [], evaluated: 0, evaluationFailed: false };
 
   for (const name of names) hosts.set(name, "building");
   log(context, "info", `evaluating ${total} hosts`);
@@ -130,7 +137,7 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
       settled();
     }
   }
-  return { warnings: [...warnings], evaluationFailed: failed && missing };
+  return { warnings: [...warnings], evaluated: total, evaluationFailed: failed && missing };
 }
 
 /** Failed hosts sharing a reason, in fleet order: one decision each. */
@@ -154,7 +161,11 @@ export async function build(
   presence: Presence,
 ): Promise<BuildOutcome | undefined> {
   const { params, flow } = context;
-  emit(context, { kind: "step.start", step: "build", total: hosts.all().length });
+
+  // `--resume` with every path reused: the build belongs to the run before.
+  const toBuild = hosts.all().filter((host) => host.state === "pending").length;
+  if (toBuild === 0) emit(context, { kind: "step.end", step: "build", status: "skipped" });
+  else emit(context, { kind: "step.start", step: "build", total: toBuild });
   presence.track(hosts.all().map((host) => host.name));
   presence.start();
 
@@ -164,7 +175,9 @@ export async function build(
   const all = hosts.all();
   const built = all.filter((host) => host.state === "built").length;
   const failed = all.filter((host) => host.state === "failed");
-  log(context, failed.length > 0 ? "warn" : "ok", `${built} builds ok, ${failed.length} failed`);
+  if (outcome.evaluated > 0 || failed.length > 0) {
+    log(context, failed.length > 0 ? "warn" : "ok", `${built} builds ok, ${failed.length} failed`);
+  }
   const { warnings } = outcome;
   if (warnings.length > 0) {
     const plural = warnings.length > 1 ? "s" : "";
@@ -175,8 +188,10 @@ export async function build(
   }
 
   // Nothing to deploy: one stop rather than a question per host. Failed as a
-  // whole, the evaluation already said why.
-  if (outcome.evaluationFailed || built === 0) {
+  // whole, the evaluation already said why. A resumed host already tested
+  // counts: it has its path, only its switch is left.
+  const ready = all.filter((host) => host.state === "built" || host.state === "tested").length;
+  if (outcome.evaluationFailed || ready === 0) {
     if (!outcome.evaluationFailed) log(context, "error", "no host built");
     flow.stop("stop");
   }
@@ -185,7 +200,7 @@ export async function build(
   if (!params.buildOnly) {
     for (const group of byReason(failed)) await decideFailure(context, hosts, group);
   }
-  endStep(context, "build", !flow.halt.aborted);
+  if (toBuild > 0) endStep(context, "build", !flow.halt.aborted);
 
   // An abort after the step, or a stop: nothing left to confirm.
   if (flow.ending !== undefined) return outcome;

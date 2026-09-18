@@ -59,11 +59,20 @@ test("an invalid option exits 2 on stderr, nothing run", () => {
   expect(result.stderr).toContain("--max-parallel: expected an integer >= 1");
 });
 
-test.each(["--resume", "--send-report"])("%s is refused until implemented", (option) => {
-  const result = run(["--no-ui", option], emptyWorkspace());
+test("--send-report is refused until implemented", () => {
+  const result = run(["--no-ui", "--send-report"], emptyWorkspace());
 
   expect(result.code).toBe(ExitCode.InvalidOptions);
-  expect(result.stderr).toContain(`${option}: not implemented yet`);
+  expect(result.stderr).toContain("--send-report: not implemented yet");
+});
+
+// Refused by the run itself, once the lock is held: the message goes through
+// the stream, like any other refusal.
+test("--resume with no deployment to resume: exit 2", () => {
+  const result = run(["--no-ui", "--resume"], emptyWorkspace());
+
+  expect(result.code).toBe(ExitCode.InvalidOptions);
+  expect(result.stdout).toContain("no deployment to resume");
 });
 
 test("--no-ui with the lock held elsewhere: text output, exit 4", () => {

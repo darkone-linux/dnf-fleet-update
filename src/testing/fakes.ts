@@ -22,6 +22,7 @@ import {
   type RunLock,
   type RunOptions,
   type RunStore,
+  type SavedRun,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
 import { DEFAULT_TIMEOUTS, DEFAULTS, type RunParams } from "../model/params.ts";
@@ -184,12 +185,25 @@ export class MemoryRunStore implements RunStore {
 export class MemoryDeploymentStore implements DeploymentStore {
   readonly runs: MemoryRunStore[] = [];
 
+  /** What `--resume` finds: set by a test, else the last run this store created. */
+  saved: SavedRun | undefined;
+
   create(mode: RunInfo["mode"]): MemoryRunStore {
     const id = `20260917T020000Z-${mode}`;
     if (this.runs.some((run) => run.id === id)) throw new Error(`run exists: ${id}`);
     const run = new MemoryRunStore(id);
     this.runs.push(run);
     return run;
+  }
+
+  last(): SavedRun | undefined {
+    if (this.saved !== undefined) return this.saved;
+    const run = this.runs.at(-1);
+    if (run === undefined) return undefined;
+    return {
+      id: run.id,
+      ...(run.state === undefined ? {} : { state: JSON.stringify(run.state) }),
+    };
   }
 }
 

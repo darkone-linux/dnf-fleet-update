@@ -90,6 +90,10 @@ export type Event =
   | (Base & { kind: "run.start"; run: RunInfo })
   | (Base & { kind: "commit"; repo: "dnf" | "consumer"; rev: string; message: string })
 
+  // Revision each repository holds once the update is done: what the run
+  // builds from, and what `--resume` compares its own trees against.
+  | (Base & { kind: "revision"; repo: "dnf" | "consumer"; rev: string })
+
   // Waves as planned at selection, presence ignored.
   | (Base & { kind: "plan"; waves: string[][] })
   | (Base & { kind: "host.add"; host: string; profile: string; zone: string })

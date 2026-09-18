@@ -26,6 +26,8 @@
 {"t":5600,"kind":"log","level":"ok","message":"commit consumer chore(update): full fleet"}
 {"t":5800,"kind":"step.end","step":"update","status":"ok"}
 {"t":5900,"kind":"step.start","step":"select"}
+{"t":6000,"kind":"revision","repo":"dnf","rev":"4f1c2a9"}
+{"t":6000,"kind":"revision","repo":"consumer","rev":"b83e07d"}
 {"t":6400,"kind":"log","level":"info","message":"current zone: ag (ipPrefix 10.0.10.0/24)"}
 {"t":6600,"kind":"log","level":"ok","message":"14 hosts selected, 5 waves"}
 {"t":6799,"kind":"plan","waves":[["hcs"],["gw-ag"],["nlt","gfx","fd-01","fd-02","vbox-test","vbox-umi"],["gw-cp","gw-lg","ms-a2"],["alt","fl-01","lenovo"]]}

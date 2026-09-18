@@ -13,11 +13,12 @@ import { FlockLock } from "./adapters/lock.ts";
 import { ProcessRunner } from "./adapters/process.ts";
 import { DirectoryStore } from "./adapters/store.ts";
 import { HELP } from "./cli/help.ts";
-import { parseCli, resolveParams } from "./cli/options.ts";
+import { parseCli, resolveParams, resumeParams } from "./cli/options.ts";
 import { RunFlow } from "./engine/flow.ts";
 import { type RunPorts, type RunRequest, runFleetUpdate } from "./engine/run.ts";
 import type { RunControl, RunSource } from "./model/events.ts";
 import { ExitCode } from "./model/exit-codes.ts";
+import type { RunParams } from "./model/params.ts";
 import { textLines } from "./output/text.ts";
 import { App } from "./ui/App.tsx";
 
@@ -54,7 +55,6 @@ if (command.kind === "invalid") exitWith(`${command.error} (see --help)`, ExitCo
 const { options } = command;
 
 // Planned, not implemented yet: refused rather than silently skipped.
-if (options.resume) exitWith("--resume: not implemented yet", ExitCode.InvalidOptions);
 if (options.sendReport) exitWith("--send-report: not implemented yet", ExitCode.InvalidOptions);
 
 // Workspace = cwd: the recipe and the systemd unit start in the consumer root.
@@ -75,6 +75,7 @@ const ports: RunPorts = {
       runDirectory = join(deployments, run.id);
       return run;
     },
+    last: () => store.last(),
   },
 };
 const request: RunRequest = {
@@ -82,6 +83,9 @@ const request: RunRequest = {
   codev: existsSync(join(workspace, "dnf", ".git")),
   version,
   resolve: (defaults) => resolveParams(options, defaults),
+
+  // `--resume`: the saved parameters lead, the options this run accepts override.
+  ...(options.resume ? { resume: (saved: RunParams) => resumeParams(saved, options) } : {}),
 };
 
 // SIGTERM (unit stop or timeout), SIGINT (`^C` under `--no-ui`), SIGHUP

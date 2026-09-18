@@ -5,6 +5,7 @@ import type { RunParams } from "../model/params.ts";
 import type { RunFlow } from "./flow.ts";
 import type { KnownErrors } from "./known-errors.ts";
 import type { EngineContext, LocalHost, RunStore } from "./ports.ts";
+import type { SavedState } from "./resume.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -22,8 +23,19 @@ export class QuestionQueue {
   }
 }
 
+/** `--resume`: what the last run left, and the `--on` of this invocation. */
+export interface ResumeContext {
+  saved: SavedState;
+
+  /** Narrows the resumed hosts; the saved selection itself is not touched. */
+  filter?: string;
+}
+
 export interface RunContext extends EngineContext {
   params: RunParams;
+
+  /** Present only under `--resume` (`params.resume`). */
+  resume?: ResumeContext;
 
   /** Consumer root, also the working directory. */
   workspace: string;

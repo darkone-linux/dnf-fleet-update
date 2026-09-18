@@ -26,6 +26,9 @@ test("nominal keeps plan, commits, waves and a finished run", () => {
   expect(state.schema).toBe(PERSIST_SCHEMA);
   expect(state.plan).toHaveLength(5);
   expect(state.commits.map((commit) => commit.repo)).toEqual(["dnf", "consumer"]);
+
+  // What a later `--resume` compares its own trees against.
+  expect(state.revisions).toEqual({ dnf: "4f1c2a9", consumer: "b83e07d" });
   expect(state.end).toEqual({ status: "done", exitCode: 0 });
   for (const step of STEPS) expect(state.steps[step].status).toBe("done");
 

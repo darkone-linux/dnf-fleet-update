@@ -1,6 +1,13 @@
 // Real `DeploymentStore`: run directories under `var/deployments/` (spec § État et reprise).
 
-import { appendFileSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   type DeploymentStore,
@@ -8,6 +15,7 @@ import {
   logFileName,
   RUN_FILE_NAME,
   type RunStore,
+  type SavedRun,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
 import type { PersistedState } from "../model/persist.ts";
@@ -57,6 +65,9 @@ export class DirectoryStore implements DeploymentStore {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
+  /** Names `create` gives: anything else in the directory is not a run of ours. */
+  private static readonly ID = /^\d{8}T\d{6}Z-(full|partial|resume)$/;
+
   create(mode: RunInfo["mode"]): RunStore {
     const id = `${runDate(this.now())}-${mode}`;
     const dir = join(this.root, id);
@@ -67,5 +78,27 @@ export class DirectoryStore implements DeploymentStore {
     mkdirSync(join(dir, "logs"));
     mkdirSync(join(dir, "gcroots"));
     return new RunDirectory(id, dir);
+  }
+
+  last(): SavedRun | undefined {
+    let entries: string[];
+    try {
+      entries = readdirSync(this.root);
+    } catch {
+      // No `var/deployments/` yet: nothing ever ran here.
+      return undefined;
+    }
+
+    // Names sort chronologically by construction (ISO 8601 basic, UTC).
+    const id = entries
+      .filter((name) => DirectoryStore.ID.test(name))
+      .sort()
+      .at(-1);
+    if (id === undefined) return undefined;
+    try {
+      return { id, state: readFileSync(join(this.root, id, "state.json"), "utf8") };
+    } catch {
+      return { id };
+    }
   }
 }

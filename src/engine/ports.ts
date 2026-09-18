@@ -117,9 +117,20 @@ export interface RunStore {
   outLink(host: string): string;
 }
 
+/** Last run directory, as `--resume` finds it (spec § État et reprise). */
+export interface SavedRun {
+  id: string;
+
+  /** Raw `state.json`; absent when the directory holds none. Validated by `resume.ts`. */
+  state?: string;
+}
+
 export interface DeploymentStore {
   /** Throws when the directory already exists: the lock makes that a bug. */
   create(mode: RunInfo["mode"]): RunStore;
+
+  /** Newest run directory, whatever it left; `undefined` when there is none. */
+  last(): SavedRun | undefined;
 }
 
 export type LockAttempt = { kind: "acquired" } | { kind: "busy"; holder: string };

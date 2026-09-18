@@ -41,6 +41,8 @@ export type SimKind =
   | "flake-update"
   | "realign"
   | "clean"
+  | "generate"
+  | "path-info"
   | "generated"
   | "eval"
   | "build"
@@ -128,6 +130,7 @@ export class SimFleet implements CommandRunner {
   readonly commits: { repo: Repo; message: string }[] = [];
   private readonly pending = { consumer: false, dnf: false };
   private readonly used = new Set<SimHook>();
+  private readonly collected = new Set<string>();
 
   constructor(
     private readonly clock: FakeClock,
@@ -146,6 +149,11 @@ export class SimFleet implements CommandRunner {
     }
     this.pending.consumer = options.dirty?.consumer ?? false;
     this.pending.dnf = options.dirty?.dnf ?? false;
+  }
+
+  /** The garbage collector took this path: `nix path-info` fails on it (`--resume`). */
+  collect(path: string): void {
+    this.collected.add(path);
   }
 
   host(name: string): HostSide {
@@ -255,6 +263,10 @@ export class SimFleet implements CommandRunner {
       };
     }
     if (program === "just" && argv[1] === "clean") return { kind: "clean", at };
+    if (program === "just" && argv[1] === "generate") return { kind: "generate", at };
+    if (program === "nix" && argv[1] === "path-info") {
+      return { kind: "path-info", detail: argv[2], at };
+    }
     if (program === "nix-instantiate") return { kind: "generated", detail: argv.at(-1), at };
     if (program === "nix-eval-jobs") return { kind: "eval", at };
     if (program === "nix" && argv[1] === "build") {
@@ -334,7 +346,12 @@ export class SimFleet implements CommandRunner {
         if (this.commits.some((commit) => commit.repo === "dnf")) this.pending.consumer = true;
         return ok();
       case "clean":
+      case "generate":
         return ok();
+
+      // `--resume`: a path the fleet built is in the store unless collected.
+      case "path-info":
+        return exit(this.collected.has(command.detail ?? "") ? 1 : 0);
       case "generated": {
         const file = command.detail ?? "";
         if (file.endsWith("/hosts.nix")) out(JSON.stringify(this.options.hostsJson ?? HOSTS_JSON));

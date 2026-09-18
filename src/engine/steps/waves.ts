@@ -62,7 +62,8 @@ async function runWave(
 
 /**
  * Opens the step, then runs the waves in plan order; offline hosts join the
- * next wave of the step (spec § Présence).
+ * next wave of the step (spec § Présence). `false`: no host to work on, the
+ * step is closed as skipped (`--resume`).
  */
 async function waves(
   context: RunContext,
@@ -70,10 +71,17 @@ async function waves(
   presence: Presence,
   selection: Selection,
   phase: Phase,
-): Promise<void> {
+): Promise<boolean> {
   const { flow } = context;
-  const eligible = (name: string) => hosts.get(name).state === startingState(context, phase);
-  presence.track(hosts.all().flatMap((host) => (eligible(host.name) ? [host.name] : [])));
+  const from = startingState(context, phase);
+  const eligible = (name: string) => hosts.get(name).state === from;
+  const ready = hosts.all().filter((host) => eligible(host.name));
+  if (ready.length === 0) {
+    log(context, "info", `no ${from} host: nothing to ${phase}`);
+    emit(context, { kind: "step.end", step: phase, status: "skipped" });
+    return false;
+  }
+  presence.track(ready.map((host) => host.name));
 
   // Empty waves are dropped at execution (spec § Vagues): the count only holds
   // the waves that can still run, so the last one reaches the total.
@@ -117,6 +125,7 @@ async function waves(
   const left = carried.filter(eligible);
   presence.untrack(left);
   if (left.length > 0 && !flow.halt.aborted) log(context, "warn", leftBehind(context, phase, left));
+  return true;
 }
 
 /** State a host must hold to enter the step: what the step before it left. */
@@ -137,8 +146,8 @@ export async function testWaves(
   presence: Presence,
   selection: Selection,
 ): Promise<void> {
-  await waves(context, hosts, presence, selection, "test");
-  endStep(context, "test", !context.flow.halt.aborted);
+  const ran = await waves(context, hosts, presence, selection, "test");
+  if (ran) endStep(context, "test", !context.flow.halt.aborted);
 }
 
 /**

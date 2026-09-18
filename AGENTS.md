@@ -201,7 +201,7 @@ in the same release train.
 | Surface | DNF side | Holds here |
 |---|---|---|
 | Launch | package: `bun run <out>/lib/fleet-update/src/main.tsx`; `just fleet-update`: same file from sources (codev) | entry stays `src/main.tsx`; no `bun build --compile` |
-| Packaged files | `package.json`, `tsconfig.json`, `src/`, `mock/`, production `node_modules` | a runtime read elsewhere → package first; `tests/cli.test.ts` runs outside the repo |
+| Packaged files | `package.json`, `tsconfig.json`, `src/`, production `node_modules` | a runtime read elsewhere → package first; `mock/` is development-only (`testing/replay.ts`); `tests/cli.test.ts` runs outside the repo |
 | Workspace | recipe `cd` and unit `WorkingDirectory` = consumer root | workspace = cwd; codev = `dnf/.git` present |
 | Fleet defaults | generator: `network.fleetUpdate.{deploymentOrder,criticalProfiles}` in `var/generated/network.nix`, only when declared, syntax checked | option > `network.fleetUpdate` > built-in default |
 | Unattended run | module: `fleet-update --no-ui <timer.extraArgs>`, `User` = project owner, `SuccessExitStatus=4`, `KillMode=mixed`, `TimeoutStartSec`, `restartIfChanged = false` | SIGTERM → children stopped, run `interrupted`; codes of `exit-codes.ts` |

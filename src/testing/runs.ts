@@ -4,11 +4,12 @@
 // Every run is checked against the invariants below before a test sees it: a
 // scenario asserts its outcome, never the bookkeeping shared by all runs.
 
-import { parseCli, resolveParams } from "../cli/options.ts";
+import { parseCli, resolveParams, resumeParams } from "../cli/options.ts";
 import { RunFlow } from "../engine/flow.ts";
 import { runFleetUpdate } from "../engine/run.ts";
 import type { Event, HostState } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
+import type { RunParams } from "../model/params.ts";
 import { type HostStatus, initialPersisted, persist } from "../model/persist.ts";
 import { initialState, type RunState, reduce } from "../model/state.ts";
 import {
@@ -44,6 +45,14 @@ export interface RunCase extends Omit<SimOptions, "hooks"> {
 
   /** Fake time moved per idle round. */
   stepMs?: number;
+
+  /**
+   * `--resume` of a previous run: its store, simulated fleet and clock carry
+   * over, so the new run finds the `state.json` the first one left. Fleet
+   * options (`behaviours`, `hooks`) stay those of that run: a behaviour that
+   * changes between them is a closure the test flips.
+   */
+  after?: RunOutcome;
 }
 
 export interface RunOutcome {
@@ -52,6 +61,9 @@ export interface RunOutcome {
 
   /** Undefined when the run was refused before its directory. */
   recorded: MemoryRunStore | undefined;
+
+  /** Every run directory, the resumed ones included. */
+  store: MemoryDeploymentStore;
   sim: SimFleet;
   clock: FakeClock;
   flow: RunFlow;
@@ -69,11 +81,12 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
   const cli = parseCli(runCase.argv ?? ["--no-ui"]);
   if (cli.kind !== "run") throw new Error(`argv: ${JSON.stringify(cli)}`);
 
-  const clock = new FakeClock();
+  const previous = runCase.after;
+  const clock = previous?.clock ?? new FakeClock();
   const flow = new RunFlow();
-  const sim = new SimFleet(clock, { ...runCase, hooks: runCase.hooks?.(flow) });
+  const sim = previous?.sim ?? new SimFleet(clock, { ...runCase, hooks: runCase.hooks?.(flow) });
   const events = new OpenQuestions(flow, runCase.answers);
-  const store = new MemoryDeploymentStore();
+  const store = previous?.store ?? new MemoryDeploymentStore();
   const lock = new FakeLock();
   const ports = {
     commands: sim,
@@ -92,15 +105,22 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     version: "0.0.0-test",
     resolve: (defaults: Parameters<typeof resolveParams>[1]) =>
       resolveParams(cli.options, defaults),
+    ...(cli.options.resume
+      ? { resume: (saved: RunParams) => resumeParams(saved, cli.options) }
+      : {}),
   };
 
+  // Directories the previous runs left: this run's own is the next one, and
+  // there is none when it was refused before creating it.
+  const before = store.runs.length;
   const exitCode = await drive(clock, runFleetUpdate(ports, request, flow), runCase.stepMs ?? 1000);
-  const recorded = store.runs[0];
+  const recorded = store.runs[before];
   const stream = events.events;
   const outcome: RunOutcome = {
     exitCode,
     events: stream,
     recorded,
+    store,
     sim,
     clock,
     flow,
