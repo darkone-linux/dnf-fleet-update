@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Event } from "../model/events.ts";
 import { initialPersisted, persist } from "../model/persist.ts";
+import { testParams } from "../testing/fakes.ts";
 import { formatDuration, renderReport } from "./report.ts";
 
 const EVENTS: Event[] = [
@@ -93,6 +94,68 @@ describe("renderReport", () => {
 
     expect(markdown).toContain("| switch | todo |  |");
     expect(markdown).not.toContain("| report |");
+  });
+
+  test("incidents: critical hosts left out, in test only after a stop", () => {
+    const done = renderReport({
+      state,
+      status: "done",
+      exitCode: 0,
+      durationMs: 65_040,
+      warnings: [],
+      knownErrors: [],
+    });
+    const stopped = renderReport({
+      state,
+      status: "failed",
+      exitCode: 1,
+      durationMs: 65_040,
+      warnings: [],
+      knownErrors: [],
+    });
+
+    // `nlt` failed too, but `laptop` is not one of the critical profiles.
+    expect(done.incident).toBe(
+      "## Critical hosts not deployed\n\n- gw-ag (gateway): error — some units failed\n",
+    );
+    expect(stopped.incident?.endsWith("## Hosts left in test\n\n- hcs\n- gw-ag\n")).toBe(true);
+  });
+
+  test("incidents: declared critical profiles, and nothing to raise", () => {
+    const laptops = persist(
+      { ...state, hosts: state.hosts.filter((host) => host.name === "nlt") },
+      {
+        t: 0,
+        kind: "run.start",
+        run: {
+          version: "0.3.0",
+          selection: "all",
+          mode: "full",
+          codev: false,
+          aiModel: "claude:opus@high",
+          maxParallel: 10,
+          params: testParams({ criticalProfiles: "laptop" }),
+        },
+      },
+    );
+    const input = {
+      status: "done" as const,
+      exitCode: 0 as const,
+      durationMs: 1000,
+      warnings: [],
+      knownErrors: [],
+    };
+
+    expect(renderReport({ ...input, state: laptops }).incident).toBe(
+      "## Critical hosts not deployed\n\n- nlt (laptop): failed — build failed: x | y\n",
+    );
+    const deployed = persist(laptops, {
+      t: 100,
+      kind: "host.state",
+      host: "nlt",
+      state: "deployed",
+    });
+    expect(renderReport({ ...input, state: deployed }).incident).toBeUndefined();
   });
 
   test("durations", () => {

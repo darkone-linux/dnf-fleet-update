@@ -2,6 +2,7 @@
 // markdown for `report.md`. Pure: built from the `state.json` fold.
 
 import type { ExitCode } from "../model/exit-codes.ts";
+import { DEFAULTS } from "../model/params.ts";
 import type { HostStatus, PersistedHost, PersistedState } from "../model/persist.ts";
 
 export interface ReportInput {
@@ -22,6 +23,9 @@ export interface ReportInput {
 export interface Report {
   lines: string[];
   markdown: string;
+
+  /** Incidents room message (spec § Rapport); absent when nothing needs one. */
+  incident?: string;
 }
 
 /** `27s`, `3m05s`, `1h02m`. */
@@ -65,6 +69,48 @@ function table(headers: readonly string[], rows: readonly string[][]): string[] 
     `| ${headers.map(() => "---").join(" | ")} |`,
     ...rows.map((row) => `| ${row.map(cell).join(" | ")} |`),
   ];
+}
+
+/** Host out of the new generation, whatever the run did: worth a separate message. */
+const INCIDENT_STATUSES: readonly HostStatus[] = [
+  "offline",
+  "excluded",
+  "failed",
+  "error",
+  "reverted",
+];
+
+const incidentLine = (host: PersistedHost) =>
+  `- ${host.name} (${host.profile}): ${host.status}${host.note === undefined ? "" : ` — ${host.note}`}`;
+
+/**
+ * Message of the incidents room (spec § Rapport): critical hosts the run left
+ * out, and, after a stop, hosts left in `test` — a reboot takes those back to
+ * their previous generation. `undefined`: nothing to raise.
+ */
+function incidentMessage(state: PersistedState, status: ReportInput["status"]): string | undefined {
+  const declared = state.run?.params?.criticalProfiles ?? DEFAULTS.criticalProfiles;
+  const critical = new Set(declared.split(":"));
+  const concerned = state.hosts.filter(
+    (host) => critical.has(host.profile) && INCIDENT_STATUSES.includes(host.status),
+  );
+
+  // A completed run leaves hosts in `test` only when asked to (`--skip-switch`).
+  const inTest =
+    status === "done"
+      ? []
+      : state.hosts.filter((host) => host.status === "tested" || host.status === "error");
+  if (concerned.length === 0 && inTest.length === 0) return undefined;
+
+  const parts: string[] = [];
+  if (concerned.length > 0) {
+    parts.push("## Critical hosts not deployed", "", ...concerned.map(incidentLine));
+  }
+  if (inTest.length > 0) {
+    if (parts.length > 0) parts.push("");
+    parts.push("## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`));
+  }
+  return `${parts.join("\n")}\n`;
 }
 
 export function renderReport(input: ReportInput): Report {
@@ -136,5 +182,10 @@ export function renderReport(input: ReportInput): Report {
   if (warnings.length > 0) {
     markdown.push("", "## Evaluation warnings", "", ...warnings.map((warning) => `- ${warning}`));
   }
-  return { lines, markdown: `${markdown.join("\n")}\n` };
+  const incident = incidentMessage(state, status);
+  return {
+    lines,
+    markdown: `${markdown.join("\n")}\n`,
+    ...(incident === undefined ? {} : { incident }),
+  };
 }
