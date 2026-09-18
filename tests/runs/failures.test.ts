@@ -8,7 +8,11 @@ import { simulateRun } from "../../src/testing/runs.ts";
 test("build failed, unattended: decided at the end of the build, excluded, the rest deployed", async () => {
   const run = await simulateRun({
     behaviours: { "srv-ag": { buildError: "builder for 'foo.drv' failed with exit code 1" } },
-    evalWarnings: ["'system' has been renamed", "'system' has been renamed"],
+    evalWarnings: [
+      "'system' has been renamed",
+      "'system' has been renamed",
+      "swap without randomEncryption",
+    ],
   });
 
   expect(run.exitCode).toBe(0);
@@ -20,12 +24,18 @@ test("build failed, unattended: decided at the end of the build, excluded, the r
       "error srv-ag: build failed: builder for 'foo.drv' failed with exit code 1",
       "warn 5 builds ok, 1 failed",
       "warn srv-ag: excluded",
+
+      // Deduplicated, then one line each: the count alone says nothing.
+      "warn 2 evaluation warnings (logs/build.log)",
+      "warn evaluation warning: 'system' has been renamed",
+      "warn evaluation warning: swap without randomEncryption",
     ]),
   );
   const report = run.recorded?.report ?? "";
   expect(report).toContain("| srv-ag | excluded | builder for 'foo.drv' failed with exit code 1 |");
   expect(report).toContain(
-    "## Evaluation warnings\n\n- evaluation warning: 'system' has been renamed\n",
+    "## Evaluation warnings\n\n- evaluation warning: 'system' has been renamed\n" +
+      "- evaluation warning: swap without randomEncryption\n",
   );
   expect(run.recorded?.logs.get("srv-ag.build")).toContain(
     "error: builder for 'foo.drv' failed with exit code 1",

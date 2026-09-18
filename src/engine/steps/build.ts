@@ -165,8 +165,13 @@ export async function build(
   const built = all.filter((host) => host.state === "built").length;
   const failed = all.filter((host) => host.state === "failed");
   log(context, failed.length > 0 ? "warn" : "ok", `${built} builds ok, ${failed.length} failed`);
-  if (outcome.warnings.length > 0) {
-    log(context, "warn", `${outcome.warnings.length} evaluation warnings (logs/build.log)`);
+  const { warnings } = outcome;
+  if (warnings.length > 0) {
+    const plural = warnings.length > 1 ? "s" : "";
+    log(context, "warn", `${warnings.length} evaluation warning${plural} (logs/build.log)`);
+
+    // One line each: a count alone says nothing of what to fix.
+    for (const warning of warnings) log(context, "warn", warning);
   }
 
   // Nothing to deploy: one stop rather than a question per host. Failed as a

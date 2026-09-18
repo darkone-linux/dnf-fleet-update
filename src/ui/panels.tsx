@@ -284,23 +284,33 @@ export function HostLogs({ host }: { host: HostRow }) {
 /** Bounded: step 4 builds every host at once, and the region must not eat the feed. */
 const ACTIVE_MAX_ROWS = 6;
 
+/** Gap kept after the longest host name, and width of the phase column. */
+const NAME_GAP = 2;
+const PHASE_WIDTH = 11;
+
 export function Active({ state, spinner }: { state: RunState; spinner: string }) {
   const hosts = activeHosts(state);
   if (hosts.length === 0) return null;
   const shown = hosts.slice(0, ACTIVE_MAX_ROWS);
 
+  // Measured on the whole fleet, not on the active rows: the phase column
+  // never slides as hosts come and go.
+  const nameWidth = Math.max(...state.hosts.map((host) => host.name.length)) + NAME_GAP;
+
   return (
     <AccentBlock accent={color.accentYellow}>
       {shown.map((host) => (
         <box key={host.name} flexDirection="row" backgroundColor={color.block}>
-          <text fg={color.accentYellow} bg={color.block}>
+          {/* `flexShrink` 0: an output line too long to wrap would otherwise
+              eat the padding of the columns before it. */}
+          <text fg={color.accentYellow} bg={color.block} flexShrink={0}>
             {`${spinner}  `}
           </text>
-          <text fg={color.host} bg={color.block}>
-            {host.name.padEnd(11)}
+          <text fg={color.host} bg={color.block} flexShrink={0}>
+            {host.name.padEnd(nameWidth)}
           </text>
-          <text fg={color.dim} bg={color.block}>
-            {(host.phase ?? "").padEnd(11)}
+          <text fg={color.white} bg={color.block} flexShrink={0}>
+            {(host.phase ?? "").padEnd(PHASE_WIDTH)}
           </text>
           <text fg={color.dim} bg={color.block}>
             {host.lastLine ?? ""}

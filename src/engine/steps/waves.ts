@@ -60,7 +60,10 @@ async function runWave(
   }
 }
 
-/** Waves in plan order; offline hosts join the next wave of the step (spec § Présence). */
+/**
+ * Opens the step, then runs the waves in plan order; offline hosts join the
+ * next wave of the step (spec § Présence).
+ */
 async function waves(
   context: RunContext,
   hosts: HostTable,
@@ -71,9 +74,19 @@ async function waves(
   const { flow } = context;
   const from = phase === "test" ? "built" : "tested";
   const eligible = (name: string) => hosts.get(name).state === from;
-  const total = selection.waves.length;
   presence.track(hosts.all().flatMap((host) => (eligible(host.name) ? [host.name] : [])));
 
+  // Empty waves are dropped at execution (spec § Vagues): the count only holds
+  // the waves that can still run, so the last one reaches the total.
+  const ahead = (position: number) =>
+    selection.waves
+      .slice(position)
+      .filter((names) => names.some((name) => eligible(name) && hosts.get(name).online !== false))
+      .length;
+
+  emit(context, { kind: "step.start", step: phase, total: ahead(0) });
+
+  let ran = 0;
   let carried: string[] = [];
   for (const [position, planned] of selection.waves.entries()) {
     if (flow.ending !== undefined) break;
@@ -86,10 +99,20 @@ async function waves(
       if (carried.length > 0)
         log(context, "warn", `offline, retried next wave: ${carried.join(", ")}`);
       if (members.length > 0) {
-        await runWave(context, hosts, presence, phase, { index: position + 1, total, members });
+        ran += 1;
+        await runWave(context, hosts, presence, phase, {
+          index: ran,
+          total: ran + ahead(position + 1),
+          members,
+        });
       }
     }
-    emit(context, { kind: "step.progress", step: phase, done: position + 1, total });
+    emit(context, {
+      kind: "step.progress",
+      step: phase,
+      done: ran,
+      total: ran + ahead(position + 1),
+    });
   }
 
   const left = carried.filter(eligible);
@@ -106,7 +129,6 @@ export async function testWaves(
   presence: Presence,
   selection: Selection,
 ): Promise<void> {
-  emit(context, { kind: "step.start", step: "test", total: selection.waves.length });
   await waves(context, hosts, presence, selection, "test");
   endStep(context, "test", !context.flow.halt.aborted);
 }
@@ -134,7 +156,6 @@ export async function switchWaves(
     }
   }
 
-  emit(context, { kind: "step.start", step: "switch", total: selection.waves.length });
   await waves(context, hosts, presence, selection, "switch");
   endStep(context, "switch", !flow.halt.aborted);
 }

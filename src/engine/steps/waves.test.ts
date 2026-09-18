@@ -116,10 +116,16 @@ describe("test waves", () => {
 
     await testWaves(context, hosts, presence, selection);
 
+    // Numbered on the waves that run: the wave left empty by an offline host
+    // is not one, and the total drops as hosts turn out unreachable.
     const waves = context.events.events.flatMap((event) =>
-      event.kind === "wave.start" ? [event.hosts.join(",")] : [],
+      event.kind === "wave.start" ? [`${event.index}/${event.total} ${event.hosts.join(",")}`] : [],
     );
-    expect(waves).toEqual(["hcs", "gw-ag", "srv-ag,pc-ag", "gw-cp"]);
+    expect(waves).toEqual(["1/6 hcs", "2/6 gw-ag", "3/5 srv-ag,pc-ag", "4/5 gw-cp"]);
+    expect(kinds(context.events.events, "step.progress").at(-1)).toMatchObject({
+      done: 4,
+      total: 4,
+    });
     expect(states()).toMatchObject({ "srv-ag": "tested", "lt-cp": "built" });
     expect(feed(context.events.events)).toContain("warn offline, not tested: lt-cp");
   });
