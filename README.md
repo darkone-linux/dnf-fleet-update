@@ -117,6 +117,7 @@ network:
 |---|---|
 | `--build-only` | stop after the build (interactive: ask whether to go on) |
 | `--skip-test` | no test step: switch wave by wave, straight from the build |
+| `--skip-switch` | no switch step: the run stops on what the test left |
 | `--resume` | resume the last unfinished deployment |
 | `--non-interactive` | no confirmation at key steps; guards only |
 

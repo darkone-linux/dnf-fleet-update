@@ -30,6 +30,7 @@ export interface CliOptions {
   consumerMessage?: string;
   buildOnly: boolean;
   skipTest: boolean;
+  skipSwitch: boolean;
   resume: boolean;
   nonInteractive: boolean;
   stopLoss: boolean;
@@ -75,6 +76,7 @@ const OPTIONS = {
   "consumer-message": text,
   "build-only": flag,
   "skip-test": flag,
+  "skip-switch": flag,
   resume: flag,
   "non-interactive": flag,
   "stop-loss": flag,
@@ -171,6 +173,7 @@ export function parseCli(argv: readonly string[]): CliCommand {
       consumerMessage: values["consumer-message"],
       buildOnly: values["build-only"] ?? false,
       skipTest: values["skip-test"] ?? false,
+      skipSwitch: values["skip-switch"] ?? false,
       resume: values.resume ?? false,
       nonInteractive: values["non-interactive"] ?? false,
       stopLoss: values["stop-loss"] ?? false,
@@ -210,6 +213,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
       (options.on === undefined ? "chore(update): full fleet" : `chore(update): ${options.on}`),
     buildOnly: options.buildOnly,
     skipTest: options.skipTest,
+    skipSwitch: options.skipSwitch,
     resume: false,
     interactive: !options.nonInteractive && !options.noUi,
     stopLoss: options.stopLoss,
@@ -255,6 +259,7 @@ export function resumeParams(saved: RunParams, options: CliOptions): Result<Resu
       resume: true,
       buildOnly: options.buildOnly,
       skipTest: options.skipTest,
+      skipSwitch: options.skipSwitch,
       interactive: !options.nonInteractive && !options.noUi,
       stopLoss: options.stopLoss,
       ui: !options.noUi,

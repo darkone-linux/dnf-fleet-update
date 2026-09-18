@@ -19,6 +19,7 @@ Update
 Flow
   --build-only                    stop after the build; interactive: ask to continue
   --skip-test                     no test step: switch wave by wave, straight from the build
+  --skip-switch                   no switch step: the run stops on what the test left
   --resume                        resume the last unfinished deployment
   --non-interactive               no confirmation (forced by --no-ui)
   --stop-loss                     non-interactive: a lost host stops the run and rolls the fleet back

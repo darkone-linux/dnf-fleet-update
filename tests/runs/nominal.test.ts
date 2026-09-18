@@ -58,6 +58,31 @@ test("--skip-test: test omitted, hosts copied then switched wave by wave", async
   expect(waves).toEqual(ALL.map((host) => `switch ${host}`));
 });
 
+test("--skip-switch: hosts left in test, the switch is never proposed", async () => {
+  const run = await simulateRun({ argv: ["--skip-switch"], answers: { build: "yes" } });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toEqual(every("tested"));
+  expect(run.ui.steps.switch.status).toBe("omitted");
+  expect(run.sim.count("profile")).toBe(0);
+
+  // The build still asks: the test runs. Nothing asks about the switch.
+  expect(run.events.flatMap((event) => (event.kind === "ask" ? [event.id] : []))).toEqual([
+    "build",
+  ]);
+});
+
+test("--skip-test --skip-switch: build only, without its question", async () => {
+  const run = await simulateRun({ argv: ["--skip-test", "--skip-switch"] });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toEqual(every("remaining"));
+  expect(run.ui.steps.test.status).toBe("omitted");
+  expect(run.ui.steps.switch.status).toBe("omitted");
+  expect(run.sim.count("copy")).toBe(0);
+  expect(run.events.some((event) => event.kind === "ask")).toBe(false);
+});
+
 test("interactive: build and switch confirmed, answers kept in state.json", async () => {
   const run = await simulateRun({
     argv: [],

@@ -45,6 +45,9 @@ export interface RunParams {
 
   /** Step 4 skipped: the switch goes wave by wave, nothing proved beforehand. */
   skipTest: boolean;
+
+  /** Step 5 skipped: the run stops on what the test left, without asking. */
+  skipSwitch: boolean;
   resume: boolean;
   interactive: boolean;
   stopLoss: boolean;

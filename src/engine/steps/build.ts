@@ -190,9 +190,10 @@ export async function build(
   // An abort after the step, or a stop: nothing left to confirm.
   if (flow.ending !== undefined) return outcome;
 
-  if (params.interactive) {
-    // `--skip-test`: the switch is what follows, and the only question it gets.
-    const next = params.skipTest ? "switch" : "test";
+  // Step the build leads to; none left, nothing to confirm and nothing to run.
+  const next = params.skipTest ? (params.skipSwitch ? undefined : "switch") : "test";
+
+  if (params.interactive && next !== undefined) {
     const question = params.buildOnly
       ? `Build done. Continue with the ${next}?`
       : `Build done. Start the ${next}?`;
@@ -200,7 +201,7 @@ export async function build(
       if (params.buildOnly) flow.finish();
       else flow.abort("after-wave");
     }
-  } else if (params.buildOnly) {
+  } else if (params.buildOnly || next === undefined) {
     flow.finish();
   }
   return outcome;

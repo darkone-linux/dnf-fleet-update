@@ -259,6 +259,7 @@ export function testParams(overrides: Partial<RunParams> = {}): RunParams {
     consumerMessage: "chore(update): full fleet",
     buildOnly: false,
     skipTest: false,
+    skipSwitch: false,
     resume: false,
     interactive: false,
     stopLoss: false,
