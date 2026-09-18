@@ -9,6 +9,18 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-18
+
+### Added
+
+- **engine**: Switch tested hosts at once, --skip-test for waves
+- **cli**: --skip-switch stops the run after the test
+
+### Fixed
+
+- **engine**: Nix copy sends unsigned paths, like just apply
+- **ui**: Wave numbering, active columns, eval warnings
+
 ## [0.2.0] - 2026-09-17
 
 ### ⚠ Breaking
@@ -80,5 +92,6 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/darkone-linux/dnf-fleet-update/releases/tag/v0.2.0
