@@ -13,7 +13,9 @@ test("run done: the summary reaches the warnings room, exit 0", async () => {
   expect(run.exitCode).toBe(ExitCode.Ok);
   expect(run.sim.messages.map((message) => message.room)).toEqual(["warnings"]);
   expect(run.sim.messages[0]?.body).toStartWith("**Fleet Update Report** (0)");
-  expect(run.sim.messages[0]?.body).toContain("- Hosts: 6 deployed");
+  expect(run.sim.messages[0]?.body).toContain(
+    "- Hosts: 6 deployed (hcs, gw-ag, srv-ag, pc-ag, gw-cp, lt-cp)",
+  );
   expect(run.feed).toContain("ok report sent to Matrix");
 });
 

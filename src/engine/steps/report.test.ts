@@ -82,6 +82,7 @@ describe("report", () => {
 
     expect(sent(context).map((message) => message.room)).toEqual(["incidents"]);
     expect(sent(context)[0]?.text).toContain("Error: hcs: build failed: disk full");
+    expect(sent(context)[0]?.text).toContain("- Hosts: 1 deployed (lt-cp), 1 failed (hcs)");
   });
 
   // Exit `10`: nothing is configured here, so the incidents room is not tried.

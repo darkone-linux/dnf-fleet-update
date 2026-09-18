@@ -87,11 +87,12 @@ const STATUSES: readonly { status: HostStatus; label: string; named: boolean }[]
   { status: "remaining", label: "not done", named: true },
 ];
 
-function summary(hosts: readonly PersistedHost[]): string {
+/** `nameAll`: the report names every host, the feed only those needing a look. */
+function summary(hosts: readonly PersistedHost[], nameAll = false): string {
   const parts = STATUSES.flatMap(({ status, label, named }) => {
     const matching = hosts.filter((host) => host.status === status);
     if (matching.length === 0) return [];
-    const names = named ? ` (${matching.map((host) => host.name).join(", ")})` : "";
+    const names = named || nameAll ? ` (${matching.map((host) => host.name).join(", ")})` : "";
     return [`${matching.length} ${label}${names}`];
   });
   return parts.length > 0 ? parts.join(", ") : "no host";
@@ -165,7 +166,7 @@ export function renderReport(input: ReportInput): Report {
       ? `Duration: ${duration}`
       : `Started at ${started}, duration: ${duration}`,
     `Options: ${mainOptions(run)}`,
-    `Hosts: ${summary(hosts)}`,
+    `Hosts: ${summary(hosts, true)}`,
   ];
   const commits = state.commits.map(
     (commit) =>
