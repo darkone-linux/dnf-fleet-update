@@ -85,6 +85,7 @@ describe("deploy identity", () => {
       "nix",
       "copy",
       "--substitute-on-destination",
+      "--no-check-sigs",
       "--to",
       "ssh-ng://nix@gw-ag",
       NEW,

@@ -105,7 +105,12 @@ export function ping(host: string, timeouts: Timeouts): CommandSpec {
   };
 }
 
-/** `nix copy` of a built closure, substitutes fetched by the host itself. */
+/**
+ * `nix copy` of a built closure, substitutes fetched by the host itself.
+ * `--no-check-sigs` like colmena: paths built here carry no signature, and the
+ * host daemon drops the check only when the client asks for it, trusted user
+ * or not.
+ */
 export function copyClosure(host: string, path: string, timeouts: Timeouts): CommandSpec {
   assertSafe("host", host, HOSTNAME);
   assertSafe("store path", path, STORE_PATH);
@@ -119,6 +124,7 @@ export function copyClosure(host: string, path: string, timeouts: Timeouts): Com
       "nix",
       "copy",
       "--substitute-on-destination",
+      "--no-check-sigs",
       "--to",
       `ssh-ng://nix@${host}`,
       path,

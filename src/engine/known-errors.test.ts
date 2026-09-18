@@ -16,6 +16,15 @@ describe("knownError", () => {
     );
   });
 
+  test("the missing signature names the trusted-users setting", () => {
+    const output =
+      "error: cannot add path '/nix/store/0gpc4z-element-web-wrapped-1.12.26' because it lacks a signature by a trusted key";
+
+    expect(knownError(output)).toBe(
+      "the deploy user is not trusted on that host: add nix to its nix.settings.trusted-users",
+    );
+  });
+
   test("an unknown failure stays unexplained", () => {
     expect(knownError("error: builder for '/nix/store/x.drv' failed")).toBeUndefined();
   });

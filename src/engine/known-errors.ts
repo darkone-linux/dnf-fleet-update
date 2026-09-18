@@ -15,6 +15,13 @@ const SIGNATURES: readonly Signature[] = [
     message:
       "nix-eval-jobs is not linked against the same Nix as the system: install the version matching nix --version",
   },
+  {
+    // `--no-check-sigs` is honoured for a trusted user only: elsewhere the
+    // host refuses every path built here, all of them unsigned.
+    match: /lacks a signature by a trusted key/,
+    message:
+      "the deploy user is not trusted on that host: add nix to its nix.settings.trusted-users",
+  },
 ];
 
 /** Plain message of the first signature found; `undefined` when none matches. */
