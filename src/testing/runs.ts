@@ -9,7 +9,7 @@ import { RunFlow } from "../engine/flow.ts";
 import type { LockHolder } from "../engine/ports.ts";
 import { runFleetUpdate } from "../engine/run.ts";
 import type { Event, HostState } from "../model/events.ts";
-import type { ExitCode } from "../model/exit-codes.ts";
+import { ExitCode } from "../model/exit-codes.ts";
 import type { RunParams } from "../model/params.ts";
 import { type HostStatus, initialPersisted, persist } from "../model/persist.ts";
 import { initialState, type RunState, reduce } from "../model/state.ts";
@@ -18,6 +18,7 @@ import {
   FakeClock,
   FakeLocalHost,
   FakeLock,
+  FakeMatrix,
   feed,
   MemoryDeploymentStore,
   type MemoryRunStore,
@@ -47,6 +48,9 @@ export interface RunCase extends Omit<SimOptions, "hooks"> {
   /** Lock busy at the start: the takeover belongs to the run (spec § Verrou). */
   lock?: { holder: LockHolder; diesOn?: readonly ("SIGTERM" | "SIGKILL")[] };
 
+  /** Every Matrix message refused, with this reason (`--send-report`, exit `3`). */
+  matrixRefusal?: string;
+
   /** Fake time moved per idle round. */
   stepMs?: number;
 
@@ -72,6 +76,9 @@ export interface RunOutcome {
   clock: FakeClock;
   flow: RunFlow;
 
+  /** What `--send-report` handed to the rooms. */
+  matrix: FakeMatrix;
+
   /** Interface fold of the stream. */
   ui: RunState;
   states: Record<string, HostState>;
@@ -92,6 +99,8 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
   const events = new OpenQuestions(flow, runCase.answers);
   const store = previous?.store ?? new MemoryDeploymentStore();
   const lock = new FakeLock(runCase.lock?.holder, runCase.lock?.diesOn);
+  const matrix = new FakeMatrix();
+  matrix.refusal = runCase.matrixRefusal;
   const ports = {
     commands: sim,
     clock,
@@ -102,6 +111,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     ),
     lock,
     store,
+    matrix,
   };
   const request = {
     workspace: "/ws",
@@ -128,6 +138,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     sim,
     clock,
     flow,
+    matrix,
     ui: stream.reduce(reduce, initialState()),
     states: {},
     statuses: {},
@@ -193,8 +204,11 @@ function invariants(outcome: RunOutcome, lock: FakeLock): string[] {
       "state.json = fold of the stream",
     );
     const status = end?.kind === "run.end" ? end.status : "none";
+
+    // `report.md` is written before the send: exit `3` is the delivery, not the run.
+    const reported = exitCode === ExitCode.ReportNotSent ? ExitCode.Ok : exitCode;
     check(
-      recorded.report?.includes(`- Status: ${status} (exit ${exitCode})`) === true,
+      recorded.report?.includes(`- Status: ${status} (exit ${reported})`) === true,
       "report.md written with the status",
     );
   }

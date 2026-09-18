@@ -1,6 +1,7 @@
 // Run orchestration (spec § Étapes): lock, parameters, prerequisites, the
 // steps in order, early ends, report, exit code.
 
+import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULT_TIMEOUTS, type RunParams, runMode } from "../model/params.ts";
 import { fail, ok, type Result } from "../model/result.ts";
@@ -18,14 +19,15 @@ import type {
   DeploymentStore,
   EventChannel,
   LocalHost,
+  MatrixSender,
   RunLock,
 } from "./ports.ts";
 import { Presence } from "./presence.ts";
 import { Recorder, recordedChannel } from "./recorder.ts";
-import { renderReport } from "./report.ts";
 import { parseSavedState, type SavedState } from "./resume.ts";
 import { rollbackFleet } from "./rollback.ts";
 import { build } from "./steps/build.ts";
+import { report } from "./steps/report.ts";
 import { select } from "./steps/select.ts";
 import { update } from "./steps/update.ts";
 import { switchWaves, testWaves } from "./steps/waves.ts";
@@ -37,6 +39,7 @@ export interface RunPorts {
   local: LocalHost;
   lock: RunLock;
   store: DeploymentStore;
+  matrix: MatrixSender;
 }
 
 export interface RunRequest {
@@ -59,6 +62,24 @@ export interface RunRequest {
    * (spec § État et reprise).
    */
   resumeFrom: (saved: RunParams) => Result<{ params: RunParams; filter?: string }>;
+}
+
+/** Last error of the feed: what ended the run, title of the incidents message. */
+class ErrorTrail implements EventChannel {
+  last: string | undefined;
+
+  constructor(private readonly inner: EventChannel) {}
+
+  emit(event: Event): void {
+    if (event.kind === "log" && event.level === "error") {
+      this.last = event.host === undefined ? event.message : `${event.host}: ${event.message}`;
+    }
+    this.inner.emit(event);
+  }
+
+  answer(id: string, signal?: AbortSignal): Promise<string> {
+    return this.inner.answer(id, signal);
+  }
 }
 
 /** Last run read and validated, or the reason to refuse the resume (exit `2`). */
@@ -229,10 +250,11 @@ export async function runFleetUpdate(
     const mode = runMode(params.value);
     const run = ports.store.create(mode);
     const recorder = new Recorder(run);
+    const errors = new ErrorTrail(recordedChannel(ports.events, recorder));
     const context: RunContext = {
       commands: ports.commands,
       clock: ports.clock,
-      events: recordedChannel(ports.events, recorder),
+      events: errors,
       signal: flow.now,
       flow,
       params: params.value,
@@ -242,6 +264,7 @@ export async function runFleetUpdate(
       workspace: request.workspace,
       codev: request.codev,
       local: ports.local,
+      matrix: ports.matrix,
       run,
       questions: new QuestionQueue(),
       known: new KnownErrors(),
@@ -304,19 +327,23 @@ export async function runFleetUpdate(
     const status = stopped ? "failed" : aborted ? "aborted" : "done";
     const exitCode = stopped ? ExitCode.Failed : aborted ? ExitCode.Aborted : ExitCode.Ok;
 
-    emit(context, { kind: "step.start", step: "report" });
-    const report = renderReport({
-      state: recorder.state,
-      status,
-      exitCode,
-      durationMs: ports.clock.now() - startedAt,
-      warnings: progress.warnings,
-      knownErrors: context.known.all(),
-    });
-    run.writeReport(report.markdown);
-    emit(context, { kind: "step.end", step: "report", status: "ok" });
-    emit(context, { kind: "run.end", status, exitCode, report: report.lines });
-    return exitCode;
+    const rendered = await report(
+      context,
+      {
+        state: recorder.state,
+        status,
+        exitCode,
+        durationMs: ports.clock.now() - startedAt,
+        warnings: progress.warnings,
+        knownErrors: context.known.all(),
+      },
+      errors.last,
+    );
+
+    // Run finished, report not delivered: exit `3`. A worse code keeps its say.
+    const code = rendered.sent || exitCode !== ExitCode.Ok ? exitCode : ExitCode.ReportNotSent;
+    emit(context, { kind: "run.end", status, exitCode: code, report: rendered.lines });
+    return code;
   } finally {
     ports.lock.release();
   }

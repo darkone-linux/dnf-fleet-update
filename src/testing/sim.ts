@@ -13,7 +13,7 @@ import type {
   RunOptions,
 } from "../engine/ports.ts";
 import type { FakeClock } from "./fakes.ts";
-import { HOSTS_JSON, NETWORK_JSON, ORIGIN_PATH, storePath } from "./fleet.ts";
+import { HOSTS_JSON, MATRIX_JSON, NETWORK_JSON, ORIGIN_PATH, storePath } from "./fleet.ts";
 
 export interface HostBehaviour {
   /** Answers ping and ssh; a function reads the fake clock (ms). Default: always. */
@@ -44,6 +44,7 @@ export type SimKind =
   | "generate"
   | "path-info"
   | "generated"
+  | "secret"
   | "eval"
   | "build"
   | "ping"
@@ -101,6 +102,10 @@ export interface SimOptions {
   updates?: { consumer?: boolean; dnf?: boolean };
   hostsJson?: unknown;
   networkJson?: unknown;
+
+  /** `null`: no `matrix.nix` in the workspace, as before `configure-alert-bot`. */
+  matrixJson?: unknown;
+  matrixToken?: string;
   evalWarnings?: string[];
 
   /** `nix-eval-jobs` fails as a whole: this error, no line, exit `1`. */
@@ -268,6 +273,7 @@ export class SimFleet implements CommandRunner {
       return { kind: "path-info", detail: argv[2], at };
     }
     if (program === "nix-instantiate") return { kind: "generated", detail: argv.at(-1), at };
+    if (program === "sops") return { kind: "secret", detail: argv.at(-1), at };
     if (program === "nix-eval-jobs") return { kind: "eval", at };
     if (program === "nix" && argv[1] === "build") {
       const host = /-nixos-system-([a-zA-Z0-9_-]+)\.drv\^\*$/.exec(argv[2] ?? "")?.[1];
@@ -357,9 +363,17 @@ export class SimFleet implements CommandRunner {
         if (file.endsWith("/hosts.nix")) out(JSON.stringify(this.options.hostsJson ?? HOSTS_JSON));
         else if (file.endsWith("/network.nix")) {
           out(JSON.stringify(this.options.networkJson ?? NETWORK_JSON));
+        } else if (file.endsWith("/matrix.nix")) {
+          if (this.options.matrixJson === null) return exit(1);
+          out(JSON.stringify(this.options.matrixJson ?? MATRIX_JSON));
         } else return exit(1);
         return ok();
       }
+
+      // `--send-report`: the bot token, as sops hands it over.
+      case "secret":
+        out(this.options.matrixToken ?? "syt_fake_token");
+        return ok();
       case "eval":
         return this.evaluate(spec, out, err);
       case "build":

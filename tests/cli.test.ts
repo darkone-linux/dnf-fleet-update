@@ -59,11 +59,13 @@ test("an invalid option exits 2 on stderr, nothing run", () => {
   expect(result.stderr).toContain("--max-parallel: expected an integer >= 1");
 });
 
-test("--send-report is refused until implemented", () => {
+// Accepted since the Matrix step exists: an empty workspace then fails on its
+// own state, never on the option.
+test("--send-report is an option of the run, not a refusal", () => {
   const result = run(["--no-ui", "--send-report"], emptyWorkspace());
 
-  expect(result.code).toBe(ExitCode.InvalidOptions);
-  expect(result.stderr).toContain("--send-report: not implemented yet");
+  expect(result.code).toBe(ExitCode.Failed);
+  expect(result.stderr).not.toContain("--send-report");
 });
 
 // Refused by the run itself, once the lock is held: the message goes through

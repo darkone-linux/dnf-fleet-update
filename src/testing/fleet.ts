@@ -45,6 +45,15 @@ export const NETWORK_JSON = {
   },
 };
 
+/** `var/generated/matrix.nix`, as `just configure-alert-bot` writes it. */
+export const MATRIX_JSON = {
+  matrix: {
+    bot: "alertbot",
+    warningsRoom: "!warnings:example.org",
+    incidentsRoom: "!incidents:example.org",
+  },
+};
+
 /** Revision the synthetic consumer sits on (`git rev-parse HEAD`). */
 export const CONSUMER_REV = "c".repeat(40);
 

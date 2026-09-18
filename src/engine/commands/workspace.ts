@@ -65,6 +65,17 @@ export function justGenerate(workspace: string, timeouts: Timeouts): CommandSpec
   };
 }
 
+/**
+ * Secret of the consumer on stdout (spec § Rapport): `sops` finds the age key
+ * of the user running the tool.
+ */
+export function readSecret(workspace: string, key: string, timeouts: Timeouts): CommandSpec {
+  return {
+    argv: ["sops", "-d", "--extract", `["${key}"]`, `${workspace}/usr/secrets/secrets.yaml`],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
 /** JSON on stdout, validated by `fleet.ts`. */
 export function readGenerated(
   workspace: string,

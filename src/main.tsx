@@ -10,6 +10,7 @@ import { LiveChannel } from "./adapters/channel.ts";
 import { SystemClock } from "./adapters/clock.ts";
 import { SystemHost } from "./adapters/localhost.ts";
 import { FlockLock } from "./adapters/lock.ts";
+import { MatrixClient } from "./adapters/matrix.ts";
 import { ProcessRunner } from "./adapters/process.ts";
 import { DirectoryStore } from "./adapters/store.ts";
 import { HELP } from "./cli/help.ts";
@@ -54,9 +55,6 @@ if (command.kind === "version") {
 if (command.kind === "invalid") exitWith(`${command.error} (see --help)`, ExitCode.InvalidOptions);
 const { options } = command;
 
-// Planned, not implemented yet: refused rather than silently skipped.
-if (options.sendReport) exitWith("--send-report: not implemented yet", ExitCode.InvalidOptions);
-
 // Workspace = cwd: the recipe and the systemd unit start in the consumer root.
 const workspace = process.cwd();
 const deployments = join(workspace, "var", "deployments");
@@ -69,6 +67,7 @@ const ports: RunPorts = {
   events: channel,
   local: new SystemHost(),
   lock: new FlockLock(join(deployments, "current.lock")),
+  matrix: new MatrixClient(),
   store: {
     create: (mode) => {
       const run = store.create(mode);
