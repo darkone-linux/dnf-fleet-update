@@ -1,7 +1,7 @@
 // Panels of the main screen. Presentation only: everything comes from RunState.
 
 import { TextAttributes } from "@opentui/core";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { STEP_LABELS, STEPS } from "../model/events.ts";
 import {
   activeHosts,
@@ -63,6 +63,30 @@ export function useSpinners(): { step: string; host: string } {
 }
 
 const FROZEN_FRAME = 4;
+
+/**
+ * Elapsed run time, ticking between events. Anchored on the engine clock, so a
+ * replay or a resumed run never drifts onto wall time. Frozen once ended.
+ */
+export function useElapsed(state: RunState): number {
+  const frozen = Boolean(process.env.FLEET_CAPTURE) || state.end !== undefined;
+  const [now, setNow] = useState(() => Date.now());
+  const anchor = useRef({ t: state.t, at: now });
+
+  useEffect(() => {
+    if (frozen) return;
+    const timer = setInterval(() => setNow(Date.now()), ELAPSED_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [frozen]);
+
+  if (anchor.current.t !== state.t) anchor.current = { t: state.t, at: Date.now() };
+  if (frozen) return state.t;
+
+  // Clamped: a tick predating the anchor would run the chronometer backwards.
+  return state.t + Math.max(0, now - anchor.current.at);
+}
+
+const ELAPSED_INTERVAL_MS = 500;
 
 function hostCell(shown: ShownState, spinner: string): string {
   const glyph = hostGlyph[shown];
@@ -340,7 +364,17 @@ export function Active({ state, spinner }: { state: RunState; spinner: string })
 /** Counter width: pads so the bars line up whatever `4/12` or `14/14` measures. */
 const COUNTER_WIDTH = 5;
 
-function StepRows({ state, spinner }: { state: RunState; spinner: string }) {
+function StepRows({
+  state,
+  spinner,
+  elapsed,
+}: {
+  state: RunState;
+  spinner: string;
+
+  /** Chronometer, right of the first row: the top right corner of the screen. */
+  elapsed: number;
+}) {
   return (
     <box flexDirection="column" flexShrink={0} paddingLeft={2} paddingRight={2}>
       {STEPS.map((step) => {
@@ -360,6 +394,11 @@ function StepRows({ state, spinner }: { state: RunState; spinner: string }) {
               {STEP_LABELS[step]}
             </text>
             <box flexGrow={1} backgroundColor={background} />
+            {step === STEPS[0] ? (
+              <text fg={color.magenta} bg={background}>
+                {clock(elapsed)}
+              </text>
+            ) : null}
             {row.total > 0 ? (
               <text fg={color.dim} bg={background}>
                 {`${progressBar(row.done, row.total)}  ${`${row.done}/${row.total}`.padStart(COUNTER_WIDTH)}`}
@@ -460,10 +499,12 @@ export function Sidebar({
   focused: boolean;
   band: boolean;
 }) {
+  const elapsed = useElapsed(state);
+
   return (
     <box flexDirection="column" flexShrink={0} width={SIDEBAR_WIDTH} backgroundColor={color.panel}>
       <box marginTop={1} />
-      <StepRows state={state} spinner={spinners.step} />
+      <StepRows state={state} spinner={spinners.step} elapsed={elapsed} />
       <HostRows
         state={state}
         spinner={spinners.host}

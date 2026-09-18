@@ -80,6 +80,9 @@ export interface RunEnd {
 }
 
 export interface RunState {
+  /** Engine clock of the last folded event: milliseconds since the run start. */
+  t: number;
+
   run?: RunInfo;
   steps: Record<StepId, StepRow>;
   hosts: HostRow[];
@@ -99,7 +102,7 @@ export function initialState(): RunState {
   for (const step of STEPS) {
     steps[step] = { status: "todo", done: 0, total: 0 };
   }
-  return { steps, hosts: [], feed: [] };
+  return { t: 0, steps, hosts: [], feed: [] };
 }
 
 const END_LEVELS: Record<RunEnd["status"], Level> = {
@@ -137,6 +140,10 @@ function patchAi(
 
 /** Applies one event. Unknown kinds are ignored: a newer engine must not break an older UI. */
 export function reduce(state: RunState, event: Event): RunState {
+  return { ...apply(state, event), t: event.t };
+}
+
+function apply(state: RunState, event: Event): RunState {
   switch (event.kind) {
     case "run.start":
       return { ...state, run: event.run };

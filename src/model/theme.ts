@@ -23,6 +23,8 @@ export const color = {
   accentBlue: "#5b9df9",
   accentYellow: "#e0b341",
 
+  magenta: "#d75fd7",
+
   ok: "#5fd75f",
   error: "#f97066",
   warn: "#e0b341",

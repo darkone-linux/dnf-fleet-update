@@ -47,6 +47,11 @@ test("every scenario is discoverable", () => {
   ]);
 });
 
+test("the fold carries the engine clock of the last event", () => {
+  expect(initialState().t).toBe(0);
+  expect(fold("nominal").t).toBe(27_300);
+});
+
 test("nominal deploys every reachable host", () => {
   const state = fold("nominal");
   expect(state.hosts).toHaveLength(14);

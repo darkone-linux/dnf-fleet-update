@@ -58,6 +58,18 @@ async function render(width: number): Promise<Setup> {
   return setup;
 }
 
+/** Foreground of the first span starting with `text`, as `rrggbb`. */
+function fgHex(setup: Setup, text: string): string | undefined {
+  return setup
+    .captureSpans()
+    .lines.flatMap((line) => line.spans)
+    .find((span) => span.text.startsWith(text))
+    ?.fg?.toInts()
+    .slice(0, 3)
+    .map((part) => part.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 test("host names aligned on the longest of the fleet, whatever the output line", async () => {
   const setup = await render(110);
 
@@ -74,19 +86,26 @@ test("host names aligned on the longest of the fleet, whatever the output line",
 
 test("the phase of an active host is white, the output line dim", async () => {
   const setup = await render(110);
-  const spans = setup.captureSpans().lines.flatMap((line) => line.spans);
 
-  /** Foreground of the first span starting with `text`, as `#rrggbb`. */
-  const hex = (text: string) =>
-    spans
-      .find((span) => span.text.startsWith(text))
-      ?.fg?.toInts()
-      .slice(0, 3)
-      .map((part) => part.toString(16).padStart(2, "0"))
-      .join("");
+  expect(fgHex(setup, "copy ")).toBe("ffffff");
+  expect(fgHex(setup, "copying path")).toBe("7a7a7a");
+});
 
-  expect(hex("copy ")).toBe("ffffff");
-  expect(hex("copying path")).toBe("7a7a7a");
+// Over an hour of run: the chronometer has to carry its hours column.
+const LONG_RUN: Event[] = [{ t: 3_725_000, kind: "step.start", step: "update" }];
+
+test("the chronometer rides the Update row, magenta, on the engine clock", async () => {
+  const setup = await testRender(<App preload={LONG_RUN} />, { width: 110, height: 30 });
+  current = setup;
+  await setup.waitForVisualIdle();
+
+  const row = setup
+    .captureCharFrame()
+    .split("\n")
+    .find((line) => line.includes("Update"));
+
+  expect(row).toContain("01:02:05");
+  expect(fgHex(setup, "01:02:05")).toBe("d75fd7");
 });
 
 // A wide run summary: the narrow footer has to give segments up.
