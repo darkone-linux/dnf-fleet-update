@@ -33,6 +33,13 @@ export interface FleetZone {
   gateway?: string;
 }
 
+/** One entry of `network.services`: a service, the host running it, its zone. */
+export interface FleetService {
+  name: string;
+  host: string;
+  zone: string;
+}
+
 /** `network.fleetUpdate`: only what the consumer declared. */
 export interface FleetDefaults {
   deploymentOrder?: string;
@@ -44,6 +51,7 @@ export interface FleetDefaults {
 export interface Fleet {
   hosts: FleetHost[];
   zones: FleetZone[];
+  services: FleetService[];
   domain: string;
   defaults: FleetDefaults;
 }
@@ -62,8 +70,15 @@ const hostSchema = z.object({
 
 const seconds = z.number().int().positive();
 
+const serviceSchema = z.object({
+  name: z.string().min(1),
+  host: z.string().regex(HOSTNAME),
+  zone: z.string().min(1),
+});
+
 const networkSchema = z.object({
   domain: z.string().min(1),
+  services: z.array(serviceSchema).nullish(),
   zones: z.record(
     z.string().min(1),
     z.object({
@@ -120,6 +135,11 @@ export function parseNetwork(json: unknown): Result<Omit<Fleet, "hosts">> {
       name,
       ipPrefix: orUndefined(zone.ipPrefix),
       gateway: orUndefined(zone.gateway?.hostname),
+    })),
+    services: (network.services ?? []).map((service) => ({
+      name: service.name,
+      host: service.host,
+      zone: service.zone,
     })),
     domain: network.domain,
     defaults: {

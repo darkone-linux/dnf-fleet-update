@@ -11,6 +11,7 @@ import {
 } from "../commands/workspace.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { describeFailure, execute, succeeded } from "../exec.ts";
+import { Fabric } from "../fabric.ts";
 import { type FleetHost, parseFleet } from "../fleet.ts";
 import { parseQuery, selectHosts } from "../query.ts";
 import { type Restored, restore, type SavedState, sameRevisions } from "../resume.ts";
@@ -26,6 +27,9 @@ export interface Selection {
 
   /** Zone gateways among the selected hosts: guarded when lost. */
   gateways: ReadonlySet<string>;
+
+  /** Cache topology the run was planned on: zone caches, substituter names. */
+  fabric: Fabric;
 
   /** The selected host this process runs on: no ssh, no copy, no rollback timer. */
   local?: string;
@@ -211,6 +215,7 @@ async function choose(context: RunContext): Promise<Selection | undefined> {
     hosts,
     waves,
     gateways: new Set(gateways),
+    fabric: new Fabric(fleet.value),
     local: names.has(hostname) ? hostname : undefined,
     ...(restored === undefined ? {} : { restored }),
   };

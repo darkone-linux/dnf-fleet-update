@@ -5,6 +5,7 @@
 // rollback timers firing on the fake clock. No argv script per test.
 
 import type { Phase } from "../engine/commands/host.ts";
+import { parseFleet } from "../engine/fleet.ts";
 import type {
   CommandResult,
   CommandRunner,
@@ -116,6 +117,8 @@ const WORKSPACE = "/ws";
 
 /** NAR size every path of the simulated store reports: 1 MiB. */
 export const SIM_PATH_SIZE = 1_048_576;
+
+const PUBLIC_CACHE = "https://cache.nixos.org";
 
 type Repo = "consumer" | "dnf";
 
@@ -236,6 +239,23 @@ export class SimFleet implements CommandRunner {
 
   private behaviour(name: string): HostBehaviour {
     return this.options.behaviours?.[name] ?? {};
+  }
+
+  /** What a host would substitute from: its zone harmonia, or the public cache. */
+  private substituter(name: string): string {
+    const fleet = parseFleet(
+      this.options.hostsJson ?? HOSTS_JSON,
+      this.options.networkJson ?? NETWORK_JSON,
+    );
+    if (!fleet.ok) return PUBLIC_CACHE;
+    const zone = fleet.value.hosts.find((host) => host.name === name)?.zone;
+    const server = fleet.value.services.find(
+      (service) => service.name === "harmonia" && service.zone === zone,
+    )?.host;
+    const ip = fleet.value.hosts.find((host) => host.name === server)?.ip;
+    return server === undefined || server === name || ip === undefined
+      ? PUBLIC_CACHE
+      : `http://${ip}:5000`;
   }
 
   private reachable(name: string): boolean {
@@ -450,9 +470,10 @@ export class SimFleet implements CommandRunner {
 
     switch (command.kind) {
       case "copy": {
-        // Counters of the report: the toplevel pushed, one path substituted.
+        // Counters of the report: the toplevel pushed, one path substituted —
+        // from the zone harmonia when the zone has one, else the public cache.
         err(`copying path '${storePath(name)}' to 'ssh-ng://nix@${name}'...`);
-        err(`copying path '${storePath(`${name}-dep`)}' from 'https://cache.nixos.org'...`);
+        err(`copying path '${storePath(`${name}-dep`)}' from '${this.substituter(name)}'...`);
         const code = behaviour.copyExit ?? 0;
         if (code !== 0) err(`error: cannot copy to '${name}'`);
         return exit(code);

@@ -58,6 +58,12 @@ export interface HostOrigin {
   profile: string;
 }
 
+/** Paths one substituter served to a host, named as the report prints it. */
+export interface PullSource {
+  source: string;
+  paths: number;
+}
+
 export type Level = "info" | "ok" | "warn" | "error";
 
 export interface RunInfo {
@@ -127,7 +133,7 @@ export type Event =
 
       /** Store that held the closure; the deployment machine until a builder is elected. */
       builder: string;
-      pulled: number;
+      pulled: PullSource[];
       pushed: number;
       pushedBytes: number;
     })

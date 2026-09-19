@@ -7,6 +7,7 @@ import {
   type Event,
   type HostOrigin,
   type HostState,
+  type PullSource,
   type RunInfo,
   STEPS,
   type StepId,
@@ -20,7 +21,7 @@ export const PERSIST_SCHEMA = 1;
 /** Copy counters of a host (spec § Rapport), as the report table shows them. */
 export interface HostCopy {
   builder: string;
-  pulled: number;
+  pulled: PullSource[];
   pushed: number;
   pushedBytes: number;
 }

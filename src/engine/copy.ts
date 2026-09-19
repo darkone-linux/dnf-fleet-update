@@ -1,22 +1,40 @@
 // Copy of a closure to one host (spec § Exécution, § Rapport): retried, then
 // counted — what the host substituted itself against what was pushed to it.
 
+import type { PullSource } from "../model/events.ts";
 import { copyClosure } from "./commands/host.ts";
 import { pathSizes } from "./commands/nix.ts";
 import { emit, log, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
+import type { Fabric } from "./fabric.ts";
 import { parseCopyPath, parsePathSize } from "./nix-output.ts";
 import type { OutputLine } from "./ports.ts";
 
 /** Distinct paths, so a retried copy counts a path once. */
 interface Tally {
-  pulled: Set<string>;
+  /** Substituter name (§ Fabric) -> paths it served. */
+  pulled: Map<string, Set<string>>;
   pushed: Set<string>;
 }
 
-function count(tally: Tally, line: string): void {
+function count(tally: Tally, fabric: Fabric, line: string): void {
   const copied = parseCopyPath(line);
-  if (copied !== undefined) tally[copied.direction].add(copied.path);
+  if (copied === undefined) return;
+  if (copied.direction === "pushed") {
+    tally.pushed.add(copied.path);
+    return;
+  }
+  const source = fabric.substituter(copied.store);
+  const paths = tally.pulled.get(source) ?? new Set<string>();
+  paths.add(copied.path);
+  tally.pulled.set(source, paths);
+}
+
+/** Biggest source first, then by name: the report reads top-down. */
+function sources(tally: Tally): PullSource[] {
+  return [...tally.pulled]
+    .map(([source, paths]) => ({ source, paths: paths.size }))
+    .sort((a, b) => b.paths - a.paths || a.source.localeCompare(b.source));
 }
 
 /** Keeps the `nix path-info` argv well under ARG_MAX on a fleet-sized closure. */
@@ -48,19 +66,20 @@ const ATTEMPTS = 3;
  */
 export async function copyToHost(
   context: RunContext,
+  fabric: Fabric,
   name: string,
   path: string,
   onLine: (line: OutputLine) => void,
 ): Promise<string | undefined> {
   const { params, flow } = context;
-  const tally: Tally = { pulled: new Set(), pushed: new Set() };
+  const tally: Tally = { pulled: new Map(), pushed: new Set() };
   let note: string | undefined;
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     const execution = await execute(context, copyClosure(name, path, params.timeouts), {
       signal: flow.halt,
       onLine: (line) => {
-        count(tally, line.line);
+        count(tally, fabric, line.line);
         onLine(line);
       },
     });
@@ -85,7 +104,7 @@ async function report(context: RunContext, name: string, tally: Tally): Promise<
     kind: "host.copy",
     host: name,
     builder: context.local.hostname(),
-    pulled: tally.pulled.size,
+    pulled: sources(tally),
     pushed: pushed.length,
     pushedBytes,
   });

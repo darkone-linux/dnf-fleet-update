@@ -62,19 +62,26 @@ export function parseEvalJob(line: string): EvalJob {
 /** Where a path went: pushed by the builder, or substituted by the host itself. */
 export type CopyDirection = "pushed" | "pulled";
 
-const COPY_PATH = /^copying path '([^']+)' (to|from) '/;
+const COPY_PATH = /^copying path '([^']+)' (to|from) '([^']+)'/;
+
+export interface CopiedPath {
+  path: string;
+  direction: CopyDirection;
+
+  /** Store the line names: the destination when pushed, a substituter when pulled. */
+  store: string;
+}
 
 /**
  * `copying path '…' to 'ssh-ng://…'` and `copying path '…' from '<substituter>'`
  * of `nix copy` (spec § Rapport). `undefined` on any other line.
  */
-export function parseCopyPath(
-  line: string,
-): { path: string; direction: CopyDirection } | undefined {
+export function parseCopyPath(line: string): CopiedPath | undefined {
   const match = COPY_PATH.exec(stripAnsi(line).trim());
   const path = match?.[1];
-  if (path === undefined || !STORE_PATH.test(path)) return undefined;
-  return { path, direction: match?.[2] === "to" ? "pushed" : "pulled" };
+  const store = match?.[3];
+  if (path === undefined || store === undefined || !STORE_PATH.test(path)) return undefined;
+  return { path, direction: match?.[2] === "to" ? "pushed" : "pulled", store };
 }
 
 const PATH_SIZE = /^\/nix\/store\/\S+\s+(\d+)$/;

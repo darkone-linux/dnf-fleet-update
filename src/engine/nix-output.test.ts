@@ -181,10 +181,12 @@ describe("copy counters", () => {
     expect(parseCopyPath(`copying path '${path}' to 'ssh-ng://nix@hcs'...`)).toEqual({
       path,
       direction: "pushed",
+      store: "ssh-ng://nix@hcs",
     });
     expect(parseCopyPath(`copying path '${path}' from 'https://cache.nixos.org'...`)).toEqual({
       path,
       direction: "pulled",
+      store: "https://cache.nixos.org",
     });
   });
 

@@ -1,6 +1,7 @@
 // Synthetic fleet of the engine tests: generator-shaped JSON, private and
 // documentation address ranges only.
 
+import { Fabric } from "../engine/fabric.ts";
 import { parseFleet } from "../engine/fleet.ts";
 import type { Selection } from "../engine/steps/select.ts";
 import type { CommandScript } from "./fakes.ts";
@@ -38,6 +39,14 @@ export const HOSTS_JSON = [
 
 export const NETWORK_JSON = {
   domain: "example.org",
+
+  // One harmonia per LAN zone: `gfx`-like in `ag`, the gateway in `cp`.
+  services: [
+    { name: "harmonia", host: "srv-ag", zone: "ag" },
+    { name: "nix-cache", host: "gw-ag", zone: "ag" },
+    { name: "harmonia", host: "gw-cp", zone: "cp" },
+    { name: "nix-cache", host: "gw-cp", zone: "cp" },
+  ],
   zones: {
     www: { ipPrefix: null, gateway: { hostname: "hcs" } },
     ag: { ipPrefix: "10.1", gateway: { hostname: "gw-ag" } },
@@ -70,6 +79,7 @@ export function fleetSelection(local?: string): Selection {
   const fleet = parseFleet(HOSTS_JSON, NETWORK_JSON);
   if (!fleet.ok) throw new Error(fleet.error);
   return {
+    fabric: new Fabric(fleet.value),
     hosts: fleet.value.hosts,
     waves: [["hcs"], ["gw-ag"], ["srv-ag"], ["pc-ag"], ["gw-cp"], ["lt-cp"]],
     gateways: new Set(["hcs", "gw-ag", "gw-cp"]),

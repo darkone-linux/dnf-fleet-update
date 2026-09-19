@@ -1,7 +1,7 @@
 // Run report (spec § Rapport et codes de sortie): short lines for `run.end`,
 // markdown for `report.md`. Pure: built from the `state.json` fold.
 
-import type { RunInfo } from "../model/events.ts";
+import type { PullSource, RunInfo } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULTS } from "../model/params.ts";
 import type { HostStatus, PersistedHost, PersistedState } from "../model/persist.ts";
@@ -86,6 +86,19 @@ export function formatBytes(bytes: number): string {
     unit += 1;
   }
   return `${value.toFixed(unit === 0 || value >= 100 ? 0 : 1)} ${UNITS[unit] ?? "B"}`;
+}
+
+/**
+ * `37 (harmonia ag)`, `44 (harmonia ag 37, cache.nixos.org 7)`, `0`: the total
+ * first, then who served it — a zone cache doing its job shows up here.
+ */
+export function formatPulled(sources: readonly PullSource[]): string {
+  const total = sources.reduce((sum, source) => sum + source.paths, 0);
+  if (sources.length === 0) return "0";
+  const first = sources[0];
+  if (sources.length === 1 && first !== undefined) return `${total} (${first.source})`;
+  const detail = sources.map((source) => `${source.source} ${source.paths}`).join(", ");
+  return `${total} (${detail})`;
 }
 
 /** Summary order: what worked, then what needs a look. */
@@ -229,7 +242,7 @@ export function renderReport(input: ReportInput): Report {
           [
             host.name,
             host.copy.builder,
-            String(host.copy.pulled),
+            formatPulled(host.copy.pulled),
             String(host.copy.pushed),
             formatBytes(host.copy.pushedBytes),
           ],

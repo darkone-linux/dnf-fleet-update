@@ -5,6 +5,7 @@ import type { HostOrigin, HostState } from "../model/events.ts";
 import { canTransition } from "../model/transitions.ts";
 import type { Phase } from "./commands/host.ts";
 import { emit, type RunContext } from "./context.ts";
+import type { Fabric } from "./fabric.ts";
 import type { Selection } from "./steps/select.ts";
 
 export interface HostEntry {
@@ -46,10 +47,14 @@ export interface StateDetail {
 export class HostTable {
   private readonly entries = new Map<string, HostEntry>();
 
+  /** Cache topology of the run: read by the copy counters and the publication. */
+  readonly fabric: Fabric;
+
   constructor(
     private readonly context: RunContext,
     selection: Selection,
   ) {
+    this.fabric = selection.fabric;
     for (const host of selection.hosts) {
       // `--resume`: progress of the saved run, not a transition — the table
       // starts where that run stopped (spec § État et reprise).

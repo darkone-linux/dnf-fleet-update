@@ -149,11 +149,17 @@ test("copy counters: one report line per host copied to", async () => {
   expect(counted?.map((host) => host.name)).toEqual(ALL.filter((host) => host !== "pc-ag"));
   expect(counted?.[0]?.copy).toEqual({
     builder: "pc-ag",
-    pulled: 1,
+
+    // Zone `www` has no harmonia: `hcs` can only substitute from the public cache.
+    pulled: [{ source: "cache.nixos.org", paths: 1 }],
     pushed: 1,
     pushedBytes: SIM_PATH_SIZE,
   });
-  expect(run.recorded?.report).toContain("| hcs | pc-ag | 1 | 1 | 1.0 MiB |");
+  expect(run.recorded?.report).toContain("| hcs | pc-ag | 1 (cache.nixos.org) | 1 | 1.0 MiB |");
+
+  // `srv-ag` runs the zone harmonia, so `gw-ag` pulls from it by name.
+  const served = counted?.find((host) => host.name === "gw-ag");
+  expect(served?.copy?.pulled).toEqual([{ source: "harmonia ag", paths: 1 }]);
 });
 
 test("--on, deployment host in the selection: no ssh, no copy, no timer for it", async () => {
