@@ -9,6 +9,26 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-19
+
+### ⚠ Breaking
+
+- **model**: Name the substituter behind each pulled path
+- **model**: Publication step, hosts ready before their wave
+- **engine**: --skip-test --skip-switch now publishes to the fleet
+
+### Added
+
+- **engine**: Copy counters in the report, copy retried twice
+- **engine**: Elect a builder per host from the fleet topology
+- **engine**: Delegate each build to its elected builder
+- **model**: Carry the elected builder, report builders and zones left out
+
+### Fixed
+
+- **engine**: A resumed host that holds its closure is deployable
+- **engine**: Elect a builder on the cpu, not on the board
+
 ## [0.3.1] - 2026-09-19
 
 ### Added
@@ -116,7 +136,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/darkone-linux/dnf-fleet-update/releases/tag/v0.2.0
