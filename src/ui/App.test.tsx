@@ -75,7 +75,7 @@ const ask: Event = {
   t: 1,
   kind: "ask",
   id: "build",
-  question: "Build done. Start the test?",
+  question: "Build done. Start publish and test?",
   options: [
     { value: "yes", label: "yes" },
     { value: "no", label: "no" },
@@ -172,7 +172,7 @@ test("q aborts while running, quits with the exit code once ended", async () => 
 test("an engine question takes only its options; ^C and s raise their dialog over it", async () => {
   const { setup, calls, emit, frame } = await start();
   emit(ask);
-  expect(await frame()).toContain("Build done. Start the test?");
+  expect(await frame()).toContain("Build done. Start publish and test?");
 
   act(() => setup.mockInput.pressEscape());
   await settle(setup);
@@ -182,13 +182,13 @@ test("an engine question takes only its options; ^C and s raise their dialog ove
   expect(await frame()).toContain("Abort the deployment?");
   act(() => setup.mockInput.pressEscape());
   await settle(setup);
-  expect(await frame()).toContain("Build done. Start the test?");
+  expect(await frame()).toContain("Build done. Start publish and test?");
 
   act(() => setup.mockInput.pressKey("s"));
   expect(await frame()).toContain("Stop the deployment now?");
   act(() => setup.mockInput.pressEscape());
   await settle(setup);
-  expect(await frame()).toContain("Build done. Start the test?");
+  expect(await frame()).toContain("Build done. Start publish and test?");
 
   act(() => setup.mockInput.pressArrow("right"));
   await setup.renderOnce();

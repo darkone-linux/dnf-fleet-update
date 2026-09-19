@@ -146,7 +146,7 @@ test("the same reason on several hosts, interactive: one question for all of the
   expect(questions).toEqual([
     "3 hosts failed: Go 1.25 is end-of-life (srv-ag, pc-ag, lt-cp)",
     "gw-cp failed: boom",
-    "Build done. Start the test?",
+    "Build done. Start publish and test?",
     "Test done. Switch 2 tested hosts?",
   ]);
   expect(run.statuses).toMatchObject({ hcs: "deployed", "lt-cp": "excluded", "gw-cp": "excluded" });

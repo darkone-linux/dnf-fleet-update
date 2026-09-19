@@ -299,14 +299,17 @@ export async function build(
   // An abort after the step, or a stop: nothing left to confirm.
   if (flow.ending !== undefined) return outcome;
 
-  // Activation step the build leads to; `undefined`: both skipped, the
-  // publication still runs — it activates nothing, so it is never proposed.
-  const next = params.skipTest ? (params.skipSwitch ? undefined : "switch") : "test";
+  // Activation step the build leads to; `undefined`: both skipped, no question
+  // and the publication runs alone.
+  const activation = params.skipTest ? (params.skipSwitch ? undefined : "switch") : "test";
 
-  if (params.interactive && next !== undefined) {
+  // Named with the publication: a `no` takes that one back too (`run.ts`).
+  const next = `publish and ${activation}`;
+
+  if (params.interactive && activation !== undefined) {
     const question = params.buildOnly
-      ? `Build done. Continue with the ${next}?`
-      : `Build done. Start the ${next}?`;
+      ? `Build done. Continue with ${next}?`
+      : `Build done. Start ${next}?`;
     if ((await ask(context, "build", question, YES_NO)) === "no") {
       if (params.buildOnly) flow.finish();
       else flow.abort("after-wave");
