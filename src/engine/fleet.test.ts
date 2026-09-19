@@ -21,7 +21,13 @@ const HOSTS = [
     ip: "10.1.1.1",
     colmena: { deployment: { tags: ["zone-ag"] } },
   },
-  { hostname: "gfx", profile: "admin-desktop", zone: "ag", ip: null },
+  {
+    hostname: "gfx",
+    profile: "admin-desktop",
+    zone: "ag",
+    ip: null,
+    features: { "auto-build": "ag", "build-farm": "ag" },
+  },
 ];
 
 const NETWORK = {
@@ -47,6 +53,7 @@ describe("hosts", () => {
           vpnIp: "100.64.0.2",
           arch: undefined,
           tags: ["online", "zone-www"],
+          features: [],
         },
         {
           name: "gw-ag",
@@ -56,6 +63,7 @@ describe("hosts", () => {
           vpnIp: undefined,
           arch: undefined,
           tags: ["zone-ag"],
+          features: [],
         },
         {
           name: "gfx",
@@ -65,6 +73,7 @@ describe("hosts", () => {
           vpnIp: undefined,
           arch: undefined,
           tags: [],
+          features: ["auto-build", "build-farm"],
         },
       ],
     });

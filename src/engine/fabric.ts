@@ -8,15 +8,22 @@ import type { Fleet, FleetHost } from "./fleet.ts";
 /** Services a substituter URL can belong to; anything else is not a fleet cache. */
 const CACHES = ["harmonia", "nix-cache"] as const;
 
+/** Host feature opting a host into building its own closure. */
+export const AUTO_BUILD = "auto-build";
+
 export class Fabric {
   private readonly byZone = new Map<string, string>();
   private readonly hosts: readonly FleetHost[];
   private readonly caches = new Map<string, string[]>();
+  private globalCache: string | undefined;
 
   constructor(fleet: Fleet) {
     this.hosts = fleet.hosts;
     for (const service of fleet.services) {
-      if (service.name === "harmonia") this.byZone.set(service.zone, service.host);
+      if (service.name === "harmonia") {
+        this.byZone.set(service.zone, service.host);
+        if (service.global) this.globalCache ??= service.host;
+      }
       if (!CACHES.some((name) => name === service.name)) continue;
       this.caches.set(service.host, [...(this.caches.get(service.host) ?? []), service.name]);
     }
@@ -25,6 +32,26 @@ export class Fabric {
   /** Host running `harmonia` in that zone; `undefined` when the zone has none. */
   harmonia(zone: string): string | undefined {
     return this.byZone.get(zone);
+  }
+
+  /**
+   * Builder elected for `host` (spec § Substituteurs et plomberie de build):
+   * itself under `auto-build`, else the harmonia of its zone, else the `global`
+   * harmonia, else `local`, the deployment machine. A builder must be able to
+   * serve what it builds, so it is a harmonia host — its store is the cache of
+   * its zone by construction.
+   *
+   * Pure, topology only: a builder unreachable or in failure falls back to the
+   * deployment machine at build time.
+   */
+  builder(host: FleetHost, local: string): string {
+    if (host.features.includes(AUTO_BUILD)) return host.name;
+    const elected = this.byZone.get(host.zone) ?? this.globalCache;
+    const builder = this.hosts.find((candidate) => candidate.name === elected);
+
+    // Undeclared architecture is the deployment host's: two undeclared match.
+    if (builder === undefined || builder.arch !== host.arch) return local;
+    return builder.name;
   }
 
   /**

@@ -40,11 +40,12 @@ export const HOSTS_JSON = [
 export const NETWORK_JSON = {
   domain: "example.org",
 
-  // One harmonia per LAN zone: `gfx`-like in `ag`, the gateway in `cp`.
+  // One harmonia per LAN zone: `gfx`-like in `ag`, the gateway in `cp`, which
+  // also serves the whole fleet over the tailnet (`global`).
   services: [
     { name: "harmonia", host: "srv-ag", zone: "ag" },
     { name: "nix-cache", host: "gw-ag", zone: "ag" },
-    { name: "harmonia", host: "gw-cp", zone: "cp" },
+    { name: "harmonia", host: "gw-cp", zone: "cp", global: true },
     { name: "nix-cache", host: "gw-cp", zone: "cp" },
   ],
   zones: {

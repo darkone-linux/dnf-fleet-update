@@ -5,12 +5,12 @@ import type { FleetHost } from "./fleet.ts";
 import { parseQuery, type QueryTerm, selectHosts } from "./query.ts";
 
 const FLEET: FleetHost[] = [
-  { name: "hcs", profile: "hcs", zone: "www", tags: ["zone-www"] },
-  { name: "gw-ag", profile: "gateway", zone: "ag", tags: ["zone-ag"] },
-  { name: "gfx", profile: "admin-desktop", zone: "ag", tags: ["zone-ag", "admin"] },
-  { name: "gw-cp", profile: "gateway", zone: "cp", tags: ["zone-cp"] },
-  { name: "fd-01", profile: "desktop", zone: "ag", tags: ["zone-ag"] },
-  { name: "fd-02", profile: "desktop", zone: "ag", tags: ["zone-ag"] },
+  { name: "hcs", profile: "hcs", zone: "www", tags: ["zone-www"], features: [] },
+  { name: "gw-ag", profile: "gateway", zone: "ag", tags: ["zone-ag"], features: [] },
+  { name: "gfx", profile: "admin-desktop", zone: "ag", tags: ["zone-ag", "admin"], features: [] },
+  { name: "gw-cp", profile: "gateway", zone: "cp", tags: ["zone-cp"], features: [] },
+  { name: "fd-01", profile: "desktop", zone: "ag", tags: ["zone-ag"], features: [] },
+  { name: "fd-02", profile: "desktop", zone: "ag", tags: ["zone-ag"], features: [] },
 ];
 
 function select(query: string): { names: string[]; unmatched: string[] } {

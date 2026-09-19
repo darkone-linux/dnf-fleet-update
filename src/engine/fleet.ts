@@ -25,6 +25,9 @@ export interface FleetHost {
 
   /** Colmena deployment tags, the `@tag` of `--on`. */
   tags: string[];
+
+  /** Fleet features declared on the host; `auto-build` elects it as its own builder. */
+  features: string[];
 }
 
 export interface FleetZone {
@@ -38,6 +41,9 @@ export interface FleetService {
   name: string;
   host: string;
   zone: string;
+
+  /** Served to the whole fleet over the tailnet, not to its zone alone. */
+  global: boolean;
 }
 
 /** `network.fleetUpdate`: only what the consumer declared. */
@@ -63,6 +69,7 @@ const hostSchema = z.object({
   ip: z.string().nullish(),
   vpnIp: z.string().nullish(),
   arch: z.string().nullish(),
+  features: z.record(z.string(), z.unknown()).nullish(),
   colmena: z
     .object({ deployment: z.object({ tags: z.array(z.string()).nullish() }).nullish() })
     .nullish(),
@@ -74,6 +81,7 @@ const serviceSchema = z.object({
   name: z.string().min(1),
   host: z.string().regex(HOSTNAME),
   zone: z.string().min(1),
+  global: z.boolean().nullish(),
 });
 
 const networkSchema = z.object({
@@ -113,6 +121,7 @@ export function parseHosts(json: unknown): Result<FleetHost[]> {
     vpnIp: orUndefined(host.vpnIp),
     arch: orUndefined(host.arch),
     tags: host.colmena?.deployment?.tags ?? [],
+    features: Object.keys(host.features ?? {}),
   }));
 
   const seen = new Set<string>();
@@ -140,6 +149,7 @@ export function parseNetwork(json: unknown): Result<Omit<Fleet, "hosts">> {
       name: service.name,
       host: service.host,
       zone: service.zone,
+      global: service.global ?? false,
     })),
     domain: network.domain,
     defaults: {

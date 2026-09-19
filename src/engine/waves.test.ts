@@ -9,6 +9,7 @@ const host = (name: string, profile: string, zone: string): FleetHost => ({
   profile,
   zone,
   tags: [],
+  features: [],
 });
 
 // The spec example fleet, in `hosts.nix` order.
