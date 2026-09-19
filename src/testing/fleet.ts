@@ -75,16 +75,32 @@ export function generatedScripts(
   return [read("hosts.nix", hosts), read("network.nix", network), head];
 }
 
-/** Selection of the whole synthetic fleet from zone `ag`, as the select step returns it. */
+/**
+ * Selection of the whole synthetic fleet from zone `ag`, as the select step
+ * returns it. Deployment machine `deployer` unless it is one of the hosts.
+ */
 export function fleetSelection(local?: string): Selection {
   const fleet = parseFleet(HOSTS_JSON, NETWORK_JSON);
   if (!fleet.ok) throw new Error(fleet.error);
+  const fabric = new Fabric(fleet.value);
+  const deployer = local ?? "deployer";
   return {
-    fabric: new Fabric(fleet.value),
+    fabric,
+    builders: new Map(fleet.value.hosts.map((host) => [host.name, fabric.builder(host, deployer)])),
     hosts: fleet.value.hosts,
     waves: [["hcs"], ["gw-ag"], ["srv-ag"], ["pc-ag"], ["gw-cp"], ["lt-cp"]],
     gateways: new Set(["hcs", "gw-ag", "gw-cp"]),
     local,
+  };
+}
+
+/** The same selection with every closure built here (`--no-distributed-build`). */
+export function centralSelection(local?: string): Selection {
+  const selection = fleetSelection(local);
+  const here = local ?? "deployer";
+  return {
+    ...selection,
+    builders: new Map(selection.hosts.map((host) => [host.name, here])),
   };
 }
 
@@ -128,6 +144,10 @@ export const HAPPY_HOSTS: CommandScript[] = [
 
   // A freshly built path sits in no cache: the pull fails and the push follows.
   { match: anywhere("--max-jobs 0"), exitCode: 1 },
+
+  // Delegated build on the elected builder, then the root it drops at the end.
+  { match: anywhere(".drv^*") },
+  { match: anywhere("rm -f") },
   { match: anywhere("dnf-maintenance") },
   { match: anywhere("ssh-ng://") },
   {

@@ -102,7 +102,8 @@ export async function deployHost(
   if (host.state === "built") {
     hosts.set(name, "copying");
     if (!host.local) {
-      const note = await serveHost(context, hosts.fabric, target, path, output("copy"));
+      const served = { target, path, builder: host.builder };
+      const note = await serveHost(context, hosts.fabric, served, output("copy"));
       if (flow.halt.aborted) return;
       if (note !== undefined) {
         return failedBeforeActivation(context, hosts, presence, name, note);

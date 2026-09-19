@@ -4,7 +4,13 @@ import { describe, expect, test } from "bun:test";
 import type { HostState } from "../../model/events.ts";
 import type { RunParams } from "../../model/params.ts";
 import { type CommandScript, fakeRunContext, feed } from "../../testing/fakes.ts";
-import { evalLine, fleetSelection, storePath } from "../../testing/fleet.ts";
+import {
+  anywhere,
+  centralSelection,
+  evalLine,
+  fleetSelection,
+  storePath,
+} from "../../testing/fleet.ts";
 import { HostTable } from "../hosts.ts";
 import { Presence } from "../presence.ts";
 import { build } from "./build.ts";
@@ -29,13 +35,20 @@ function evaluation(lines: string[]): CommandScript {
 
 function setup(
   commands: CommandScript[],
-  options: { params?: Partial<RunParams>; answers?: Record<string, string> } = {},
+  options: {
+    params?: Partial<RunParams>;
+    answers?: Record<string, string>;
+
+    /** Default: every closure built here, as `--no-distributed-build` would. */
+    delegated?: boolean;
+  } = {},
 ) {
+  const { delegated, ...rest } = options;
   const context = fakeRunContext({
-    ...options,
+    ...rest,
     commands: [{ match: ["ping"], exitCode: 0 }, ...commands, { match: ["nix", "build"] }],
   });
-  const hosts = new HostTable(context, fleetSelection());
+  const hosts = new HostTable(context, delegated ? fleetSelection() : centralSelection());
   const presence = new Presence(context, hosts);
   const states = () =>
     Object.fromEntries(hosts.all().map((host) => [host.name, host.state])) as Record<
@@ -209,6 +222,58 @@ describe("build", () => {
 
       expect({ interactive, ending: context.flow.ending }).toEqual({ interactive, ending: "done" });
     }
+  });
+
+  test("delegated: derivation to the elected builder, build there, nothing here", async () => {
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        { match: anywhere("ssh-ng://") },
+        { match: anywhere(".drv^*") },
+      ],
+      { delegated: true },
+    );
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    const sent = context.commands.calls.map(({ argv }) => argv.join(" "));
+    const drv = storePath("hcs", ".drv");
+
+    // Zone `www` has no harmonia: `hcs` is built by the global one.
+    expect(sent).toContainEqual(expect.stringContaining(`--to ssh-ng://nix@gw-cp ${drv}`));
+    expect(sent).toContainEqual(expect.stringContaining(`nix@gw-cp timeout`));
+    expect(hosts.get("hcs").state).toBe("built");
+    expect(hosts.get("hcs").builder).toBe("gw-cp");
+    expect(hosts.get("pc-ag").builder).toBe("srv-ag");
+
+    // Nothing was built here: every `nix build` went through a builder.
+    expect(sent.filter((line) => line.startsWith("nix build"))).toEqual([]);
+  });
+
+  test("builder unreachable: built here instead, warned, the host does not fail", async () => {
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        {
+          match: anywhere("nix@gw-cp"),
+          exitCode: 255,
+          output: [{ stream: "stderr", line: "ssh: connect to host gw-cp port 22: No route" }],
+        },
+        { match: anywhere("ssh-ng://") },
+        { match: anywhere(".drv^*") },
+      ],
+      { delegated: true },
+    );
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    expect(feed(context.events.events)).toContain(
+      "warn hcs: builder gw-cp: derivation not copied: exit 255: ssh: connect to host gw-cp port 22: No route, building here",
+    );
+    expect(hosts.get("hcs").state).toBe("built");
+    expect(hosts.get("hcs").builder).toBe("deployer");
   });
 
   test("nothing built: one error, no question per host, the run stops", async () => {

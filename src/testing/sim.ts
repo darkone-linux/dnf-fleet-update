@@ -51,6 +51,8 @@ export type SimKind =
   | "build"
   | "ping"
   | "copy"
+  | "derivation"
+  | "drop-links"
   | "pull"
   | "maintenance"
   | "origin"
@@ -64,7 +66,7 @@ export interface SimCommand {
   host?: string;
   phase?: Phase;
 
-  /** Repository, `on`/`off`, timer delay, profile path: per kind. */
+  /** Repository, `on`/`off`, timer delay, profile path, builder: per kind. */
   detail?: string;
   at: number;
 }
@@ -317,8 +319,12 @@ export class SimFleet implements CommandRunner {
     }
     if (program === "ping") return { kind: "ping", host: argv.at(-1), at };
 
-    const copyTarget = /ssh-ng:\/\/nix@([a-zA-Z0-9_-]+)/.exec(joined);
-    if (copyTarget) return { kind: "copy", host: copyTarget[1], at };
+    // Both carry `--to`; a push may also carry `--from`, the builder it pulls from.
+    const copyTarget = /--to ssh-ng:\/\/nix@([a-zA-Z0-9_-]+)/.exec(joined)?.[1];
+    if (copyTarget !== undefined) {
+      const kind = joined.includes("nix copy --derivation") ? "derivation" : "copy";
+      return { kind, host: copyTarget, at };
+    }
 
     // Host-side command: through ssh, or on the deployment host itself.
     const sshTarget = argv.find((arg) => arg.startsWith("nix@"));
@@ -326,6 +332,17 @@ export class SimFleet implements CommandRunner {
     const inner = sshTarget === undefined ? joined : (argv.at(-1) ?? "");
     if (host === undefined) throw new Error(`unsimulated command: ${joined}`);
 
+    // `--resume`: the path asked of the store that holds it, the builder.
+    if (inner.includes("nix path-info")) {
+      return { kind: "path-info", host, detail: /\/nix\/store\/\S+/.exec(inner)?.[0], at };
+    }
+
+    // Delegated build: named by the host built, run by the builder.
+    if (inner.includes(".drv^*")) {
+      const built = /-nixos-system-([a-zA-Z0-9_-]+)\.drv\^\*/.exec(inner)?.[1];
+      return { kind: "build", host: built, detail: host, at };
+    }
+    if (inner.includes("rm -f")) return { kind: "drop-links", host, at };
     if (inner.includes("dnf-maintenance")) {
       return {
         kind: "maintenance",
@@ -393,7 +410,12 @@ export class SimFleet implements CommandRunner {
         return ok();
 
       // `--resume`: a path the fleet built is in the store unless collected.
+      // Asked of a builder: unreachable is no answer, hence no reuse.
       case "path-info":
+        if (command.host !== undefined && !this.reachable(command.host)) {
+          err(`ssh: connect to host ${command.host} port 22: No route to host`);
+          return exit(255);
+        }
         return exit(this.collected.has(command.detail ?? "") ? 1 : 0);
 
       // Volume of the copy counters: every synthetic path weighs the same.
@@ -419,7 +441,7 @@ export class SimFleet implements CommandRunner {
       case "eval":
         return this.evaluate(spec, out, err);
       case "build":
-        return this.build(command.host ?? "", out, err);
+        return this.build(command, out, err);
       case "ping":
         return exit(this.reachable(command.host ?? "") ? 0 : 1);
       default:
@@ -452,12 +474,23 @@ export class SimFleet implements CommandRunner {
     return ok();
   }
 
-  private build(name: string, out: (line: string) => void, err: (line: string) => void) {
+  private build(command: SimCommand, out: (line: string) => void, err: (line: string) => void) {
+    const name = command.host ?? "";
+    const builder = command.detail;
+
+    // Delegated: the ssh to the builder fails like any other.
+    if (builder !== undefined && !this.reachable(builder)) {
+      err(`ssh: connect to host ${builder} port 22: No route to host`);
+      return exit(255);
+    }
     const error = this.behaviour(name).buildError;
     if (error !== undefined) {
       err(`@nix ${JSON.stringify({ action: "msg", level: 0, msg: `error: ${error}` })}`);
       return exit(1);
     }
+
+    // The result stays in the builder's store: what its zone then pulls from.
+    if (builder !== undefined) this.holding.add(builder);
     out(storePath(name));
     return ok(1000);
   }
@@ -503,6 +536,8 @@ export class SimFleet implements CommandRunner {
         this.holding.add(name);
         return ok();
       }
+      case "derivation":
+      case "drop-links":
       case "maintenance":
         return ok();
       case "origin":

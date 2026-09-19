@@ -22,6 +22,9 @@ export interface HostEntry {
 
   /** The deployment host itself: no ssh, no copy, no rollback timer. */
   local: boolean;
+
+  /** Store holding its closure: the elected builder, or the deployment machine. */
+  builder: string;
   note?: string;
   path?: string;
   origin?: HostOrigin;
@@ -55,6 +58,7 @@ export class HostTable {
     selection: Selection,
   ) {
     this.fabric = selection.fabric;
+    const deployer = context.local.hostname();
     for (const host of selection.hosts) {
       // `--resume`: progress of the saved run, not a transition — the table
       // starts where that run stopped (spec § État et reprise).
@@ -68,6 +72,7 @@ export class HostTable {
         ...(restored?.origin === undefined ? {} : { origin: restored.origin }),
         gateway: selection.gateways.has(host.name),
         local: host.name === selection.local,
+        builder: selection.builders.get(host.name) ?? deployer,
         lost: false,
       });
     }

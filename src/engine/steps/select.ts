@@ -1,6 +1,7 @@
 // Step 2, selection (spec § Étapes): fleet data, `--on`, current zone, wave plan.
 
 import { fail, ok, type Result } from "../../model/result.ts";
+import { hasPath, onHost } from "../commands/host.ts";
 import { pathInfo } from "../commands/nix.ts";
 import {
   type GeneratedFile,
@@ -30,6 +31,9 @@ export interface Selection {
 
   /** Cache topology the run was planned on: zone caches, substituter names. */
   fabric: Fabric;
+
+  /** Builder elected for each selected host (spec § Substituteurs), by host name. */
+  builders: ReadonlyMap<string, string>;
 
   /** The selected host this process runs on: no ssh, no copy, no rollback timer. */
   local?: string;
@@ -84,12 +88,13 @@ async function regenerate(context: RunContext): Promise<string | undefined> {
     : `generated files changed (${changes.length}): configuration moved, start a new run`;
 }
 
-/** Built paths still in the store, under the same revisions: what needs no build again. */
+/** Built paths still in a store, under the same revisions: what needs no build again. */
 async function reusable(
   context: RunContext,
   resume: { saved: SavedState },
   names: ReadonlySet<string>,
   revisions: Revisions,
+  builders: ReadonlyMap<string, string>,
 ): Promise<Map<string, Restored>> {
   const { saved } = resume;
   const restored = new Map<string, Restored>();
@@ -99,9 +104,18 @@ async function reusable(
     return restored;
   }
 
+  // Asked of the store that holds the path — its builder, not systematically
+  // the deployment machine (spec § État et reprise).
+  const local = context.local.hostname();
   for (const host of saved.hosts) {
     if (!names.has(host.name) || host.path === undefined) continue;
-    const execution = await execute(context, pathInfo(host.path, context.params.timeouts));
+    const { timeouts } = context.params;
+    const builder = builders.get(host.name) ?? local;
+    const spec =
+      builder === local
+        ? pathInfo(host.path, timeouts)
+        : onHost({ host: builder, local: false }, hasPath(host.path, timeouts), timeouts);
+    const execution = await execute(context, spec);
     if (context.signal.aborted) return restored;
     const entry = restore(host, succeeded(execution.result));
     if (entry !== undefined) restored.set(host.name, entry);
@@ -170,6 +184,15 @@ async function choose(context: RunContext): Promise<Selection | undefined> {
     emit(context, { kind: "host.add", host: host.name, profile: host.profile, zone: host.zone });
   }
 
+  // Election, once: the build delegates to it, the publication serves from it,
+  // and a resume asks it whether the path is still there.
+  const hostname = context.local.hostname();
+  const fabric = new Fabric(fleet.value);
+  const builders = new Map<string, string>();
+  for (const host of hosts) {
+    builders.set(host.name, params.distributedBuild ? fabric.builder(host, hostname) : hostname);
+  }
+
   // Waves come from the saved plan: a resume keeps the order its run started
   // with, so no zone to detect either.
   let zone: string | undefined;
@@ -201,7 +224,7 @@ async function choose(context: RunContext): Promise<Selection | undefined> {
 
   let restored: Map<string, Restored> | undefined;
   if (resume !== undefined) {
-    restored = await reusable(context, resume, names, revisions);
+    restored = await reusable(context, resume, names, revisions, builders);
     if (context.signal.aborted) return undefined;
     const build = hosts.length - restored.size;
     log(context, "info", `${restored.size} paths reused, ${build} to build`);
@@ -210,12 +233,12 @@ async function choose(context: RunContext): Promise<Selection | undefined> {
   const gateways = fleet.value.zones
     .map((candidate) => candidate.gateway)
     .filter((name): name is string => name !== undefined && names.has(name));
-  const hostname = context.local.hostname();
   return {
     hosts,
     waves,
     gateways: new Set(gateways),
-    fabric: new Fabric(fleet.value),
+    fabric,
+    builders,
     local: names.has(hostname) ? hostname : undefined,
     ...(restored === undefined ? {} : { restored }),
   };

@@ -105,29 +105,66 @@ export function ping(host: string, timeouts: Timeouts): CommandSpec {
   };
 }
 
+/** `sudo` resets the environment: the ssh options travel through `env`. */
+const sshEnv = (timeouts: Timeouts) => `NIX_SSHOPTS=${sshOptions(timeouts).join(" ")}`;
+
 /**
  * `nix copy` of a built closure, substitutes fetched by the host itself.
  * `--no-check-sigs` like colmena: paths built here carry no signature, and the
  * host daemon drops the check only when the client asks for it, trusted user
  * or not.
+ *
+ * `from`: the builder holding the closure, when it is not the local store
+ * (spec § Exécution, « depuis le store qui détient le chemin »).
  */
-export function copyClosure(host: string, path: string, timeouts: Timeouts): CommandSpec {
+export function copyClosure(
+  host: string,
+  path: string,
+  timeouts: Timeouts,
+  from?: string,
+): CommandSpec {
   assertSafe("host", host, HOSTNAME);
   assertSafe("store path", path, STORE_PATH);
+  if (from !== undefined) assertSafe("host", from, HOSTNAME);
 
-  // `sudo` resets the environment: the ssh options travel through `env`.
-  const sshOpts = `NIX_SSHOPTS=${sshOptions(timeouts).join(" ")}`;
+  const source = from === undefined ? [] : ["--from", `ssh-ng://nix@${from}`];
   return asNix(
     [
       "env",
-      sshOpts,
+      sshEnv(timeouts),
       "nix",
       "copy",
       "--substitute-on-destination",
       "--no-check-sigs",
+      ...source,
       "--to",
       `ssh-ng://nix@${host}`,
       path,
+    ],
+    timeouts.copy,
+    timeouts,
+  );
+}
+
+/**
+ * Derivation closure to an elected builder (spec § Substituteurs et plomberie
+ * de build): `--derivation` copies the `.drv` and its inputs, never its
+ * outputs — they are what the builder is about to produce.
+ */
+export function copyDerivation(builder: string, drvPath: string, timeouts: Timeouts): CommandSpec {
+  assertSafe("host", builder, HOSTNAME);
+  assertSafe("derivation", drvPath, STORE_PATH);
+  return asNix(
+    [
+      "env",
+      sshEnv(timeouts),
+      "nix",
+      "copy",
+      "--derivation",
+      "--no-check-sigs",
+      "--to",
+      `ssh-ng://nix@${builder}`,
+      drvPath,
     ],
     timeouts.copy,
     timeouts,
@@ -153,6 +190,47 @@ export function pullClosure(path: string, timeouts: Timeouts): HostCommand {
     `${shellJoin(["nix", "build", path, "--max-jobs", "0", "--out-link"])} "${PUBLISHED_LINK}"`,
   ].join(" && ");
   return { argv: ["sh", "-c", script], root: false, seconds: timeouts.publish };
+}
+
+/**
+ * GC roots of a delegated build, in the home of `nix`: one link per host built
+ * here, replaced by the next run and dropped at the end of this one. The
+ * deployment machine cannot root a path it does not have (spec § Exécution).
+ */
+const BUILD_LINKS = "$HOME/.local/state/fleet-update/build";
+
+/**
+ * Build of one host's closure on its elected builder, from the derivation
+ * copied beforehand: no re-evaluation, so the output path is the one the
+ * central evaluation named.
+ */
+export function buildDerivation(drvPath: string, host: string, timeouts: Timeouts): HostCommand {
+  assertSafe("derivation", drvPath, STORE_PATH);
+  assertSafe("host", host, HOSTNAME);
+  const build = shellJoin([
+    "nix",
+    "build",
+    `${drvPath}^*`,
+    "--log-format",
+    "internal-json",
+    "--print-out-paths",
+    "--out-link",
+  ]);
+  const script = [`mkdir -p "${BUILD_LINKS}"`, `${build} "${BUILD_LINKS}/${host}"`].join(" && ");
+  return { argv: ["sh", "-c", script], root: false, seconds: timeouts.build };
+}
+
+/** End of run: a builder keeps no root of what it built for others. */
+export function dropBuildLinks(hosts: readonly string[], timeouts: Timeouts): HostCommand {
+  for (const host of hosts) assertSafe("host", host, HOSTNAME);
+  const links = hosts.map((host) => `"${BUILD_LINKS}/${host}"`).join(" ");
+  return { argv: ["sh", "-c", `rm -f ${links}`], root: false, seconds: timeouts.ssh };
+}
+
+/** Exit `0`: the store of that host holds the path (`--resume`). */
+export function hasPath(path: string, timeouts: Timeouts): HostCommand {
+  assertSafe("store path", path, STORE_PATH);
+  return { argv: ["nix", "path-info", path], root: false, seconds: timeouts.ssh };
 }
 
 /** Two lines: `/run/current-system`, then the system profile target. */

@@ -189,18 +189,37 @@ test("activation failed on a reachable host, --stop-loss: the fleet rolls back",
 });
 
 test("copy failed on a reachable host: retried, then failed, excluded, not activated", async () => {
-  const run = await simulateRun({ behaviours: { "srv-ag": { copyExit: 1 } } });
+  // `hcs`: zone `www` has no cache of its own, so it is the host pushed to.
+  const run = await simulateRun({ behaviours: { hcs: { copyExit: 1 } } });
 
   expect(run.exitCode).toBe(0);
-  expect(run.statuses["srv-ag"]).toBe("excluded");
+  expect(run.statuses.hcs).toBe("excluded");
 
   // Spec § Exécution: the transfer is relaunched at most twice.
-  expect(run.sim.count("copy", "srv-ag")).toBe(3);
-  expect(run.sim.count("activate", "srv-ag")).toBe(0);
-  expect(run.recorded?.report).toContain("| srv-ag | excluded | copy failed: exit 1:");
+  expect(run.sim.count("copy", "hcs")).toBe(3);
+  expect(run.sim.count("activate", "hcs")).toBe(0);
+  expect(run.recorded?.report).toContain("| hcs | excluded | copy failed: exit 1:");
   expect(run.feed).toContain(
-    "warn srv-ag: copy failed: exit 1: error: cannot copy to 'srv-ag', retrying",
+    "warn hcs: copy failed: exit 1: error: cannot copy to 'hcs', retrying",
   );
+});
+
+test("a builder that is down: its hosts built here, warned, deployed all the same", async () => {
+  const run = await simulateRun({ behaviours: { "gw-cp": { reachable: false } } });
+
+  expect(run.exitCode).toBe(0);
+
+  // `gw-cp` builds zone `cp` and, being the global harmonia, `hcs` as well.
+  expect(run.statuses).toMatchObject({ hcs: "deployed", "lt-cp": "deployed", "gw-cp": "offline" });
+  expect(run.feed).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("warn hcs: builder gw-cp: derivation not copied:"),
+      expect.stringContaining("warn lt-cp: builder gw-cp: derivation not copied:"),
+    ]),
+  );
+
+  // Built here after the fallback, so pushed from here.
+  expect(run.sim.count("copy", "lt-cp")).toBe(1);
 });
 
 test("a copy that goes through is not retried", async () => {

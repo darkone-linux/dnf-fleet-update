@@ -82,9 +82,9 @@ test("hosts left in test are switched, nothing built, nothing tested again", asy
 
   // One activation each, the switch: the test of the saved run stands.
   expect(run.sim.count("activate") - tests).toBe(6);
-  // Three pushes in the first run (the zone caches, and the zone without one);
-  // the resume finds every path in place and copies nothing.
-  expect(run.sim.count("copy")).toBe(3);
+  // One push in the first run, for the zone without a cache of its own; the
+  // resume finds every path in place and copies nothing.
+  expect(run.sim.count("copy")).toBe(1);
 });
 
 test("published without activating, then resumed: waves copy nothing", async () => {
@@ -98,9 +98,9 @@ test("published without activating, then resumed: waves copy nothing", async () 
   expect(run.ui.steps.build.status).toBe("skipped");
   expect(run.ui.steps.publish.status).toBe("skipped");
 
-  // Three pushes in the first run, none in this one: the hosts hold their
-  // closure, the waves only activate it.
-  expect(run.sim.count("copy")).toBe(3);
+  // One push in the first run, none in this one: the hosts hold their closure,
+  // the waves only activate it.
+  expect(run.sim.count("copy")).toBe(1);
 });
 
 test("--on narrows the resumed hosts without touching the saved selection", async () => {

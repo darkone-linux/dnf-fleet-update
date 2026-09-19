@@ -67,8 +67,8 @@ test("gateway lost, unattended: its rollback waited for, then the run stops", as
 
   // Attempts, then `ssh` + `activation` for the timer and its rollback.
   expect(run.clock.now()).toBeGreaterThanOrEqual(ATTEMPTS_END + 330_000);
-  // Published before the waves; the run stopped before its activation.
-  expect(run.sim.count("copy", "srv-ag")).toBe(1);
+  // `srv-ag` builds its zone: it holds its own closure, nothing was copied to it.
+  expect(run.sim.count("copy", "srv-ag")).toBe(0);
   expect(run.sim.count("activate", "srv-ag")).toBe(0);
   run.sim.tick();
   expect(run.sim.host("gw-ag").system).toBe(ORIGIN_PATH);

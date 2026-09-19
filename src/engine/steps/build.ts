@@ -2,12 +2,20 @@
 // per host as soon as its derivation is known, presence pinged meanwhile.
 
 import type { HostState } from "../../model/events.ts";
+import {
+  buildDerivation,
+  copyDerivation,
+  dropBuildLinks,
+  onHost,
+  type Target,
+} from "../commands/host.ts";
 import { buildHost, evalHosts } from "../commands/nix.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { decideFailure, type Hosts } from "../decisions.ts";
 import { describeFailure, execute, succeeded } from "../exec.ts";
 import type { HostEntry, HostTable } from "../hosts.ts";
 import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
+import type { CommandSpec } from "../ports.ts";
 import type { Presence } from "../presence.ts";
 import { endStep } from "./step.ts";
 
@@ -29,17 +37,26 @@ const HOLDS_ITS_PATH: readonly HostState[] = ["built", "ready", "tested"];
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
-async function buildOne(
-  context: RunContext,
-  hosts: HostTable,
-  name: string,
-  job: { drvPath: string; outPath: string },
-): Promise<void> {
+interface Job {
+  drvPath: string;
+  outPath: string;
+}
+
+interface Built {
+  /** Printed by `--print-out-paths`; the evaluated output path otherwise. */
+  path?: string;
+
+  /** Set: the build failed, this is its reason. */
+  note?: string;
+  durationMs: number;
+}
+
+/** One `nix build`, here or on a builder: its log to the host, its reason on failure. */
+async function runBuild(context: RunContext, name: string, spec: CommandSpec): Promise<Built> {
   let lastError: string | undefined;
   const output = (line: string) =>
     emit(context, { kind: "host.output", host: name, phase: "build", line });
 
-  const spec = buildHost(job.drvPath, context.run.outLink(name), context.params.timeouts);
   const execution = await execute(context, spec, {
     signal: context.flow.halt,
     onLine: ({ stream, line }) => {
@@ -63,17 +80,84 @@ async function buildOne(
       }
     },
   });
+  const { durationMs } = execution.result;
+  if (succeeded(execution.result)) {
+    return {
+      path: execution.stdout.find((line) => STORE_PATH.test(line.trim()))?.trim(),
+      durationMs,
+    };
+  }
+  return { note: lastError ?? describeFailure(execution), durationMs };
+}
+
+/**
+ * Build on the elected builder (spec § Substituteurs et plomberie de build):
+ * derivation copied over, built there, result left in its store for the
+ * publication. `undefined`: the builder could not, and said why.
+ */
+async function delegate(
+  context: RunContext,
+  name: string,
+  builder: string,
+  job: Job,
+): Promise<Built | undefined> {
+  const { timeouts } = context.params;
+  const give = (note: string): undefined => {
+    log(context, "warn", `builder ${builder}: ${note}, building here`, name);
+    return undefined;
+  };
+
+  const copied = await execute(context, copyDerivation(builder, job.drvPath, timeouts), {
+    signal: context.flow.halt,
+    onLine: ({ line }) => emit(context, { kind: "host.output", host: name, phase: "build", line }),
+  });
+  if (context.flow.halt.aborted) return undefined;
+  if (!succeeded(copied.result)) {
+    return give(`derivation not copied: ${describeFailure(copied)}`);
+  }
+
+  const target: Target = { host: builder, local: false };
+  const built = await runBuild(
+    context,
+    name,
+    onHost(target, buildDerivation(job.drvPath, name, timeouts), timeouts),
+  );
+  if (context.flow.halt.aborted || built.note === undefined) return built;
+  return give(built.note);
+}
+
+async function buildOne(
+  context: RunContext,
+  hosts: HostTable,
+  name: string,
+  job: Job,
+): Promise<void> {
+  const entry = hosts.get(name);
+  const here = context.local.hostname();
+  let built: Built | undefined;
+
+  if (entry.builder !== here) {
+    built = await delegate(context, name, entry.builder, job);
+    if (context.flow.halt.aborted) return;
+
+    // Whatever the builder failed on, the deployment machine takes over: no
+    // host fails because of the delegation (spec § Erreurs et réparations).
+    if (built === undefined) entry.builder = here;
+  }
+  built ??= await runBuild(
+    context,
+    name,
+    buildHost(job.drvPath, context.run.outLink(name), context.params.timeouts),
+  );
 
   // Halted: the build was cancelled, the host is left as it is.
   if (context.flow.halt.aborted) return;
-  if (succeeded(execution.result)) {
-    const printed = execution.stdout.find((line) => STORE_PATH.test(line.trim()))?.trim();
-    hosts.set(name, "built", { path: printed ?? job.outPath });
-    log(context, "ok", `build ok ${seconds(execution.result.durationMs)}`, name);
+  if (built.note === undefined) {
+    hosts.set(name, "built", { path: built.path ?? job.outPath });
+    log(context, "ok", `build ok ${seconds(built.durationMs)}`, name);
   } else {
-    const note = lastError ?? describeFailure(execution);
-    hosts.set(name, "failed", { note });
-    log(context, "error", `build failed: ${note}`, name);
+    hosts.set(name, "failed", { note: built.note });
+    log(context, "error", `build failed: ${built.note}`, name);
   }
 }
 
@@ -224,4 +308,28 @@ export async function build(
     flow.finish();
   }
   return outcome;
+}
+
+/**
+ * End of run: every builder drops the roots it took for this run. Bounded
+ * garbage anyway — one link per host built there, replaced by the next run.
+ */
+export async function clearBuildLinks(context: RunContext, hosts: HostTable): Promise<void> {
+  const { timeouts } = context.params;
+  const here = context.local.hostname();
+  const built = new Map<string, string[]>();
+  for (const host of hosts.all()) {
+    if (host.builder === here || host.path === undefined) continue;
+    built.set(host.builder, [...(built.get(host.builder) ?? []), host.name]);
+  }
+
+  for (const [builder, names] of built) {
+    const target: Target = { host: builder, local: false };
+    const spec = onHost(target, dropBuildLinks(names, timeouts), timeouts);
+    const execution = await execute(context, spec);
+    if (context.signal.aborted) return;
+    if (!succeeded(execution.result)) {
+      log(context, "warn", `builder ${builder}: build links left behind`);
+    }
+  }
 }

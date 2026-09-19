@@ -292,6 +292,7 @@ export function testParams(overrides: Partial<RunParams> = {}): RunParams {
     buildOnly: false,
     skipTest: false,
     skipSwitch: false,
+    distributedBuild: true,
     resume: false,
     interactive: false,
     stopLoss: false,

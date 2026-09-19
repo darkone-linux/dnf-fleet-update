@@ -36,6 +36,23 @@ test("unattended: every host tested then switched, recorded, reported, exit 0", 
   expect(run.recorded?.report).toContain("| test | 6/6 | lt-cp |");
   expect(run.feed).toContain("info switching 6 tested hosts");
   expect(run.ui.steps.switch).toMatchObject({ status: "done", done: 6, total: 6 });
+
+  // Two builders, each dropping at the end the roots it took for the run.
+  expect(run.sim.count("drop-links")).toBe(2);
+});
+
+test("--no-distributed-build: everything built here, each zone cache seeded", async () => {
+  const run = await simulateRun({ argv: ["--no-ui", "--no-distributed-build"] });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toEqual(every("deployed"));
+  expect(run.sim.count("derivation")).toBe(0);
+  expect(run.sim.count("drop-links")).toBe(0);
+
+  // Nothing is in a fleet store to start with: the two zone caches are pushed
+  // to, and so is the zone without one; their zones then pull in LAN.
+  for (const name of ["hcs", "srv-ag", "gw-cp"]) expect(run.sim.count("copy", name)).toBe(1);
+  for (const name of ["gw-ag", "pc-ag", "lt-cp"]) expect(run.sim.count("copy", name)).toBe(0);
 });
 
 test("--skip-test: test omitted, hosts copied then switched wave by wave", async () => {
@@ -45,10 +62,12 @@ test("--skip-test: test omitted, hosts copied then switched wave by wave", async
   expect(run.statuses).toEqual(every("deployed"));
   expect(run.ui.steps.test.status).toBe("omitted");
 
-  // Published before the waves: only the zone caches, and the zone that has
-  // none, are pushed to — the rest of each zone pulls in LAN.
-  for (const name of ["hcs", "srv-ag", "gw-cp"]) expect(run.sim.count("copy", name)).toBe(1);
-  for (const name of ["gw-ag", "pc-ag", "lt-cp"]) expect(run.sim.count("copy", name)).toBe(0);
+  // Published before the waves: each zone cache built the closures of its zone,
+  // so only `hcs`, whose zone has no cache, is pushed to.
+  expect(run.sim.count("copy", "hcs")).toBe(1);
+  for (const name of ALL.filter((host) => host !== "hcs")) {
+    expect(run.sim.count("copy", name)).toBe(0);
+  }
   for (const name of ALL) {
     expect(run.sim.host(name).history).toEqual([
       "profile set",
@@ -88,7 +107,7 @@ test("--skip-test --skip-switch: fleet published, nothing activated, no question
   // The fleet ends holding its closures: a later run activates without copying.
   expect(Object.values(run.states)).toEqual(Array(6).fill("ready"));
   expect(run.statuses).toEqual(every("remaining"));
-  expect(run.sim.count("copy")).toBe(3);
+  expect(run.sim.count("copy")).toBe(1);
   expect(run.sim.count("profile")).toBe(0);
 
   // The publication activates nothing: it is never proposed.
@@ -156,17 +175,18 @@ test("copy counters: one report line per host copied to", async () => {
   const run = await simulateRun({ local: "pc-ag" });
   const counted = run.recorded?.state?.hosts.filter((host) => host.copy !== undefined);
 
-  // The deployment host is never copied to, so it has no counters.
-  expect(counted?.map((host) => host.name)).toEqual(ALL.filter((host) => host !== "pc-ag"));
+  // No counters for the deployment host, never copied to, nor for the two zone
+  // caches, which built what their zone runs.
+  expect(counted?.map((host) => host.name)).toEqual(["hcs", "gw-ag", "lt-cp"]);
   expect(counted?.[0]?.copy).toEqual({
-    builder: "pc-ag",
-
-    // Zone `www` has no harmonia: `hcs` can only substitute from the public cache.
+    // Zone `www` has no harmonia: built by the global one, pushed from there,
+    // and `hcs` can only substitute the rest from the public cache.
+    builder: "gw-cp",
     pulled: [{ source: "cache.nixos.org", paths: 1 }],
     pushed: 1,
     pushedBytes: SIM_PATH_SIZE,
   });
-  expect(run.recorded?.report).toContain("| hcs | pc-ag | 1 (cache.nixos.org) | 1 | 1.0 MiB |");
+  expect(run.recorded?.report).toContain("| hcs | gw-cp | 1 (cache.nixos.org) | 1 | 1.0 MiB |");
 
   // `srv-ag` runs the zone harmonia, so `gw-ag` pulls from it by name.
   const served = counted?.find((host) => host.name === "gw-ag");

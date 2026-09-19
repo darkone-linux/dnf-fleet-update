@@ -49,6 +49,9 @@ export interface RunParams {
 
   /** Step 5 skipped: the run stops on what the test left, without asking. */
   skipSwitch: boolean;
+
+  /** False (`--no-distributed-build`): every closure built on the deployment machine. */
+  distributedBuild: boolean;
   resume: boolean;
   interactive: boolean;
   stopLoss: boolean;

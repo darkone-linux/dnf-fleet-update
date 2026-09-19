@@ -25,7 +25,7 @@ import { Presence } from "./presence.ts";
 import { Recorder, recordedChannel } from "./recorder.ts";
 import { parseSavedState, type SavedState } from "./resume.ts";
 import { rollbackFleet } from "./rollback.ts";
-import { build } from "./steps/build.ts";
+import { build, clearBuildLinks } from "./steps/build.ts";
 import { publish } from "./steps/publish.ts";
 import { report } from "./steps/report.ts";
 import { select } from "./steps/select.ts";
@@ -181,6 +181,9 @@ async function steps(context: RunContext, progress: Progress) {
       await switchWaves(context, hosts, presence, selection);
   } finally {
     await presence.stop();
+
+    // Roots the builders took for this run, dropped whatever ended it.
+    if (!context.signal.aborted) await clearBuildLinks(context, hosts);
   }
   if (flow.ending === "rollback" && !context.signal.aborted) {
     await rollbackFleet(context, hosts, selection);

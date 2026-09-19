@@ -31,8 +31,7 @@ async function serve(
   const note = await serveHost(
     context,
     hosts.fabric,
-    { host: name, local: false },
-    path,
+    { target: { host: name, local: false }, path, builder: host.builder },
     ({ line }) => emit(context, { kind: "host.output", host: name, phase: "publish", line }),
   );
   if (context.flow.halt.aborted) return true;

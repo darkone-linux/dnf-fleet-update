@@ -64,13 +64,14 @@ async function push(
   context: RunContext,
   name: string,
   path: string,
+  from: string | undefined,
   onLine: (line: OutputLine) => void,
 ): Promise<string | undefined> {
   const { params, flow } = context;
   let note: string | undefined;
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
-    const execution = await execute(context, copyClosure(name, path, params.timeouts), {
+    const execution = await execute(context, copyClosure(name, path, params.timeouts, from), {
       signal: flow.halt,
       onLine,
     });
@@ -81,20 +82,31 @@ async function push(
   return note;
 }
 
+export interface Served {
+  /** Host to serve, and whether it is the deployment machine itself. */
+  target: Target;
+
+  /** Toplevel to put in its store. */
+  path: string;
+
+  /** Store holding it: a push comes from there when it is not the local one. */
+  builder: string;
+}
+
 /**
  * Puts the closure on the host: pulled by the host from its own substituters
- * first, pushed from the local store when nothing can serve it (spec
+ * first, pushed from the store that holds it when nothing can serve it (spec
  * § Publication). Emits the copy counters of the host. Returns the failure
  * note, `undefined` when the host holds the closure or a halt cut the work.
  */
 export async function serveHost(
   context: RunContext,
   fabric: Fabric,
-  target: Target,
-  path: string,
+  served: Served,
   onLine: (line: OutputLine) => void,
 ): Promise<string | undefined> {
   const { params, flow } = context;
+  const { target, path, builder } = served;
   const tally: Tally = { pulled: new Map(), pushed: new Set() };
   const watch = (line: OutputLine) => {
     count(tally, fabric, line.line);
@@ -110,25 +122,26 @@ export async function serveHost(
   // not an incident, and the push behind it is the fallback, not a repair.
   let note: string | undefined;
   if (!succeeded((await pull()).result) && !flow.halt.aborted) {
-    note = await push(context, target.host, path, watch);
+    const from = builder === context.local.hostname() ? undefined : builder;
+    note = await push(context, target.host, path, from, watch);
 
     // Roots what the push landed: same command, instant from the local store.
     if (note === undefined && !flow.halt.aborted) await pull();
   }
 
   // Aborted `now`: the process is being killed, no time left to measure.
-  if (!context.signal.aborted) await report(context, target.host, tally);
+  if (!context.signal.aborted) await report(context, served, tally);
   return note;
 }
 
-async function report(context: RunContext, name: string, tally: Tally): Promise<void> {
+async function report(context: RunContext, served: Served, tally: Tally): Promise<void> {
   if (tally.pulled.size + tally.pushed.size === 0) return;
   const pushed = [...tally.pushed];
   const pushedBytes = await volume(context, pushed);
   emit(context, {
     kind: "host.copy",
-    host: name,
-    builder: context.local.hostname(),
+    host: served.target.host,
+    builder: served.builder,
     pulled: sources(tally),
     pushed: pushed.length,
     pushedBytes,

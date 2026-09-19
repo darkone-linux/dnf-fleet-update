@@ -31,6 +31,7 @@ export interface CliOptions {
   buildOnly: boolean;
   skipTest: boolean;
   skipSwitch: boolean;
+  noDistributedBuild: boolean;
   resume: boolean;
   nonInteractive: boolean;
   stopLoss: boolean;
@@ -77,6 +78,7 @@ const OPTIONS = {
   "build-only": flag,
   "skip-test": flag,
   "skip-switch": flag,
+  "no-distributed-build": flag,
   resume: flag,
   "non-interactive": flag,
   "stop-loss": flag,
@@ -174,6 +176,7 @@ export function parseCli(argv: readonly string[]): CliCommand {
       buildOnly: values["build-only"] ?? false,
       skipTest: values["skip-test"] ?? false,
       skipSwitch: values["skip-switch"] ?? false,
+      noDistributedBuild: values["no-distributed-build"] ?? false,
       resume: values.resume ?? false,
       nonInteractive: values["non-interactive"] ?? false,
       stopLoss: values["stop-loss"] ?? false,
@@ -218,6 +221,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     buildOnly: options.buildOnly,
     skipTest: options.skipTest,
     skipSwitch: options.skipSwitch,
+    distributedBuild: !options.noDistributedBuild,
     resume: false,
     interactive: interactively(options),
     stopLoss: options.stopLoss,
@@ -264,6 +268,7 @@ export function resumeParams(saved: RunParams, options: CliOptions): Result<Resu
       buildOnly: options.buildOnly,
       skipTest: options.skipTest,
       skipSwitch: options.skipSwitch,
+      distributedBuild: !options.noDistributedBuild,
       interactive: interactively(options),
       stopLoss: options.stopLoss,
       ui: !options.noUi,

@@ -36,6 +36,9 @@ const savedParams = z.object({
   buildOnly: flag,
   skipTest: flag,
   skipSwitch: flag,
+
+  // Added after 0.3: an older state file resumes with delegation on.
+  distributedBuild: z.boolean().default(true),
   resume: flag,
   interactive: z.boolean(),
   stopLoss: flag,

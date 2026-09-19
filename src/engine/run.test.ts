@@ -177,15 +177,16 @@ describe("runFleetUpdate", () => {
     expect(ports.store.runs[0]?.report).toContain("Status: failed (exit 1)");
   });
 
-  test("--build-only: done after the build, nothing copied", async () => {
+  test("--build-only: done after the build, no closure copied", async () => {
     const { ports, run, end } = harness({ argv: ["--no-ui", "--build-only", "--on", "gw-*"] });
 
     expect(await run()).toBe(0);
 
     expect(ports.store.runs[0]?.id).toBe("20260917T020000Z-partial");
-    expect(ports.commands.calls.some((call) => call.argv.join(" ").includes("ssh-ng://"))).toBe(
-      false,
-    );
+
+    // Derivations reach the builders; no closure reaches a host.
+    const copies = ports.commands.calls.filter((call) => call.argv.join(" ").includes("ssh-ng://"));
+    expect(copies.map((call) => call.argv.includes("--derivation"))).toEqual([true, true]);
     expect(end()).toMatchObject({
       status: "done",
       report: ["2 not done (gw-ag, gw-cp)", "duration 0s"],

@@ -102,7 +102,7 @@ describe("publish", () => {
 
   test("a zone cache that fails: its zone is still served, with a warning", async () => {
     const { context, hosts, presence, states } = setup([
-      { match: anywhere("ssh-ng://nix@srv-ag"), exitCode: 1 },
+      { match: anywhere("--to ssh-ng://nix@srv-ag"), exitCode: 1 },
     ]);
 
     await publish(context, hosts, presence);
