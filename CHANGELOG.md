@@ -9,6 +9,30 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-19
+
+### Added
+
+- **engine**: --resume picks up the last unfinished deployment
+- **ui**: Footer drops the segments a narrow window cannot hold
+- **ui**: Chronometer on the Update row, magenta, top right
+- **ui**: Running step drops its band, the spinner marks it
+- **engine**: Take a busy lock from its holder, then offer its run
+- **engine**: Incidents message for critical hosts and hosts in test
+- **engine**: Send the report to the Matrix alert rooms
+- **engine**: Readable report header, UTC start date and options
+- **engine**: Name the deployed hosts in the report summary
+
+### Fixed
+
+- **icon**: Revert icon updated
+- **engine**: Bound the Matrix send by the matrix timeout
+- **alerts**: Render the report markdown as Matrix HTML
+
+### Changed
+
+- **engine**: Send the report through just send-msg
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
@@ -92,6 +116,7 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/darkone-linux/dnf-fleet-update/releases/tag/v0.2.0
