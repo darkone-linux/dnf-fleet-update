@@ -136,6 +136,13 @@ async function buildOne(
   const here = context.local.hostname();
   let built: Built | undefined;
 
+  // Auto-build on a host the last ping lost: the delegation would only spend
+  // the copy timeout to fail (spec § Substituteurs). Presence unknown: delegate.
+  if (entry.builder === name && entry.online === false) {
+    log(context, "warn", "auto-build host offline, building here", name);
+    entry.builder = here;
+  }
+
   if (entry.builder !== here) {
     built = await delegate(context, name, entry.builder, job);
     if (context.flow.halt.aborted) return;

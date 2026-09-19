@@ -9,6 +9,7 @@ import {
   centralSelection,
   evalLine,
   fleetSelection,
+  pingOf,
   storePath,
 } from "../../testing/fleet.ts";
 import { HostTable } from "../hosts.ts";
@@ -41,14 +42,31 @@ function setup(
 
     /** Default: every closure built here, as `--no-distributed-build` would. */
     delegated?: boolean;
+
+    /** Host elected as its own builder, as the `auto-build` feature does. */
+    autoBuild?: string;
+
+    /** Host whose ping never answers. */
+    offline?: string;
   } = {},
 ) {
-  const { delegated, ...rest } = options;
+  const { delegated, autoBuild, offline, ...rest } = options;
   const context = fakeRunContext({
     ...rest,
-    commands: [{ match: ["ping"], exitCode: 0 }, ...commands, { match: ["nix", "build"] }],
+    commands: [
+      ...(offline === undefined ? [] : [pingOf(offline, 1)]),
+      { match: ["ping"], exitCode: 0 },
+      ...commands,
+      { match: ["nix", "build"] },
+    ],
   });
-  const hosts = new HostTable(context, delegated ? fleetSelection() : centralSelection());
+  const selection = delegated ? fleetSelection() : centralSelection();
+  const hosts = new HostTable(
+    context,
+    autoBuild === undefined
+      ? selection
+      : { ...selection, builders: new Map(selection.builders).set(autoBuild, autoBuild) },
+  );
   const presence = new Presence(context, hosts);
   const states = () =>
     Object.fromEntries(hosts.all().map((host) => [host.name, host.state])) as Record<
@@ -274,6 +292,33 @@ describe("build", () => {
     );
     expect(hosts.get("hcs").state).toBe("built");
     expect(hosts.get("hcs").builder).toBe("deployer");
+  });
+
+  test("auto-build host offline: nothing delegated to it, built here, warned", async () => {
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        { match: anywhere("ssh-ng://") },
+        { match: anywhere(".drv^*") },
+      ],
+      { delegated: true, autoBuild: "pc-ag", offline: "pc-ag" },
+    );
+
+    // Ping before the step: the build reads the presence the loop already has.
+    await presence.check(["pc-ag"]);
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    const sent = context.commands.calls.map(({ argv }) => argv.join(" "));
+    expect(sent.filter((line) => line.includes("nix@pc-ag"))).toEqual([]);
+    expect(feed(context.events.events)).toContain(
+      "warn pc-ag: auto-build host offline, building here",
+    );
+    expect(sent).toContainEqual(
+      expect.stringContaining(`nix build ${storePath("pc-ag", ".drv")}^*`),
+    );
+    expect(hosts.get("pc-ag").state).toBe("built");
+    expect(hosts.get("pc-ag").builder).toBe("deployer");
   });
 
   test("nothing built: one error, no question per host, the run stops", async () => {
