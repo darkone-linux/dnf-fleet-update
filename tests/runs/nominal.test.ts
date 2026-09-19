@@ -77,14 +77,21 @@ test("--skip-switch: hosts left in test, the switch is never proposed", async ()
   ]);
 });
 
-test("--skip-test --skip-switch: build only, without its question", async () => {
+test("--skip-test --skip-switch: fleet published, nothing activated, no question", async () => {
   const run = await simulateRun({ argv: ["--skip-test", "--skip-switch"] });
 
   expect(run.exitCode).toBe(0);
-  expect(run.statuses).toEqual(every("remaining"));
+  expect(run.ui.steps.publish.status).toBe("done");
   expect(run.ui.steps.test.status).toBe("omitted");
   expect(run.ui.steps.switch.status).toBe("omitted");
-  expect(run.sim.count("copy")).toBe(0);
+
+  // The fleet ends holding its closures: a later run activates without copying.
+  expect(Object.values(run.states)).toEqual(Array(6).fill("ready"));
+  expect(run.statuses).toEqual(every("remaining"));
+  expect(run.sim.count("copy")).toBe(3);
+  expect(run.sim.count("profile")).toBe(0);
+
+  // The publication activates nothing: it is never proposed.
   expect(run.events.some((event) => event.kind === "ask")).toBe(false);
 });
 

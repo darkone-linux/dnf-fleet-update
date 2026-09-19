@@ -173,7 +173,9 @@ async function steps(context: RunContext, progress: Progress) {
   try {
     const built = await build(context, hosts, presence);
     progress.warnings = built?.warnings ?? [];
-    if (goOn() && !context.params.buildOnly) await publish(context, hosts, presence);
+    // No `--build-only` guard: the build ended the flow, and a `yes` taking it
+    // back takes back the publication with it.
+    if (goOn()) await publish(context, hosts, presence);
     if (goOn() && !context.params.skipTest) await testWaves(context, hosts, presence, selection);
     if (goOn() && !context.params.skipSwitch)
       await switchWaves(context, hosts, presence, selection);

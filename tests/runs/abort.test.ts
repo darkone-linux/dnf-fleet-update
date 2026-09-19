@@ -102,6 +102,7 @@ test("--build-only, interactive: no ends the run normally, yes goes on with the 
   expect(stopped.ui.end?.status).toBe("done");
 
   // Announced before the build: the deploying steps are ruled out by the option.
+  expect(stopped.ui.steps.publish.status).toBe("omitted");
   expect(stopped.ui.steps.test.status).toBe("omitted");
   expect(stopped.ui.steps.switch.status).toBe("omitted");
   expect(stopped.recorded?.report).toMatch(/\| switch \| omitted \|/);
@@ -113,7 +114,9 @@ test("--build-only, interactive: no ends the run normally, yes goes on with the 
   expect(continued.exitCode).toBe(0);
   expect(Object.values(continued.statuses)).toEqual(Array(6).fill("deployed"));
 
-  // A `yes` starts them after all: the rows leave `omitted` for their own end.
+  // A `yes` starts them after all, publication included: the rows leave
+  // `omitted` for their own end.
+  expect(continued.ui.steps.publish.status).toBe("done");
   expect(continued.ui.steps.test.status).toBe("done");
   expect(continued.ui.steps.switch.status).toBe("done");
 });

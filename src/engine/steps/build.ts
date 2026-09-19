@@ -205,7 +205,8 @@ export async function build(
   // An abort after the step, or a stop: nothing left to confirm.
   if (flow.ending !== undefined) return outcome;
 
-  // Step the build leads to; none left, nothing to confirm and nothing to run.
+  // Activation step the build leads to; `undefined`: both skipped, the
+  // publication still runs — it activates nothing, so it is never proposed.
   const next = params.skipTest ? (params.skipSwitch ? undefined : "switch") : "test";
 
   if (params.interactive && next !== undefined) {
@@ -216,7 +217,7 @@ export async function build(
       if (params.buildOnly) flow.finish();
       else flow.abort("after-wave");
     }
-  } else if (params.buildOnly || next === undefined) {
+  } else if (params.buildOnly) {
     flow.finish();
   }
   return outcome;
