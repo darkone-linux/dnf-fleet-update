@@ -11,6 +11,12 @@ const CACHES = ["harmonia", "nix-cache"] as const;
 /** Host feature opting a host into building its own closure. */
 export const AUTO_BUILD = "auto-build";
 
+/**
+ * `arch` is `cpu[:board]` and defaults to x86_64 (generator): the board picks
+ * the image, the cpu alone says where a derivation can be built.
+ */
+const cpu = (arch: string | undefined) => (arch ?? "x86_64").split(":")[0];
+
 export class Fabric {
   private readonly byZone = new Map<string, string>();
   private readonly hosts: readonly FleetHost[];
@@ -64,9 +70,7 @@ export class Fabric {
     if (host.features.includes(AUTO_BUILD)) return host.name;
     const elected = this.byZone.get(host.zone) ?? this.globalCache;
     const builder = this.hosts.find((candidate) => candidate.name === elected);
-
-    // Undeclared architecture is the deployment host's: two undeclared match.
-    if (builder === undefined || builder.arch !== host.arch) return local;
+    if (builder === undefined || cpu(builder.arch) !== cpu(host.arch)) return local;
     return builder.name;
   }
 

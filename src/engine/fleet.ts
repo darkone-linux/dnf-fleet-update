@@ -20,7 +20,7 @@ export interface FleetHost {
   ip?: string;
   vpnIp?: string;
 
-  /** Absent: the architecture of the deployment host. */
+  /** `cpu[:board]` as the generator writes it; absent: its default, x86_64. */
   arch?: string;
 
   /** Colmena deployment tags, the `@tag` of `--on`. */

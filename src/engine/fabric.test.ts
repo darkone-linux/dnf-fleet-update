@@ -60,12 +60,27 @@ describe("Fabric", () => {
     expect(builders(fleet(hosts))["pc-ag"]).toBe("pc-ag");
   });
 
-  test("builder: an architecture the elected builder does not share stays central", () => {
+  test("builder: a cpu the elected builder does not share stays central", () => {
     const hosts = HOSTS_JSON.map((host) =>
-      host.hostname === "pc-ag" ? { ...host, arch: "aarch64-linux" } : host,
+      host.hostname === "pc-ag" ? { ...host, arch: "aarch64:rpi4" } : host,
     );
 
     expect(builders(fleet(hosts))["pc-ag"]).toBe("deployer");
+  });
+
+  test("builder: the board does not decide, the cpu does, declared or defaulted", () => {
+    const hosts = HOSTS_JSON.map((host) => {
+      if (host.hostname === "srv-ag") return { ...host, arch: "aarch64:rpi5" };
+      if (host.hostname === "pc-ag") return { ...host, arch: "aarch64:rpi4" };
+
+      // Declared where the generator would have defaulted, same cpu as `gw-cp`.
+      if (host.hostname === "lt-cp") return { ...host, arch: "x86_64" };
+      return host;
+    });
+    const elected = builders(fleet(hosts));
+
+    expect(elected["pc-ag"]).toBe("srv-ag");
+    expect(elected["lt-cp"]).toBe("gw-cp");
   });
 
   test("builder: no harmonia anywhere, everything is built centrally", () => {
