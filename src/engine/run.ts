@@ -345,6 +345,7 @@ export async function runFleetUpdate(
         durationMs: ports.clock.now() - startedAt,
         warnings: progress.warnings,
         knownErrors: context.known.all(),
+        zonesWithoutCache: progress.hosts?.zonesWithoutCache() ?? [],
       },
       errors.last,
     );

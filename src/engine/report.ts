@@ -21,6 +21,9 @@ export interface ReportInput {
 
   /** Known errors met, in plain language (spec § Erreurs et réparations). */
   knownErrors: readonly string[];
+
+  /** Zones of the run no harmonia serves (spec § Rapport): actionable warning. */
+  zonesWithoutCache?: readonly string[];
 }
 
 export interface Report {
@@ -233,6 +236,18 @@ export function renderReport(input: ReportInput): Report {
     markdown.push("", "## Waves", "", ...table(["Step", "Wave", "Hosts", "Duration"], rows));
   }
 
+  // Who built what: a delegation that did not happen shows up here, and so
+  // does a builder that took over after a fallback (spec § Substituteurs).
+  const builders = new Map<string, string[]>();
+  for (const host of hosts) {
+    if (host.builder === undefined) continue;
+    builders.set(host.builder, [...(builders.get(host.builder) ?? []), host.name]);
+  }
+  if (builders.size > 0) {
+    const rows = [...builders].map(([builder, names]) => [builder, names.join(", ")]);
+    markdown.push("", "## Builders", "", ...table(["Builder", "Hosts built"], rows));
+  }
+
   // Where the closure came from, per host: a zone cache doing its job pulls
   // far more than the run pushes (spec § Rapport).
   const copies = hosts.flatMap((host) =>
@@ -251,6 +266,13 @@ export function renderReport(input: ReportInput): Report {
   if (copies.length > 0) {
     const headers = ["Host", "Builder", "Pulled", "Pushed", "Pushed volume"];
     markdown.push("", "## Copies", "", ...table(headers, copies));
+  }
+
+  const orphans = input.zonesWithoutCache ?? [];
+  if (orphans.length > 0) {
+    const line = (zone: string) =>
+      `- ${zone}: no harmonia, everything the fleet builds for it travels host by host. Declare one on a host of the zone.`;
+    markdown.push("", "## Zones without a cache", "", ...orphans.map(line));
   }
 
   const notDeployed = hosts.filter(

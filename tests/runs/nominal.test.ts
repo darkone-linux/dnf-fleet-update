@@ -188,6 +188,11 @@ test("copy counters: one report line per host copied to", async () => {
   });
   expect(run.recorded?.report).toContain("| hcs | gw-cp | 1 (cache.nixos.org) | 1 | 1.0 MiB |");
 
+  // Elected, never declared: each zone cache built its zone, the global one
+  // built the host of the zone that has none.
+  expect(run.recorded?.report).toContain("| gw-cp | hcs, gw-cp, lt-cp |");
+  expect(run.recorded?.report).toContain("| srv-ag | gw-ag, srv-ag, pc-ag |");
+
   // `srv-ag` runs the zone harmonia, so `gw-ag` pulls from it by name.
   const served = counted?.find((host) => host.name === "gw-ag");
   expect(served?.copy?.pulled).toEqual([{ source: "harmonia ag", paths: 2 }]);

@@ -44,6 +44,9 @@ export function rollbackTarget(host: HostEntry): boolean {
 export interface StateDetail {
   note?: string;
   path?: string;
+
+  /** On `built`: the store that built it, when the election was not followed. */
+  builder?: string;
   origin?: HostOrigin;
 }
 
@@ -100,6 +103,11 @@ export class HostTable {
     return [...this.entries.values()];
   }
 
+  /** LAN zones of the run whose hosts nothing caches (spec § Rapport). */
+  zonesWithoutCache(): string[] {
+    return this.fabric.zonesWithoutCache(this.all().map((host) => host.zone));
+  }
+
   /** Throws on a transition outside the table: an engine bug, not a host failure. */
   set(name: string, state: HostState, detail: StateDetail = {}): void {
     const entry = this.get(name);
@@ -111,13 +119,14 @@ export class HostTable {
     if (detail.path !== undefined) entry.path = detail.path;
     if (detail.origin !== undefined) entry.origin = detail.origin;
 
-    const { note, path, origin } = detail;
+    const { note, path, builder, origin } = detail;
     emit(this.context, {
       kind: "host.state",
       host: name,
       state,
       ...(note === undefined ? {} : { note }),
       ...(path === undefined ? {} : { path }),
+      ...(builder === undefined ? {} : { builder }),
       ...(origin === undefined ? {} : { origin }),
     });
   }

@@ -153,7 +153,7 @@ async function buildOne(
   // Halted: the build was cancelled, the host is left as it is.
   if (context.flow.halt.aborted) return;
   if (built.note === undefined) {
-    hosts.set(name, "built", { path: built.path ?? job.outPath });
+    hosts.set(name, "built", { path: built.path ?? job.outPath, builder: entry.builder });
     log(context, "ok", `build ok ${seconds(built.durationMs)}`, name);
   } else {
     hosts.set(name, "failed", { note: built.note });

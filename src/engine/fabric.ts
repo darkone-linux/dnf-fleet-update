@@ -15,10 +15,17 @@ export class Fabric {
   private readonly byZone = new Map<string, string>();
   private readonly hosts: readonly FleetHost[];
   private readonly caches = new Map<string, string[]>();
+  private readonly lans: ReadonlySet<string>;
   private globalCache: string | undefined;
 
   constructor(fleet: Fleet) {
     this.hosts = fleet.hosts;
+
+    // A zone without an address range is not a LAN: no cache of its own to
+    // expect there, its hosts take the `global` harmonia over the tailnet.
+    this.lans = new Set(
+      fleet.zones.filter((zone) => zone.ipPrefix !== undefined).map((zone) => zone.name),
+    );
     for (const service of fleet.services) {
       if (service.name === "harmonia") {
         this.byZone.set(service.zone, service.host);
@@ -32,6 +39,15 @@ export class Fabric {
   /** Host running `harmonia` in that zone; `undefined` when the zone has none. */
   harmonia(zone: string): string | undefined {
     return this.byZone.get(zone);
+  }
+
+  /**
+   * Of these zones, the LAN ones no harmonia serves: what the fleet builds for
+   * them reaches them host by host, and no builder can be elected there.
+   */
+  zonesWithoutCache(zones: Iterable<string>): string[] {
+    const named = [...new Set(zones)].filter((zone) => this.lans.has(zone));
+    return named.filter((zone) => !this.byZone.has(zone)).sort();
   }
 
   /**

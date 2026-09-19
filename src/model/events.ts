@@ -104,8 +104,10 @@ export type Event =
   // builds from, and what `--resume` compares its own trees against.
   | (Base & { kind: "revision"; repo: "dnf" | "consumer"; rev: string })
 
-  // Waves as planned at selection, presence ignored.
-  | (Base & { kind: "plan"; waves: string[][] })
+  // Waves as planned at selection, presence ignored, and the builder elected
+  // for each host (spec § Substituteurs). `builders`: absent from the streams
+  // recorded before 0.4.
+  | (Base & { kind: "plan"; waves: string[][]; builders?: Record<string, string> })
   | (Base & { kind: "host.add"; host: string; profile: string; zone: string })
   | (Base & { kind: "host.presence"; host: string; online: boolean })
   | (Base & { kind: "step.start"; step: StepId; total?: number })
@@ -120,6 +122,9 @@ export type Event =
 
       /** Toplevel store path, on `built`. */
       path?: string;
+
+      /** On `built`: the store that built it, after a fallback of the election. */
+      builder?: string;
 
       /** On the first activation of the run. */
       origin?: HostOrigin;

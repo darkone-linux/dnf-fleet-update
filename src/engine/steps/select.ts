@@ -219,7 +219,7 @@ async function choose(context: RunContext): Promise<Selection | undefined> {
       : saved
           .map((wave) => wave.filter((name) => names.has(name)))
           .filter((wave) => wave.length > 0);
-  emit(context, { kind: "plan", waves });
+  emit(context, { kind: "plan", waves, builders: Object.fromEntries(builders) });
   log(context, "ok", `${hosts.length} hosts selected, ${waves.length} waves`);
 
   let restored: Map<string, Restored> | undefined;

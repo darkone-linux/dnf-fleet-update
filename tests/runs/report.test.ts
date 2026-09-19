@@ -3,6 +3,7 @@
 
 import { expect, test } from "bun:test";
 import { ExitCode } from "../../src/model/exit-codes.ts";
+import { NETWORK_JSON } from "../../src/testing/fleet.ts";
 import { simulateRun } from "../../src/testing/runs.ts";
 
 const SENDING = ["--no-ui", "--send-report"];
@@ -44,4 +45,21 @@ test("alert rooms not configured here: exit 3, the run itself is untouched", asy
   expect(run.exitCode).toBe(ExitCode.ReportNotSent);
   expect(run.recorded?.report).toContain("- Status: done (exit 0)");
   expect(run.sim.messages).toHaveLength(1);
+});
+
+test("a zone without a harmonia: named in the report, its hosts served one by one", async () => {
+  const networkJson = {
+    ...NETWORK_JSON,
+    services: NETWORK_JSON.services.filter((service) => service.zone !== "ag"),
+  };
+  const run = await simulateRun({ argv: ["--no-ui"], networkJson });
+
+  expect(run.exitCode).toBe(ExitCode.Ok);
+  expect(run.recorded?.report).toContain(
+    "## Zones without a cache\n\n- ag: no harmonia, everything the fleet builds for it",
+  );
+
+  // Built by the global harmonia, but nothing caches zone `ag`: each host of
+  // the zone is pushed to, one by one.
+  for (const name of ["gw-ag", "srv-ag", "pc-ag"]) expect(run.sim.count("copy", name)).toBe(1);
 });

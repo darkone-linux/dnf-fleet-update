@@ -9,6 +9,16 @@ const context = (options: FakeRunOptions = {}) =>
   fakeRunContext({ commands: generatedScripts(), addresses: ["10.1.0.50"], ...options });
 
 describe("select", () => {
+  test("--no-distributed-build: every host elects the deployment machine", async () => {
+    const run = context({ params: { distributedBuild: false } });
+
+    const selection = await select(run);
+
+    expect([...(selection?.builders ?? [])].map(([, builder]) => builder)).toEqual(
+      Array(6).fill("deployer"),
+    );
+  });
+
   test("whole fleet from zone ag: hosts added, plan, gateways, deployment host", async () => {
     const run = context({ hostname: "gw-ag" });
 
@@ -26,7 +36,22 @@ describe("select", () => {
     expect(selection?.local).toBe("gw-ag");
     const kinds = run.events.events.map((event) => event.kind);
     expect(kinds.filter((kind) => kind === "host.add")).toHaveLength(6);
-    expect(run.events.events).toContainEqual({ t: 0, kind: "plan", waves: selection?.waves ?? [] });
+    expect(run.events.events).toContainEqual({
+      t: 0,
+      kind: "plan",
+      waves: selection?.waves ?? [],
+
+      // Elected, never declared: the harmonia of each zone, the global one for
+      // `www`, which has none (spec § Substituteurs et plomberie de build).
+      builders: {
+        hcs: "gw-cp",
+        "gw-ag": "srv-ag",
+        "srv-ag": "srv-ag",
+        "pc-ag": "srv-ag",
+        "gw-cp": "gw-cp",
+        "lt-cp": "gw-cp",
+      },
+    });
     expect(feed(run.events.events)).toEqual([
       "info current zone: ag",
       "ok 6 hosts selected, 6 waves",

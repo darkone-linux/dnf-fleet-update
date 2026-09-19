@@ -228,6 +228,42 @@ describe("renderReport", () => {
     );
   });
 
+  test("builders and zones without a cache: who built what, and what to declare", () => {
+    const planned: Event[] = [
+      ...EVENTS,
+      {
+        t: 25,
+        kind: "plan",
+        waves: [["hcs"], ["gw-ag"]],
+        builders: { hcs: "gw-cp", "gw-ag": "gfx", nlt: "gfx" },
+      },
+    ];
+    const state = planned.reduce(persist, initialPersisted());
+
+    const { markdown } = renderReport({ ...BASE, state, zonesWithoutCache: ["lg"] });
+
+    expect(markdown.split("## ").find((part) => part.startsWith("Builders"))).toBe(
+      [
+        "Builders",
+        "",
+        "| Builder | Hosts built |",
+        "| --- | --- |",
+        "| gw-cp | hcs |",
+        "| gfx | gw-ag, nlt |",
+        "",
+        "",
+      ].join("\n"),
+    );
+    expect(markdown).toContain("## Zones without a cache\n\n- lg: no harmonia, everything");
+  });
+
+  test("no builder elected, no zone left out: neither section", () => {
+    const { markdown } = renderReport({ ...BASE, state });
+
+    expect(markdown).not.toContain("## Builders");
+    expect(markdown).not.toContain("## Zones without a cache");
+  });
+
   test("no host copied to: no section", () => {
     expect(renderReport({ ...BASE, state }).markdown).not.toContain("## Copies");
   });

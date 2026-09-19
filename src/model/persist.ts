@@ -51,6 +51,9 @@ export interface PersistedHost {
   origin?: HostOrigin;
   known?: boolean;
 
+  /** Store that holds its closure: elected at selection, corrected at `built`. */
+  builder?: string;
+
   /** Absent until the host is copied to: a local host never is. */
   copy?: HostCopy;
 }
@@ -165,8 +168,14 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
     case "revision":
       return { ...state, revisions: { ...state.revisions, [event.repo]: event.rev } };
 
-    case "plan":
-      return { ...state, plan: event.waves };
+    case "plan": {
+      const elected = event.builders ?? {};
+      const hosts = state.hosts.map((host) => {
+        const builder = elected[host.name];
+        return builder === undefined ? host : { ...host, builder };
+      });
+      return { ...state, plan: event.waves, hosts };
+    }
 
     case "step.start":
       return {
@@ -223,6 +232,7 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
         known: event.known,
       };
       if (event.path !== undefined) patch.path = event.path;
+      if (event.builder !== undefined) patch.builder = event.builder;
       if (event.origin !== undefined) patch.origin = event.origin;
       return { ...state, hosts: patchHost(state, event.host, patch) };
     }
