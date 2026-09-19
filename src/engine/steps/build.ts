@@ -1,6 +1,7 @@
 // Step 3, build (spec § Étapes, § Exécution): one evaluation, then one build
 // per host as soon as its derivation is known, presence pinged meanwhile.
 
+import type { HostState } from "../../model/events.ts";
 import { buildHost, evalHosts } from "../commands/nix.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { decideFailure, type Hosts } from "../decisions.ts";
@@ -22,6 +23,9 @@ export interface BuildOutcome {
 }
 
 const EVAL_WARNING = /^(evaluation )?warning:/;
+
+/** Holds its closure, nothing left but activation: a resume counts it as built. */
+const HOLDS_ITS_PATH: readonly HostState[] = ["built", "ready", "tested"];
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
@@ -188,10 +192,9 @@ export async function build(
   }
 
   // Nothing to deploy: one stop rather than a question per host. Failed as a
-  // whole, the evaluation already said why. A resumed host already tested
-  // counts: it has its path, only its switch is left.
-  const ready = all.filter((host) => host.state === "built" || host.state === "tested").length;
-  if (outcome.evaluationFailed || ready === 0) {
+  // whole, the evaluation already said why.
+  const deployable = all.filter((host) => HOLDS_ITS_PATH.includes(host.state)).length;
+  if (outcome.evaluationFailed || deployable === 0) {
     if (!outcome.evaluationFailed) log(context, "error", "no host built");
     flow.stop("stop");
   }

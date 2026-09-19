@@ -87,6 +87,22 @@ test("hosts left in test are switched, nothing built, nothing tested again", asy
   expect(run.sim.count("copy")).toBe(3);
 });
 
+test("published without activating, then resumed: waves copy nothing", async () => {
+  const first = await simulateRun({ argv: ["--no-ui", "--skip-test", "--skip-switch"] });
+  expect(Object.values(first.states)).toEqual(Array(6).fill("ready"));
+
+  const run = await simulateRun({ argv: ["--no-ui", "--resume"], after: first });
+
+  expect(run.exitCode).toBe(ExitCode.Ok);
+  expect(Object.values(run.statuses)).toEqual(Array(6).fill("deployed"));
+  expect(run.ui.steps.build.status).toBe("skipped");
+  expect(run.ui.steps.publish.status).toBe("skipped");
+
+  // Three pushes in the first run, none in this one: the hosts hold their
+  // closure, the waves only activate it.
+  expect(run.sim.count("copy")).toBe(3);
+});
+
 test("--on narrows the resumed hosts without touching the saved selection", async () => {
   let up = false;
   const first = await simulateRun({
