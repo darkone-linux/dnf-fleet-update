@@ -188,13 +188,25 @@ test("activation failed on a reachable host, --stop-loss: the fleet rolls back",
   expect(run.feed).toContain("error pc-ag: test failed: switch-to-configuration exit 2");
 });
 
-test("copy failed on a reachable host: failed, excluded, not activated", async () => {
+test("copy failed on a reachable host: retried, then failed, excluded, not activated", async () => {
   const run = await simulateRun({ behaviours: { "srv-ag": { copyExit: 1 } } });
 
   expect(run.exitCode).toBe(0);
   expect(run.statuses["srv-ag"]).toBe("excluded");
+
+  // Spec § Exécution: the transfer is relaunched at most twice.
+  expect(run.sim.count("copy", "srv-ag")).toBe(3);
   expect(run.sim.count("activate", "srv-ag")).toBe(0);
-  expect(run.recorded?.report).toContain("| srv-ag | excluded | copy failed: exit 1 |");
+  expect(run.recorded?.report).toContain("| srv-ag | excluded | copy failed: exit 1:");
+  expect(run.feed).toContain(
+    "warn srv-ag: copy failed: exit 1: error: cannot copy to 'srv-ag', retrying",
+  );
+});
+
+test("a copy that goes through is not retried", async () => {
+  const run = await simulateRun();
+
+  expect(run.sim.count("copy", "gw-ag")).toBe(1);
 });
 
 test("forced rollback failing on a host: failed with its reason, the others reverted", async () => {

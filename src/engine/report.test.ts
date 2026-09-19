@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { Event } from "../model/events.ts";
 import { initialPersisted, persist } from "../model/persist.ts";
 import { testParams } from "../testing/fakes.ts";
-import { formatDuration, renderReport } from "./report.ts";
+import { formatBytes, formatDuration, renderReport } from "./report.ts";
 
 const EVENTS: Event[] = [
   {
@@ -40,8 +40,39 @@ const EVENTS: Event[] = [
 
 const RUN_ID = "20260917T020000Z-full";
 
+const COPIES: Event[] = [
+  {
+    t: 45,
+    kind: "host.copy",
+    host: "hcs",
+    builder: "gfx",
+    pulled: 37,
+    pushed: 67,
+    pushedBytes: 679_477_248,
+  },
+  {
+    t: 46,
+    kind: "host.copy",
+    host: "gw-ag",
+    builder: "gfx",
+    pulled: 142,
+    pushed: 3,
+    pushedBytes: 1258,
+  },
+];
+
+const EVENTS_WITH_COPIES = [...EVENTS, ...COPIES];
+
 describe("renderReport", () => {
   const state = EVENTS.reduce(persist, initialPersisted());
+  const BASE = {
+    runId: RUN_ID,
+    status: "done" as const,
+    exitCode: 0 as const,
+    durationMs: 65_040,
+    warnings: [],
+    knownErrors: [],
+  };
 
   test("short lines for the end of the run", () => {
     const report = renderReport({
@@ -173,6 +204,37 @@ describe("renderReport", () => {
       state: "deployed",
     });
     expect(renderReport({ ...input, state: deployed }).incident).toBeUndefined();
+  });
+
+  test("copy counters, one line per host copied to", () => {
+    const counted = EVENTS_WITH_COPIES.reduce(persist, initialPersisted());
+    const { markdown } = renderReport({ ...BASE, state: counted });
+
+    // `nlt` never got a closure: no line of its own.
+    expect(markdown.split("## ").find((part) => part.startsWith("Copies"))).toBe(
+      [
+        "Copies",
+        "",
+        "| Host | Builder | Pulled | Pushed | Pushed volume |",
+        "| --- | --- | --- | --- | --- |",
+        "| hcs | gfx | 37 | 67 | 648 MiB |",
+        "| gw-ag | gfx | 142 | 3 | 1.2 KiB |",
+        "",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("no host copied to: no section", () => {
+    expect(renderReport({ ...BASE, state }).markdown).not.toContain("## Copies");
+  });
+
+  test("volumes", () => {
+    expect([formatBytes(0), formatBytes(1258), formatBytes(679_477_248)]).toEqual([
+      "0 B",
+      "1.2 KiB",
+      "648 MiB",
+    ]);
   });
 
   test("durations", () => {

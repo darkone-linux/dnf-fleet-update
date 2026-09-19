@@ -75,6 +75,19 @@ export function formatDuration(ms: number): string {
   return `${seconds}s`;
 }
 
+const UNITS = ["B", "KiB", "MiB", "GiB", "TiB"] as const;
+
+/** `648 MiB`, `1.2 MiB`, `12 KiB`: a figure to read, not an exact size. */
+export function formatBytes(bytes: number): string {
+  let value = Math.max(0, Math.round(bytes));
+  let unit = 0;
+  while (value >= 1024 && unit < UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 || value >= 100 ? 0 : 1)} ${UNITS[unit] ?? "B"}`;
+}
+
 /** Summary order: what worked, then what needs a look. */
 const STATUSES: readonly { status: HostStatus; label: string; named: boolean }[] = [
   { status: "deployed", label: "deployed", named: false },
@@ -205,6 +218,26 @@ export function renderReport(input: ReportInput): Report {
       return [wave.step, `${wave.index}/${wave.total}`, wave.hosts.join(", "), duration];
     });
     markdown.push("", "## Waves", "", ...table(["Step", "Wave", "Hosts", "Duration"], rows));
+  }
+
+  // Where the closure came from, per host: a zone cache doing its job pulls
+  // far more than the run pushes (spec § Rapport).
+  const copies = hosts.flatMap((host) =>
+    host.copy === undefined
+      ? []
+      : [
+          [
+            host.name,
+            host.copy.builder,
+            String(host.copy.pulled),
+            String(host.copy.pushed),
+            formatBytes(host.copy.pushedBytes),
+          ],
+        ],
+  );
+  if (copies.length > 0) {
+    const headers = ["Host", "Builder", "Pulled", "Pushed", "Pushed volume"];
+    markdown.push("", "## Copies", "", ...table(headers, copies));
   }
 
   const notDeployed = hosts.filter(

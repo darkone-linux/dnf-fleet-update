@@ -1,7 +1,15 @@
 // Parsers against line shapes recorded from nix 2.34 and nix-eval-jobs 2.34 (spike).
 
 import { describe, expect, test } from "bun:test";
-import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "./nix-output.ts";
+import {
+  errorSummary,
+  parseCopyPath,
+  parseEvalJob,
+  parseNixLog,
+  parsePathSize,
+  STORE_PATH,
+  stripAnsi,
+} from "./nix-output.ts";
 
 const DRV = "/nix/store/mfm2y1k08lnq8cfqdjiz92bjzkzfn575-nixos-system-hcs-dnf-0.1.0-26.11.drv";
 const OUT = "/nix/store/jq1s2fmaq2pnv5f233sfkhmjm0lzqgcm-nixos-system-hcs-dnf-0.1.0-26.11";
@@ -163,6 +171,33 @@ describe("errorSummary", () => {
       "builder for 'x.drv' failed with exit code 1;",
     );
     expect(errorSummary("\n  cannot connect to daemon\n")).toBe("cannot connect to daemon");
+  });
+});
+
+describe("copy counters", () => {
+  const path = "/nix/store/00000000000000000000000000000000-outline-1.10.1";
+
+  test("a path pushed to the host, and one the host substituted itself", () => {
+    expect(parseCopyPath(`copying path '${path}' to 'ssh-ng://nix@hcs'...`)).toEqual({
+      path,
+      direction: "pushed",
+    });
+    expect(parseCopyPath(`copying path '${path}' from 'https://cache.nixos.org'...`)).toEqual({
+      path,
+      direction: "pulled",
+    });
+  });
+
+  test("any other line of nix copy, or a path that is not one", () => {
+    expect(parseCopyPath("copying 67 paths...")).toBeUndefined();
+    expect(parseCopyPath("error: cannot add path because it lacks a signature")).toBeUndefined();
+    expect(parseCopyPath("copying path '/etc/passwd' to 'ssh-ng://nix@hcs'...")).toBeUndefined();
+  });
+
+  test("nix path-info --size: the padded columns it prints", () => {
+    expect(parsePathSize(`${path}   \t     679477248`)).toBe(679_477_248);
+    expect(parsePathSize("total: 12")).toBeUndefined();
+    expect(parsePathSize("")).toBeUndefined();
   });
 });
 

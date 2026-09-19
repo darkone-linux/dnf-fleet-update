@@ -17,6 +17,14 @@ import { endedStep, type StepStatus } from "./state.ts";
 /** Bumped on any change a previous reader cannot load. */
 export const PERSIST_SCHEMA = 1;
 
+/** Copy counters of a host (spec § Rapport), as the report table shows them. */
+export interface HostCopy {
+  builder: string;
+  pulled: number;
+  pushed: number;
+  pushedBytes: number;
+}
+
 /** Per-host line of the report and of `state.json`. */
 export type HostStatus =
   | "deployed"
@@ -41,6 +49,9 @@ export interface PersistedHost {
   path?: string;
   origin?: HostOrigin;
   known?: boolean;
+
+  /** Absent until the host is copied to: a local host never is. */
+  copy?: HostCopy;
 }
 
 /** `t` in milliseconds since the run start, like the stream. */
@@ -211,6 +222,19 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
       if (event.origin !== undefined) patch.origin = event.origin;
       return { ...state, hosts: patchHost(state, event.host, patch) };
     }
+
+    case "host.copy":
+      return {
+        ...state,
+        hosts: patchHost(state, event.host, {
+          copy: {
+            builder: event.builder,
+            pulled: event.pulled,
+            pushed: event.pushed,
+            pushedBytes: event.pushedBytes,
+          },
+        }),
+      };
 
     case "ask.close":
       return {

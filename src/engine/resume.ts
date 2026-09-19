@@ -5,7 +5,7 @@
 // trusted on its shape.
 
 import { z } from "zod";
-import { AI_ANALYSIS, AI_ERROR_ACTION, type RunParams } from "../model/params.ts";
+import { AI_ANALYSIS, AI_ERROR_ACTION, DEFAULT_TIMEOUTS, type RunParams } from "../model/params.ts";
 import { type HostStatus, PERSIST_SCHEMA } from "../model/persist.ts";
 import { fail, ok, type Result } from "../model/result.ts";
 import { STORE_PATH } from "./nix-output.ts";
@@ -52,6 +52,9 @@ const savedParams = z.object({
     commit: seconds,
     eval: seconds,
     build: seconds,
+
+    // Added after 0.3: a state file written before it is still resumable.
+    publish: seconds.default(DEFAULT_TIMEOUTS.publish),
     copy: seconds,
     activation: seconds,
     ssh: seconds,

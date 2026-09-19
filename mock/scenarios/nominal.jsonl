@@ -91,6 +91,7 @@
 {"t":12900,"kind":"wave.start","index":1,"total":5,"hosts":["hcs"]}
 {"t":13000,"kind":"host.state","host":"hcs","state":"copying"}
 {"t":13200,"kind":"host.output","host":"hcs","phase":"copy","line":"copying 142 paths to ssh-ng://nix@hcs"}
+{"t":13900,"kind":"host.copy","host":"hcs","builder":"gfx","pulled":37,"pushed":67,"pushedBytes":679477248}
 {"t":14000,"kind":"host.state","host":"hcs","state":"testing"}
 {"t":14200,"kind":"host.output","host":"hcs","phase":"activate","line":"switch-to-configuration test"}
 {"t":15000,"kind":"host.state","host":"hcs","state":"tested"}
@@ -98,6 +99,7 @@
 {"t":15200,"kind":"step.progress","step":"test","done":1,"total":5}
 {"t":15400,"kind":"wave.start","index":2,"total":5,"hosts":["gw-ag"]}
 {"t":15500,"kind":"host.state","host":"gw-ag","state":"copying"}
+{"t":16100,"kind":"host.copy","host":"gw-ag","builder":"gfx","pulled":142,"pushed":3,"pushedBytes":1258}
 {"t":16200,"kind":"host.state","host":"gw-ag","state":"testing"}
 {"t":17000,"kind":"host.state","host":"gw-ag","state":"tested"}
 {"t":17100,"kind":"log","host":"gw-ag","level":"ok","message":"test ok, gateway reachable"}

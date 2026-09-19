@@ -65,6 +65,17 @@ export function buildHost(drvPath: string, outLink: string, timeouts: Timeouts):
   };
 }
 
+/** NAR size of each path, `<path> <bytes>` per line: the volume of the copy counters. */
+export function pathSizes(paths: readonly [string, ...string[]], timeouts: Timeouts): CommandSpec {
+  for (const path of paths) {
+    if (!STORE_PATH.test(path)) throw new Error(`unsafe store path: ${JSON.stringify(path)}`);
+  }
+  return {
+    argv: ["nix", "path-info", "--size", ...paths],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
 /** Exit `0`: the path is still in the store (`--resume`). */
 export function pathInfo(path: string, timeouts: Timeouts): CommandSpec {
   return { argv: ["nix", "path-info", path], ...limits(timeouts.commit, timeouts) };

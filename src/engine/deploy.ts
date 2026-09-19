@@ -3,7 +3,6 @@
 
 import {
   activate,
-  copyClosure,
   onHost,
   type Phase,
   parseOrigin,
@@ -12,6 +11,7 @@ import {
   type Target,
 } from "./commands/host.ts";
 import { emit, log, type RunContext } from "./context.ts";
+import { copyToHost } from "./copy.ts";
 import { decideFailure, decideLost } from "./decisions.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
 import type { HostTable } from "./hosts.ts";
@@ -102,13 +102,9 @@ export async function deployHost(
   if (host.state === "built") {
     hosts.set(name, "copying");
     if (!host.local) {
-      const copy = await execute(context, copyClosure(name, path, timeouts), {
-        signal: flow.halt,
-        onLine: output("copy"),
-      });
+      const note = await copyToHost(context, name, path, output("copy"));
       if (flow.halt.aborted) return;
-      if (!succeeded(copy.result)) {
-        const note = `copy failed: ${describeFailure(copy)}`;
+      if (note !== undefined) {
         return failedBeforeActivation(context, hosts, presence, name, note);
       }
     }

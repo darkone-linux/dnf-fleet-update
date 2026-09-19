@@ -118,6 +118,19 @@ export type Event =
       known?: boolean;
     })
   | (Base & { kind: "host.output"; host: string; phase: string; line: string })
+
+  // Copy counters of one host (spec § Rapport): distinct paths it substituted
+  // itself, paths pushed to it, and the volume pushed.
+  | (Base & {
+      kind: "host.copy";
+      host: string;
+
+      /** Store that held the closure; the deployment machine until a builder is elected. */
+      builder: string;
+      pulled: number;
+      pushed: number;
+      pushedBytes: number;
+    })
   | (Base & { kind: "log"; host?: string; level: Level; message: string })
 
   // AI answers stream: `ai` opens the block, `ai.line` appends, `ai.end` closes

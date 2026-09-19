@@ -43,6 +43,7 @@ export type SimKind =
   | "clean"
   | "generate"
   | "path-info"
+  | "path-size"
   | "generated"
   | "send-msg"
   | "eval"
@@ -112,6 +113,9 @@ export interface SimOptions {
 }
 
 const WORKSPACE = "/ws";
+
+/** NAR size every path of the simulated store reports: 1 MiB. */
+export const SIM_PATH_SIZE = 1_048_576;
 
 type Repo = "consumer" | "dnf";
 
@@ -275,6 +279,7 @@ export class SimFleet implements CommandRunner {
       return { kind: "send-msg", detail: argv[2], at };
     }
     if (program === "nix" && argv[1] === "path-info") {
+      if (argv[2] === "--size") return { kind: "path-size", at };
       return { kind: "path-info", detail: argv[2], at };
     }
     if (program === "nix-instantiate") return { kind: "generated", detail: argv.at(-1), at };
@@ -362,6 +367,11 @@ export class SimFleet implements CommandRunner {
       // `--resume`: a path the fleet built is in the store unless collected.
       case "path-info":
         return exit(this.collected.has(command.detail ?? "") ? 1 : 0);
+
+      // Volume of the copy counters: every synthetic path weighs the same.
+      case "path-size":
+        for (const path of spec.argv.slice(3)) out(`${path}\t${SIM_PATH_SIZE}`);
+        return ok();
       case "generated": {
         const file = command.detail ?? "";
         if (file.endsWith("/hosts.nix")) out(JSON.stringify(this.options.hostsJson ?? HOSTS_JSON));
@@ -439,8 +449,14 @@ export class SimFleet implements CommandRunner {
     }
 
     switch (command.kind) {
-      case "copy":
-        return exit(behaviour.copyExit ?? 0);
+      case "copy": {
+        // Counters of the report: the toplevel pushed, one path substituted.
+        err(`copying path '${storePath(name)}' to 'ssh-ng://nix@${name}'...`);
+        err(`copying path '${storePath(`${name}-dep`)}' from 'https://cache.nixos.org'...`);
+        const code = behaviour.copyExit ?? 0;
+        if (code !== 0) err(`error: cannot copy to '${name}'`);
+        return exit(code);
+      }
       case "maintenance":
         return ok();
       case "origin":

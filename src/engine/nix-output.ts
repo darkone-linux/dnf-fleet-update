@@ -59,6 +59,32 @@ export function parseEvalJob(line: string): EvalJob {
   return { kind: "invalid", line };
 }
 
+/** Where a path went: pushed by the builder, or substituted by the host itself. */
+export type CopyDirection = "pushed" | "pulled";
+
+const COPY_PATH = /^copying path '([^']+)' (to|from) '/;
+
+/**
+ * `copying path '…' to 'ssh-ng://…'` and `copying path '…' from '<substituter>'`
+ * of `nix copy` (spec § Rapport). `undefined` on any other line.
+ */
+export function parseCopyPath(
+  line: string,
+): { path: string; direction: CopyDirection } | undefined {
+  const match = COPY_PATH.exec(stripAnsi(line).trim());
+  const path = match?.[1];
+  if (path === undefined || !STORE_PATH.test(path)) return undefined;
+  return { path, direction: match?.[2] === "to" ? "pushed" : "pulled" };
+}
+
+const PATH_SIZE = /^\/nix\/store\/\S+\s+(\d+)$/;
+
+/** Bytes of a `nix path-info --size` line; `undefined` on anything else. */
+export function parsePathSize(line: string): number | undefined {
+  const size = PATH_SIZE.exec(line.trim())?.[1];
+  return size === undefined ? undefined : Number(size);
+}
+
 /** Cause of a nix error on one line: the last `error:` of its trace, else its first line. */
 export function errorSummary(message: string): string {
   const lines = stripAnsi(message)

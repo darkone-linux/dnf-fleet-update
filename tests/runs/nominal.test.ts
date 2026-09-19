@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import type { HostStatus } from "../../src/model/persist.ts";
 import { ORIGIN_PATH, storePath } from "../../src/testing/fleet.ts";
 import { simulateRun } from "../../src/testing/runs.ts";
+import { SIM_PATH_SIZE } from "../../src/testing/sim.ts";
 
 const ALL = ["hcs", "gw-ag", "srv-ag", "pc-ag", "gw-cp", "lt-cp"];
 
@@ -138,6 +139,21 @@ test("codev: dnf/ committed, lock realigned, consumer committed, both in the rep
   expect(run.recorded?.report).toContain(
     "- Commits: dnf/ d000000 chore(update): regular flake upgrade; consumer c000000 chore(update): full fleet",
   );
+});
+
+test("copy counters: one report line per host copied to", async () => {
+  const run = await simulateRun({ local: "pc-ag" });
+  const counted = run.recorded?.state?.hosts.filter((host) => host.copy !== undefined);
+
+  // The deployment host is never copied to, so it has no counters.
+  expect(counted?.map((host) => host.name)).toEqual(ALL.filter((host) => host !== "pc-ag"));
+  expect(counted?.[0]?.copy).toEqual({
+    builder: "pc-ag",
+    pulled: 1,
+    pushed: 1,
+    pushedBytes: SIM_PATH_SIZE,
+  });
+  expect(run.recorded?.report).toContain("| hcs | pc-ag | 1 | 1 | 1.0 MiB |");
 });
 
 test("--on, deployment host in the selection: no ssh, no copy, no timer for it", async () => {

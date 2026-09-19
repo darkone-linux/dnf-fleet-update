@@ -148,9 +148,10 @@ function apply(state: RunState, event: Event): RunState {
     case "run.start":
       return { ...state, run: event.run };
 
-    // Persisted by `persist.ts`; the interface shows the matching `log` lines.
+    // Report material, persisted by `persist.ts`: nothing to draw live.
     case "commit":
     case "plan":
+    case "host.copy":
       return state;
 
     case "host.add":
