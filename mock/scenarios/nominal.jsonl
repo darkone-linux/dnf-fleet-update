@@ -65,7 +65,7 @@
 {"t":8600,"kind":"host.output","host":"hcs","phase":"build","line":"evaluating nixosConfigurations.hcs"}
 {"t":8900,"kind":"host.output","host":"gw-ag","phase":"build","line":"building nftables-rules.drv"}
 {"t":9200,"kind":"host.output","host":"gfx","phase":"build","line":"building gnome-shell-extensions.drv"}
-{"t":9600,"kind":"host.output","host":"fd-01","phase":"build","line":"copying path /nix/store/…-linux-6.18.49"}
+{"t":9600,"kind":"host.output","host":"fd-01","phase":"build","line":"copying path /nix/store/\u2026-linux-6.18.49"}
 {"t":10200,"kind":"host.state","host":"hcs","state":"built"}
 {"t":10300,"kind":"log","host":"hcs","level":"ok","message":"build ok 1.8s"}
 {"t":10600,"kind":"step.progress","step":"build","done":4,"total":14}
@@ -87,93 +87,129 @@
 {"t":12599,"kind":"host.state","host":"vbox-umi","state":"built"}
 {"t":12599,"kind":"host.state","host":"alt","state":"built"}
 {"t":12600,"kind":"step.end","step":"build","status":"ok"}
-{"t":12800,"kind":"step.start","step":"test","total":5}
-{"t":12900,"kind":"wave.start","index":1,"total":5,"hosts":["hcs"]}
-{"t":13000,"kind":"host.state","host":"hcs","state":"copying"}
-{"t":13200,"kind":"host.output","host":"hcs","phase":"copy","line":"copying 142 paths to ssh-ng://nix@hcs"}
-{"t":13900,"kind":"host.copy","host":"hcs","builder":"gfx","pulled":[{"source":"harmonia ag","paths":30},{"source":"cache.nixos.org","paths":7}],"pushed":67,"pushedBytes":679477248}
-{"t":14000,"kind":"host.state","host":"hcs","state":"testing"}
-{"t":14200,"kind":"host.output","host":"hcs","phase":"activate","line":"switch-to-configuration test"}
-{"t":15000,"kind":"host.state","host":"hcs","state":"tested"}
-{"t":15100,"kind":"log","host":"hcs","level":"ok","message":"test ok, rollback timer disarmed"}
-{"t":15200,"kind":"step.progress","step":"test","done":1,"total":5}
-{"t":15400,"kind":"wave.start","index":2,"total":5,"hosts":["gw-ag"]}
-{"t":15500,"kind":"host.state","host":"gw-ag","state":"copying"}
-{"t":16100,"kind":"host.copy","host":"gw-ag","builder":"gfx","pulled":[{"source":"harmonia ag","paths":142}],"pushed":3,"pushedBytes":1258}
-{"t":16200,"kind":"host.state","host":"gw-ag","state":"testing"}
-{"t":17000,"kind":"host.state","host":"gw-ag","state":"tested"}
-{"t":17100,"kind":"log","host":"gw-ag","level":"ok","message":"test ok, gateway reachable"}
-{"t":17200,"kind":"step.progress","step":"test","done":2,"total":5}
-{"t":17400,"kind":"wave.start","index":3,"total":5,"hosts":["nlt","gfx","fd-01","fd-02","vbox-test"]}
-{"t":17500,"kind":"host.state","host":"nlt","state":"copying"}
-{"t":17520,"kind":"host.state","host":"gfx","state":"copying"}
-{"t":17540,"kind":"host.state","host":"fd-01","state":"copying"}
-{"t":17560,"kind":"host.state","host":"fd-02","state":"copying"}
-{"t":17580,"kind":"host.state","host":"vbox-test","state":"copying"}
-{"t":17800,"kind":"host.output","host":"gfx","phase":"copy","line":"1.2 GiB / 3.4 GiB"}
-{"t":18400,"kind":"host.state","host":"nlt","state":"testing"}
-{"t":18420,"kind":"host.state","host":"gfx","state":"testing"}
-{"t":18440,"kind":"host.state","host":"fd-01","state":"testing"}
-{"t":18460,"kind":"host.state","host":"fd-02","state":"testing"}
-{"t":18480,"kind":"host.state","host":"vbox-test","state":"testing"}
-{"t":19400,"kind":"host.state","host":"nlt","state":"tested"}
-{"t":19420,"kind":"host.state","host":"gfx","state":"tested"}
-{"t":19440,"kind":"host.state","host":"fd-01","state":"tested"}
-{"t":19460,"kind":"host.state","host":"fd-02","state":"tested"}
-{"t":19480,"kind":"host.state","host":"vbox-test","state":"tested"}
-{"t":19600,"kind":"step.progress","step":"test","done":3,"total":5}
-{"t":19800,"kind":"wave.start","index":4,"total":5,"hosts":["gw-cp","gw-lg","ms-a2"]}
-{"t":19900,"kind":"host.state","host":"gw-cp","state":"copying"}
-{"t":19920,"kind":"host.state","host":"gw-lg","state":"copying"}
-{"t":19940,"kind":"host.state","host":"ms-a2","state":"copying"}
-{"t":20800,"kind":"host.state","host":"gw-cp","state":"testing"}
-{"t":20820,"kind":"host.state","host":"gw-lg","state":"testing"}
-{"t":20840,"kind":"host.state","host":"ms-a2","state":"testing"}
-{"t":21800,"kind":"host.state","host":"gw-cp","state":"tested"}
-{"t":21820,"kind":"host.state","host":"gw-lg","state":"tested"}
-{"t":21840,"kind":"host.state","host":"ms-a2","state":"tested"}
-{"t":22000,"kind":"step.progress","step":"test","done":4,"total":5}
-{"t":22200,"kind":"wave.start","index":5,"total":5,"hosts":["fl-01","lenovo"]}
-{"t":22300,"kind":"host.state","host":"fl-01","state":"copying"}
-{"t":22320,"kind":"host.state","host":"lenovo","state":"copying"}
-{"t":23200,"kind":"host.state","host":"fl-01","state":"testing"}
-{"t":23220,"kind":"host.state","host":"lenovo","state":"testing"}
-{"t":24200,"kind":"host.state","host":"fl-01","state":"tested"}
-{"t":24220,"kind":"host.state","host":"lenovo","state":"tested"}
-{"t":24400,"kind":"step.progress","step":"test","done":5,"total":5}
-{"t":24500,"kind":"step.end","step":"test","status":"ok"}
-{"t":24700,"kind":"ask","id":"switch","question":"12 hosts tested. Switch now?","options":[{"value":"yes","label":"yes"},{"value":"no","label":"no"}]}
-{"t":24800,"kind":"step.start","step":"switch","total":12}
-{"t":24850,"kind":"log","level":"info","message":"switching 12 tested hosts"}
-{"t":24900,"kind":"host.state","host":"hcs","state":"switching"}
-{"t":25000,"kind":"host.state","host":"hcs","state":"deployed"}
-{"t":25100,"kind":"host.state","host":"gw-ag","state":"switching"}
-{"t":25200,"kind":"host.state","host":"gw-ag","state":"deployed"}
-{"t":25300,"kind":"step.progress","step":"switch","done":2,"total":12}
-{"t":25400,"kind":"host.state","host":"gw-cp","state":"switching"}
-{"t":25400,"kind":"host.state","host":"gw-cp","state":"deployed"}
-{"t":25450,"kind":"host.state","host":"gw-lg","state":"switching"}
-{"t":25450,"kind":"host.state","host":"gw-lg","state":"deployed"}
-{"t":25500,"kind":"host.state","host":"ms-a2","state":"switching"}
-{"t":25500,"kind":"host.state","host":"ms-a2","state":"deployed"}
-{"t":25600,"kind":"step.progress","step":"switch","done":5,"total":12}
-{"t":25800,"kind":"host.state","host":"gfx","state":"switching"}
-{"t":25800,"kind":"host.state","host":"gfx","state":"deployed"}
-{"t":25850,"kind":"host.state","host":"nlt","state":"switching"}
-{"t":25850,"kind":"host.state","host":"nlt","state":"deployed"}
-{"t":25900,"kind":"host.state","host":"fd-01","state":"switching"}
-{"t":25900,"kind":"host.state","host":"fd-01","state":"deployed"}
-{"t":25950,"kind":"host.state","host":"fd-02","state":"switching"}
-{"t":25950,"kind":"host.state","host":"fd-02","state":"deployed"}
-{"t":26000,"kind":"host.state","host":"vbox-test","state":"switching"}
-{"t":26000,"kind":"host.state","host":"vbox-test","state":"deployed"}
-{"t":26100,"kind":"step.progress","step":"switch","done":10,"total":12}
-{"t":26300,"kind":"host.state","host":"fl-01","state":"switching"}
-{"t":26300,"kind":"host.state","host":"fl-01","state":"deployed"}
-{"t":26350,"kind":"host.state","host":"lenovo","state":"switching"}
-{"t":26350,"kind":"host.state","host":"lenovo","state":"deployed"}
-{"t":26400,"kind":"step.progress","step":"switch","done":12,"total":12}
-{"t":26500,"kind":"step.end","step":"switch","status":"ok"}
-{"t":26700,"kind":"step.start","step":"report"}
-{"t":27200,"kind":"step.end","step":"report","status":"ok"}
-{"t":27300,"kind":"run.end","status":"done","exitCode":0,"report":["12 deployed, 2 offline (alt, vbox-umi)","duration 27s","report sent to the warnings room"]}
+{"t":12700,"kind":"step.start","step":"publish","total":12}
+{"t":12800,"kind":"host.state","host":"hcs","state":"copying"}
+{"t":12820,"kind":"host.output","host":"hcs","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-hcs"}
+{"t":12840,"kind":"host.copy","host":"hcs","builder":"gfx","pulled":[{"source":"harmonia ag","paths":30},{"source":"cache.nixos.org","paths":7}],"pushed":67,"pushedBytes":679477248}
+{"t":12860,"kind":"host.state","host":"hcs","state":"ready"}
+{"t":12870,"kind":"step.progress","step":"publish","done":1,"total":12}
+{"t":13275,"kind":"host.state","host":"gw-ag","state":"copying"}
+{"t":13295,"kind":"host.output","host":"gw-ag","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-gw-ag"}
+{"t":13315,"kind":"host.copy","host":"gw-ag","builder":"gfx","pulled":[{"source":"harmonia ag","paths":142}],"pushed":3,"pushedBytes":1258}
+{"t":13335,"kind":"host.state","host":"gw-ag","state":"ready"}
+{"t":13345,"kind":"step.progress","step":"publish","done":2,"total":12}
+{"t":13750,"kind":"host.state","host":"nlt","state":"copying"}
+{"t":13770,"kind":"host.output","host":"nlt","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-nlt"}
+{"t":13810,"kind":"host.state","host":"nlt","state":"ready"}
+{"t":13820,"kind":"step.progress","step":"publish","done":3,"total":12}
+{"t":14225,"kind":"host.state","host":"gfx","state":"copying"}
+{"t":14245,"kind":"host.output","host":"gfx","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-gfx"}
+{"t":14285,"kind":"host.state","host":"gfx","state":"ready"}
+{"t":14295,"kind":"step.progress","step":"publish","done":4,"total":12}
+{"t":14700,"kind":"host.state","host":"fd-01","state":"copying"}
+{"t":14720,"kind":"host.output","host":"fd-01","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-fd-01"}
+{"t":14760,"kind":"host.state","host":"fd-01","state":"ready"}
+{"t":14770,"kind":"step.progress","step":"publish","done":5,"total":12}
+{"t":15175,"kind":"host.state","host":"fd-02","state":"copying"}
+{"t":15195,"kind":"host.output","host":"fd-02","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-fd-02"}
+{"t":15235,"kind":"host.state","host":"fd-02","state":"ready"}
+{"t":15245,"kind":"step.progress","step":"publish","done":6,"total":12}
+{"t":15650,"kind":"host.state","host":"vbox-test","state":"copying"}
+{"t":15670,"kind":"host.output","host":"vbox-test","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-vbox-test"}
+{"t":15710,"kind":"host.state","host":"vbox-test","state":"ready"}
+{"t":15720,"kind":"step.progress","step":"publish","done":7,"total":12}
+{"t":16125,"kind":"host.state","host":"gw-cp","state":"copying"}
+{"t":16145,"kind":"host.output","host":"gw-cp","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-gw-cp"}
+{"t":16185,"kind":"host.state","host":"gw-cp","state":"ready"}
+{"t":16195,"kind":"step.progress","step":"publish","done":8,"total":12}
+{"t":16600,"kind":"host.state","host":"gw-lg","state":"copying"}
+{"t":16620,"kind":"host.output","host":"gw-lg","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-gw-lg"}
+{"t":16660,"kind":"host.state","host":"gw-lg","state":"ready"}
+{"t":16670,"kind":"step.progress","step":"publish","done":9,"total":12}
+{"t":17075,"kind":"host.state","host":"ms-a2","state":"copying"}
+{"t":17095,"kind":"host.output","host":"ms-a2","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-ms-a2"}
+{"t":17135,"kind":"host.state","host":"ms-a2","state":"ready"}
+{"t":17145,"kind":"step.progress","step":"publish","done":10,"total":12}
+{"t":17550,"kind":"host.state","host":"fl-01","state":"copying"}
+{"t":17570,"kind":"host.output","host":"fl-01","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-fl-01"}
+{"t":17610,"kind":"host.state","host":"fl-01","state":"ready"}
+{"t":17620,"kind":"step.progress","step":"publish","done":11,"total":12}
+{"t":18025,"kind":"host.state","host":"lenovo","state":"copying"}
+{"t":18045,"kind":"host.output","host":"lenovo","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-lenovo"}
+{"t":18085,"kind":"host.state","host":"lenovo","state":"ready"}
+{"t":18095,"kind":"step.progress","step":"publish","done":12,"total":12}
+{"t":18500,"kind":"step.end","step":"publish","status":"ok"}
+{"t":18800,"kind":"step.start","step":"test","total":5}
+{"t":18900,"kind":"wave.start","index":1,"total":5,"hosts":["hcs"]}
+{"t":20000,"kind":"host.state","host":"hcs","state":"testing"}
+{"t":20200,"kind":"host.output","host":"hcs","phase":"activate","line":"switch-to-configuration test"}
+{"t":21000,"kind":"host.state","host":"hcs","state":"tested"}
+{"t":21100,"kind":"log","host":"hcs","level":"ok","message":"test ok, rollback timer disarmed"}
+{"t":21200,"kind":"step.progress","step":"test","done":1,"total":5}
+{"t":21400,"kind":"wave.start","index":2,"total":5,"hosts":["gw-ag"]}
+{"t":22200,"kind":"host.state","host":"gw-ag","state":"testing"}
+{"t":23000,"kind":"host.state","host":"gw-ag","state":"tested"}
+{"t":23100,"kind":"log","host":"gw-ag","level":"ok","message":"test ok, gateway reachable"}
+{"t":23200,"kind":"step.progress","step":"test","done":2,"total":5}
+{"t":23400,"kind":"wave.start","index":3,"total":5,"hosts":["nlt","gfx","fd-01","fd-02","vbox-test"]}
+{"t":24400,"kind":"host.state","host":"nlt","state":"testing"}
+{"t":24420,"kind":"host.state","host":"gfx","state":"testing"}
+{"t":24440,"kind":"host.state","host":"fd-01","state":"testing"}
+{"t":24460,"kind":"host.state","host":"fd-02","state":"testing"}
+{"t":24480,"kind":"host.state","host":"vbox-test","state":"testing"}
+{"t":25400,"kind":"host.state","host":"nlt","state":"tested"}
+{"t":25420,"kind":"host.state","host":"gfx","state":"tested"}
+{"t":25440,"kind":"host.state","host":"fd-01","state":"tested"}
+{"t":25460,"kind":"host.state","host":"fd-02","state":"tested"}
+{"t":25480,"kind":"host.state","host":"vbox-test","state":"tested"}
+{"t":25600,"kind":"step.progress","step":"test","done":3,"total":5}
+{"t":25800,"kind":"wave.start","index":4,"total":5,"hosts":["gw-cp","gw-lg","ms-a2"]}
+{"t":26800,"kind":"host.state","host":"gw-cp","state":"testing"}
+{"t":26820,"kind":"host.state","host":"gw-lg","state":"testing"}
+{"t":26840,"kind":"host.state","host":"ms-a2","state":"testing"}
+{"t":27800,"kind":"host.state","host":"gw-cp","state":"tested"}
+{"t":27820,"kind":"host.state","host":"gw-lg","state":"tested"}
+{"t":27840,"kind":"host.state","host":"ms-a2","state":"tested"}
+{"t":28000,"kind":"step.progress","step":"test","done":4,"total":5}
+{"t":28200,"kind":"wave.start","index":5,"total":5,"hosts":["fl-01","lenovo"]}
+{"t":29200,"kind":"host.state","host":"fl-01","state":"testing"}
+{"t":29220,"kind":"host.state","host":"lenovo","state":"testing"}
+{"t":30200,"kind":"host.state","host":"fl-01","state":"tested"}
+{"t":30220,"kind":"host.state","host":"lenovo","state":"tested"}
+{"t":30400,"kind":"step.progress","step":"test","done":5,"total":5}
+{"t":30500,"kind":"step.end","step":"test","status":"ok"}
+{"t":30700,"kind":"ask","id":"switch","question":"12 hosts tested. Switch now?","options":[{"value":"yes","label":"yes"},{"value":"no","label":"no"}]}
+{"t":30800,"kind":"step.start","step":"switch","total":12}
+{"t":30850,"kind":"log","level":"info","message":"switching 12 tested hosts"}
+{"t":30900,"kind":"host.state","host":"hcs","state":"switching"}
+{"t":31000,"kind":"host.state","host":"hcs","state":"deployed"}
+{"t":31100,"kind":"host.state","host":"gw-ag","state":"switching"}
+{"t":31200,"kind":"host.state","host":"gw-ag","state":"deployed"}
+{"t":31300,"kind":"step.progress","step":"switch","done":2,"total":12}
+{"t":31400,"kind":"host.state","host":"gw-cp","state":"switching"}
+{"t":31400,"kind":"host.state","host":"gw-cp","state":"deployed"}
+{"t":31450,"kind":"host.state","host":"gw-lg","state":"switching"}
+{"t":31450,"kind":"host.state","host":"gw-lg","state":"deployed"}
+{"t":31500,"kind":"host.state","host":"ms-a2","state":"switching"}
+{"t":31500,"kind":"host.state","host":"ms-a2","state":"deployed"}
+{"t":31600,"kind":"step.progress","step":"switch","done":5,"total":12}
+{"t":31800,"kind":"host.state","host":"gfx","state":"switching"}
+{"t":31800,"kind":"host.state","host":"gfx","state":"deployed"}
+{"t":31850,"kind":"host.state","host":"nlt","state":"switching"}
+{"t":31850,"kind":"host.state","host":"nlt","state":"deployed"}
+{"t":31900,"kind":"host.state","host":"fd-01","state":"switching"}
+{"t":31900,"kind":"host.state","host":"fd-01","state":"deployed"}
+{"t":31950,"kind":"host.state","host":"fd-02","state":"switching"}
+{"t":31950,"kind":"host.state","host":"fd-02","state":"deployed"}
+{"t":32000,"kind":"host.state","host":"vbox-test","state":"switching"}
+{"t":32000,"kind":"host.state","host":"vbox-test","state":"deployed"}
+{"t":32100,"kind":"step.progress","step":"switch","done":10,"total":12}
+{"t":32300,"kind":"host.state","host":"fl-01","state":"switching"}
+{"t":32300,"kind":"host.state","host":"fl-01","state":"deployed"}
+{"t":32350,"kind":"host.state","host":"lenovo","state":"switching"}
+{"t":32350,"kind":"host.state","host":"lenovo","state":"deployed"}
+{"t":32400,"kind":"step.progress","step":"switch","done":12,"total":12}
+{"t":32500,"kind":"step.end","step":"switch","status":"ok"}
+{"t":32700,"kind":"step.start","step":"report"}
+{"t":33200,"kind":"step.end","step":"report","status":"ok"}
+{"t":33300,"kind":"run.end","status":"done","exitCode":0,"report":["12 deployed, 2 offline (alt, vbox-umi)","duration 27s","report sent to the warnings room"]}

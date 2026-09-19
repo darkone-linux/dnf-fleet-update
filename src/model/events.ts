@@ -7,8 +7,8 @@
 import type { ExitCode } from "./exit-codes.ts";
 import type { RunParams } from "./params.ts";
 
-/** The 6 steps of the procedure, in order. Presence runs inside `build`. */
-export const STEPS = ["update", "select", "build", "test", "switch", "report"] as const;
+/** The 7 steps of the procedure, in order. Presence runs inside `build`. */
+export const STEPS = ["update", "select", "build", "publish", "test", "switch", "report"] as const;
 
 export type StepId = (typeof STEPS)[number];
 
@@ -22,6 +22,7 @@ export const STEP_LABELS: Record<StepId, string> = {
   update: "Update",
   select: "Select",
   build: "Build",
+  publish: "Publish",
   test: "Test",
   switch: "Switch",
   report: "Report",
@@ -31,6 +32,8 @@ export const STEP_LABELS: Record<StepId, string> = {
  * Host progress (spec § État et reprise). Presence is separate: `host.presence`.
  * Active states (`building`, `copying`, `testing`, `switching`) carry a spinner.
  *
+ * - `built`: closure exists in a fleet store, not on the host yet;
+ * - `ready`: closure on the host, waiting for its wave;
  * - `error`: activation done, at least one unit failed;
  * - `failed`: any other failure;
  * - `reverted`: rolled back on purpose to its origin.
@@ -40,6 +43,7 @@ export type HostState =
   | "building"
   | "built"
   | "copying"
+  | "ready"
   | "testing"
   | "tested"
   | "switching"

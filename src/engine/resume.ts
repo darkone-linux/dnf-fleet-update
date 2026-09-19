@@ -68,6 +68,9 @@ const savedParams = z.object({
 const savedHost = z.object({
   name: z.string(),
   status: z.string(),
+
+  // Finer than `status`: tells a published host from one still to publish.
+  state: z.string().optional(),
   path: z.string().regex(STORE_PATH).optional(),
   origin: z.object({ system: z.string(), profile: z.string() }).optional(),
 });
@@ -140,7 +143,17 @@ export function sameRevisions(
 }
 
 /** Progress a resumed host starts from, once its path is known to be reusable. */
-export type Restored = { state: "built" | "tested"; path: string; origin?: SavedHost["origin"] };
+export type Restored = {
+  state: "built" | "ready" | "tested";
+  path: string;
+  origin?: SavedHost["origin"];
+};
+
+/** What the host held, never what it was doing: an interrupted step starts over. */
+function held(host: SavedHost): Restored["state"] {
+  if (host.status === "tested") return "tested";
+  return host.state === "ready" ? "ready" : "built";
+}
 
 /**
  * What the new run rehydrates for one host. Without a reusable path the host
@@ -149,6 +162,6 @@ export type Restored = { state: "built" | "tested"; path: string; origin?: Saved
  */
 export function restore(host: SavedHost, reusable: boolean): Restored | undefined {
   if (!reusable || host.path === undefined) return undefined;
-  const state = host.status === "tested" ? "tested" : "built";
+  const state = held(host);
   return { state, path: host.path, ...(host.origin === undefined ? {} : { origin: host.origin }) };
 }

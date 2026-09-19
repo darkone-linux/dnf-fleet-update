@@ -26,6 +26,7 @@ import { Recorder, recordedChannel } from "./recorder.ts";
 import { parseSavedState, type SavedState } from "./resume.ts";
 import { rollbackFleet } from "./rollback.ts";
 import { build } from "./steps/build.ts";
+import { publish } from "./steps/publish.ts";
 import { report } from "./steps/report.ts";
 import { select } from "./steps/select.ts";
 import { update } from "./steps/update.ts";
@@ -172,6 +173,7 @@ async function steps(context: RunContext, progress: Progress) {
   try {
     const built = await build(context, hosts, presence);
     progress.warnings = built?.warnings ?? [];
+    if (goOn() && !context.params.buildOnly) await publish(context, hosts, presence);
     if (goOn() && !context.params.skipTest) await testWaves(context, hosts, presence, selection);
     if (goOn() && !context.params.skipSwitch)
       await switchWaves(context, hosts, presence, selection);
@@ -288,8 +290,12 @@ export async function runFleetUpdate(
     // Steps that will not run, said before the build starts. Only `--build-only`
     // can be taken back, by a `yes` to the question that follows the build.
     const { buildOnly, skipTest, skipSwitch } = params.value;
-    const omitted = { test: buildOnly || skipTest, switch: buildOnly || skipSwitch };
-    for (const step of ["test", "switch"] as const) {
+    const omitted = {
+      publish: buildOnly,
+      test: buildOnly || skipTest,
+      switch: buildOnly || skipSwitch,
+    };
+    for (const step of ["publish", "test", "switch"] as const) {
       if (omitted[step]) emit(context, { kind: "step.end", step, status: "omitted" });
     }
 

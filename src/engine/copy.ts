@@ -2,7 +2,7 @@
 // counted — what the host substituted itself against what was pushed to it.
 
 import type { PullSource } from "../model/events.ts";
-import { copyClosure } from "./commands/host.ts";
+import { copyClosure, onHost, pullClosure, type Target } from "./commands/host.ts";
 import { pathSizes } from "./commands/nix.ts";
 import { emit, log, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
@@ -60,39 +60,64 @@ async function volume(context: RunContext, paths: readonly string[]): Promise<nu
  */
 const ATTEMPTS = 3;
 
-/**
- * Copies the closure, then emits the copy counters of the host. Returns the
- * failure note, `undefined` when the copy went through or a halt cut it.
- */
-export async function copyToHost(
+async function push(
   context: RunContext,
-  fabric: Fabric,
   name: string,
   path: string,
   onLine: (line: OutputLine) => void,
 ): Promise<string | undefined> {
   const { params, flow } = context;
-  const tally: Tally = { pulled: new Map(), pushed: new Set() };
   let note: string | undefined;
 
   for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
     const execution = await execute(context, copyClosure(name, path, params.timeouts), {
       signal: flow.halt,
-      onLine: (line) => {
-        count(tally, fabric, line.line);
-        onLine(line);
-      },
+      onLine,
     });
-    if (flow.halt.aborted || succeeded(execution.result)) {
-      note = undefined;
-      break;
-    }
+    if (flow.halt.aborted || succeeded(execution.result)) return undefined;
     note = `copy failed: ${describeFailure(execution)}`;
     if (attempt < ATTEMPTS) log(context, "warn", `${note}, retrying`, name);
   }
+  return note;
+}
+
+/**
+ * Puts the closure on the host: pulled by the host from its own substituters
+ * first, pushed from the local store when nothing can serve it (spec
+ * § Publication). Emits the copy counters of the host. Returns the failure
+ * note, `undefined` when the host holds the closure or a halt cut the work.
+ */
+export async function serveHost(
+  context: RunContext,
+  fabric: Fabric,
+  target: Target,
+  path: string,
+  onLine: (line: OutputLine) => void,
+): Promise<string | undefined> {
+  const { params, flow } = context;
+  const tally: Tally = { pulled: new Map(), pushed: new Set() };
+  const watch = (line: OutputLine) => {
+    count(tally, fabric, line.line);
+    onLine(line);
+  };
+  const pull = () =>
+    execute(context, onHost(target, pullClosure(path, params.timeouts), params.timeouts), {
+      signal: flow.halt,
+      onLine: watch,
+    });
+
+  // A freshly built path sits in no cache: a failed pull is the ordinary case,
+  // not an incident, and the push behind it is the fallback, not a repair.
+  let note: string | undefined;
+  if (!succeeded((await pull()).result) && !flow.halt.aborted) {
+    note = await push(context, target.host, path, watch);
+
+    // Roots what the push landed: same command, instant from the local store.
+    if (note === undefined && !flow.halt.aborted) await pull();
+  }
 
   // Aborted `now`: the process is being killed, no time left to measure.
-  if (!context.signal.aborted) await report(context, name, tally);
+  if (!context.signal.aborted) await report(context, target.host, tally);
   return note;
 }
 

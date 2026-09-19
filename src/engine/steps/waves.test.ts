@@ -69,6 +69,7 @@ describe("test waves", () => {
       if (argv.includes("ssh-ng://nix@gw-ag")) return "copy";
       for (const word of [
         "dnf-maintenance on",
+        "--max-jobs 0",
         "readlink",
         "rc=$?",
         "[ -f",
@@ -80,7 +81,11 @@ describe("test waves", () => {
     });
     expect(steps).toEqual([
       "dnf-maintenance on",
+
+      // Pull, push, then pull again: the second one only roots what landed.
+      "--max-jobs 0",
       "copy",
+      "--max-jobs 0",
       "readlink",
       "rc=$?",
       "[ -f",

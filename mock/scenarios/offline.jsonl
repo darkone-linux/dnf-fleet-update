@@ -31,31 +31,42 @@
 {"t":4900,"kind":"step.progress","step":"build","done":6,"total":6}
 {"t":5000,"kind":"log","level":"info","message":"offline hosts built anyway, deployment skipped"}
 {"t":5100,"kind":"step.end","step":"build","status":"ok"}
-{"t":5300,"kind":"step.start","step":"test","total":2}
-{"t":5400,"kind":"wave.start","index":1,"total":2,"hosts":["gw-ag"]}
-{"t":5500,"kind":"host.state","host":"gw-ag","state":"copying"}
-{"t":6200,"kind":"host.state","host":"gw-ag","state":"testing"}
-{"t":7000,"kind":"host.state","host":"gw-ag","state":"tested"}
-{"t":7100,"kind":"step.progress","step":"test","done":1,"total":2}
-{"t":7300,"kind":"wave.start","index":2,"total":2,"hosts":["gfx","fd-01"]}
-{"t":7400,"kind":"host.state","host":"gfx","state":"copying"}
-{"t":7420,"kind":"host.state","host":"fd-01","state":"copying"}
-{"t":8200,"kind":"host.state","host":"gfx","state":"testing"}
-{"t":8220,"kind":"host.state","host":"fd-01","state":"testing"}
-{"t":9000,"kind":"host.state","host":"gfx","state":"tested"}
-{"t":9020,"kind":"host.state","host":"fd-01","state":"tested"}
-{"t":9100,"kind":"step.progress","step":"test","done":2,"total":2}
-{"t":9200,"kind":"step.end","step":"test","status":"ok"}
-{"t":9400,"kind":"step.start","step":"switch","total":3}
-{"t":9500,"kind":"log","level":"info","message":"switching 3 tested hosts"}
-{"t":9600,"kind":"host.state","host":"gw-ag","state":"switching"}
-{"t":9600,"kind":"host.state","host":"gw-ag","state":"deployed"}
-{"t":9700,"kind":"host.state","host":"gfx","state":"switching"}
-{"t":9700,"kind":"host.state","host":"gfx","state":"deployed"}
-{"t":9800,"kind":"host.state","host":"fd-01","state":"switching"}
-{"t":9800,"kind":"host.state","host":"fd-01","state":"deployed"}
-{"t":9900,"kind":"step.progress","step":"switch","done":3,"total":3}
-{"t":10000,"kind":"step.end","step":"switch","status":"ok"}
-{"t":10200,"kind":"step.start","step":"report"}
-{"t":10600,"kind":"step.end","step":"report","status":"ok"}
-{"t":10700,"kind":"run.end","status":"done","exitCode":0,"report":["3 deployed, 3 offline, 1 excluded","offline hosts carry a stale configuration","no critical profile affected: warnings room only"]}
+{"t":5200,"kind":"step.start","step":"publish","total":3}
+{"t":5300,"kind":"host.state","host":"gw-ag","state":"copying"}
+{"t":5320,"kind":"host.output","host":"gw-ag","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-gw-ag"}
+{"t":5360,"kind":"host.state","host":"gw-ag","state":"ready"}
+{"t":5370,"kind":"step.progress","step":"publish","done":1,"total":3}
+{"t":7200,"kind":"host.state","host":"gfx","state":"copying"}
+{"t":7220,"kind":"host.output","host":"gfx","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-gfx"}
+{"t":7260,"kind":"host.state","host":"gfx","state":"ready"}
+{"t":7270,"kind":"step.progress","step":"publish","done":2,"total":3}
+{"t":9100,"kind":"host.state","host":"fd-01","state":"copying"}
+{"t":9120,"kind":"host.output","host":"fd-01","phase":"publish","line":"copying path /nix/store/\u2026-nixos-system-fd-01"}
+{"t":9160,"kind":"host.state","host":"fd-01","state":"ready"}
+{"t":9170,"kind":"step.progress","step":"publish","done":3,"total":3}
+{"t":11000,"kind":"step.end","step":"publish","status":"ok"}
+{"t":11300,"kind":"step.start","step":"test","total":2}
+{"t":11400,"kind":"wave.start","index":1,"total":2,"hosts":["gw-ag"]}
+{"t":12200,"kind":"host.state","host":"gw-ag","state":"testing"}
+{"t":13000,"kind":"host.state","host":"gw-ag","state":"tested"}
+{"t":13100,"kind":"step.progress","step":"test","done":1,"total":2}
+{"t":13300,"kind":"wave.start","index":2,"total":2,"hosts":["gfx","fd-01"]}
+{"t":14200,"kind":"host.state","host":"gfx","state":"testing"}
+{"t":14220,"kind":"host.state","host":"fd-01","state":"testing"}
+{"t":15000,"kind":"host.state","host":"gfx","state":"tested"}
+{"t":15020,"kind":"host.state","host":"fd-01","state":"tested"}
+{"t":15100,"kind":"step.progress","step":"test","done":2,"total":2}
+{"t":15200,"kind":"step.end","step":"test","status":"ok"}
+{"t":15400,"kind":"step.start","step":"switch","total":3}
+{"t":15500,"kind":"log","level":"info","message":"switching 3 tested hosts"}
+{"t":15600,"kind":"host.state","host":"gw-ag","state":"switching"}
+{"t":15600,"kind":"host.state","host":"gw-ag","state":"deployed"}
+{"t":15700,"kind":"host.state","host":"gfx","state":"switching"}
+{"t":15700,"kind":"host.state","host":"gfx","state":"deployed"}
+{"t":15800,"kind":"host.state","host":"fd-01","state":"switching"}
+{"t":15800,"kind":"host.state","host":"fd-01","state":"deployed"}
+{"t":15900,"kind":"step.progress","step":"switch","done":3,"total":3}
+{"t":16000,"kind":"step.end","step":"switch","status":"ok"}
+{"t":16200,"kind":"step.start","step":"report"}
+{"t":16600,"kind":"step.end","step":"report","status":"ok"}
+{"t":16700,"kind":"run.end","status":"done","exitCode":0,"report":["3 deployed, 3 offline, 1 excluded","offline hosts carry a stale configuration","no critical profile affected: warnings room only"]}

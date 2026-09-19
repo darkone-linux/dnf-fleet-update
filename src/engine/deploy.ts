@@ -11,7 +11,7 @@ import {
   type Target,
 } from "./commands/host.ts";
 import { emit, log, type RunContext } from "./context.ts";
-import { copyToHost } from "./copy.ts";
+import { serveHost } from "./copy.ts";
 import { decideFailure, decideLost } from "./decisions.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
 import type { HostTable } from "./hosts.ts";
@@ -38,7 +38,7 @@ async function failed(
 }
 
 /** Before the activation of this phase: unreachable means lost, no timer to wait for. */
-async function failedBeforeActivation(
+export async function failedBeforeActivation(
   context: RunContext,
   hosts: HostTable,
   presence: Presence,
@@ -97,12 +97,12 @@ export async function deployHost(
     ({ line }: OutputLine) =>
       emit(context, { kind: "host.output", host: name, phase: outputPhase, line });
 
-  // `built`: nothing copied yet — the test phase, or a switch under
-  // `--skip-test`. A tested host already holds its closure.
+  // `built`: the publication left this host behind, unreachable at the time
+  // (spec § Publication). A `ready` or `tested` host already holds its closure.
   if (host.state === "built") {
     hosts.set(name, "copying");
     if (!host.local) {
-      const note = await copyToHost(context, hosts.fabric, name, path, output("copy"));
+      const note = await serveHost(context, hosts.fabric, target, path, output("copy"));
       if (flow.halt.aborted) return;
       if (note !== undefined) {
         return failedBeforeActivation(context, hosts, presence, name, note);

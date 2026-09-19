@@ -1,5 +1,6 @@
 // Steps 4 and 5, test then switch by waves (spec § Étapes, § Vagues, § Présence).
 
+import type { HostState } from "../../model/events.ts";
 import { COMMAND_NOT_FOUND, maintenance, onHost, type Phase } from "../commands/host.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { deployHost } from "../deploy.ts";
@@ -73,11 +74,11 @@ async function waves(
   phase: Phase,
 ): Promise<boolean> {
   const { flow } = context;
-  const from = startingState(context, phase);
-  const eligible = (name: string) => hosts.get(name).state === from;
+  const from = startingStates(context, phase);
+  const eligible = (name: string) => from.includes(hosts.get(name).state);
   const ready = hosts.all().filter((host) => eligible(host.name));
   if (ready.length === 0) {
-    log(context, "info", `no ${from} host: nothing to ${phase}`);
+    log(context, "info", `no ${from[0]} host: nothing to ${phase}`);
     emit(context, { kind: "step.end", step: phase, status: "skipped" });
     return false;
   }
@@ -128,9 +129,12 @@ async function waves(
   return true;
 }
 
-/** State a host must hold to enter the step: what the step before it left. */
-function startingState(context: RunContext, phase: Phase): "built" | "tested" {
-  return phase === "test" || context.params.skipTest ? "built" : "tested";
+/**
+ * States a host may hold to enter the step. `built` alongside `ready`: the
+ * publication left that host behind, and its wave serves it (spec § Publication).
+ */
+function startingStates(context: RunContext, phase: Phase): HostState[] {
+  return phase === "test" || context.params.skipTest ? ["ready", "built"] : ["tested"];
 }
 
 /** Hosts the step could not reach: where they are left says what to do with them. */
@@ -199,10 +203,10 @@ export async function switchWaves(
   selection: Selection,
 ): Promise<void> {
   const { params, flow } = context;
-  const from = startingState(context, "switch");
-  const ready = hosts.all().filter((host) => host.state === from);
+  const from = startingStates(context, "switch");
+  const ready = hosts.all().filter((host) => from.includes(host.state));
   if (ready.length === 0) {
-    log(context, "warn", `no ${from} host: nothing to switch`);
+    log(context, "warn", `no ${from[0]} host: nothing to switch`);
     emit(context, { kind: "step.end", step: "switch", status: "skipped" });
     flow.finish();
     return;

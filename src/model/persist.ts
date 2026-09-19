@@ -122,7 +122,10 @@ export function hostStatus(host: Pick<PersistedHost, "state" | "online">): HostS
     case "excluded":
     case "tested":
       return host.state;
+    // A host holding its closure but never pinged reads as offline, like a
+    // built one: the waves left it out for lack of presence.
     case "built":
+    case "ready":
       return host.online ? "remaining" : "offline";
     case "pending":
     case "building":

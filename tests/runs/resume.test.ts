@@ -75,13 +75,16 @@ test("hosts left in test are switched, nothing built, nothing tested again", asy
   expect(run.feed).toEqual(
     expect.arrayContaining([
       "info 6 paths reused, 0 to build",
-      "info no built host: nothing to test",
+      "info no built host: nothing to publish",
+      "info no ready host: nothing to test",
     ]),
   );
 
   // One activation each, the switch: the test of the saved run stands.
   expect(run.sim.count("activate") - tests).toBe(6);
-  expect(run.sim.count("copy")).toBe(6);
+  // Three pushes in the first run (the zone caches, and the zone without one);
+  // the resume finds every path in place and copies nothing.
+  expect(run.sim.count("copy")).toBe(3);
 });
 
 test("--on narrows the resumed hosts without touching the saved selection", async () => {

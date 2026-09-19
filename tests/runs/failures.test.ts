@@ -206,7 +206,7 @@ test("copy failed on a reachable host: retried, then failed, excluded, not activ
 test("a copy that goes through is not retried", async () => {
   const run = await simulateRun();
 
-  expect(run.sim.count("copy", "gw-ag")).toBe(1);
+  expect(run.sim.count("copy", "hcs")).toBe(1);
 });
 
 test("forced rollback failing on a host: failed with its reason, the others reverted", async () => {

@@ -49,7 +49,7 @@ test("every scenario is discoverable", () => {
 
 test("the fold carries the engine clock of the last event", () => {
   expect(initialState().t).toBe(0);
-  expect(fold("nominal").t).toBe(27_300);
+  expect(fold("nominal").t).toBe(33_300);
 });
 
 test("nominal deploys every reachable host", () => {
@@ -125,7 +125,7 @@ test("settled hosts drop their live output line", () => {
 test("each started step opens a heading in the feed", () => {
   const state = fold("nominal");
   const headings = state.feed.filter((item) => item.kind === "step").map((item) => item.message);
-  expect(headings).toEqual(["Update", "Select", "Build", "Test", "Switch", "Report"]);
+  expect(headings).toEqual(["Update", "Select", "Build", "Publish", "Test", "Switch", "Report"]);
 });
 
 test("a streamed AI answer accumulates and closes", () => {

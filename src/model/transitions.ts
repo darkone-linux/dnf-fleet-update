@@ -9,8 +9,13 @@ const NEXT: Record<HostState, readonly HostState[]> = {
   pending: ["building", "excluded"],
   building: ["built", "failed", "excluded"],
   built: ["copying", "excluded"],
-  // `switching`: `--skip-test`, the copy leads straight to the activation.
-  copying: ["testing", "switching", "failed", "excluded"],
+
+  // `testing`/`switching`: a host served just before its wave activates without
+  // passing through `ready` — publication left it behind, unreachable.
+  copying: ["ready", "testing", "switching", "failed", "excluded"],
+
+  // `switching`: `--skip-test`, the wave activates straight from `ready`.
+  ready: ["testing", "switching", "failed", "excluded"],
   testing: ["tested", "error", "failed", "excluded"],
 
   // `reverted`, `failed` from an activated host: forced rollback and its failure.

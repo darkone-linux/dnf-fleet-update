@@ -27,7 +27,9 @@ test("offline at its test wave, back later: joins the next wave, deployed", asyn
     "test 4/5 srv-ag,gw-cp",
     "test 5/5 lt-cp",
   ]);
+  expect(run.feed).toContain("warn zone ag: cache offline, its hosts pay one by one");
   expect(run.feed.filter((line) => line.startsWith("warn offline"))).toEqual([
+    "warn offline, served before their wave: srv-ag",
     "warn offline, retried next wave: srv-ag",
     "warn offline, retried next wave: srv-ag",
   ]);

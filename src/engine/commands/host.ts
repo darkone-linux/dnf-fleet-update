@@ -134,6 +134,27 @@ export function copyClosure(host: string, path: string, timeouts: Timeouts): Com
   );
 }
 
+/**
+ * GC root of a published closure, in the home of `nix`. One per host, replaced
+ * by the next publication: the fleet collects garbage daily, and between the
+ * publication and its wave nothing else holds the path.
+ */
+const PUBLISHED_LINK = "$HOME/.local/state/fleet-update/current";
+
+/**
+ * Substitutes the closure on the host itself (spec § Publication).
+ * `--max-jobs 0` substitutes or fails, never compiles: without it a laptop
+ * missing one path starts building a kernel.
+ */
+export function pullClosure(path: string, timeouts: Timeouts): HostCommand {
+  assertSafe("store path", path, STORE_PATH);
+  const script = [
+    `mkdir -p "$(dirname "${PUBLISHED_LINK}")"`,
+    `${shellJoin(["nix", "build", path, "--max-jobs", "0", "--out-link"])} "${PUBLISHED_LINK}"`,
+  ].join(" && ");
+  return { argv: ["sh", "-c", script], root: false, seconds: timeouts.publish };
+}
+
 /** Two lines: `/run/current-system`, then the system profile target. */
 export function readOrigin(timeouts: Timeouts): HostCommand {
   return {

@@ -48,6 +48,7 @@ export const hostGlyph: Record<ShownState, string> = {
   testing: "",
   switching: "",
   built: "🌥️",
+  ready: "⛅",
   tested: "🌤️",
   deployed: "☀️",
 
@@ -68,6 +69,7 @@ export const hostStateColor: Record<ShownState, string> = {
   testing: color.text,
   switching: color.text,
   built: color.text,
+  ready: color.text,
   tested: color.text,
   deployed: color.ok,
   error: color.warn,

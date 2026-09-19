@@ -51,6 +51,7 @@ export type SimKind =
   | "build"
   | "ping"
   | "copy"
+  | "pull"
   | "maintenance"
   | "origin"
   | "profile"
@@ -150,6 +151,7 @@ export class SimFleet implements CommandRunner {
     private readonly clock: FakeClock,
     private readonly options: SimOptions = {},
   ) {
+    if (options.local !== undefined) this.holding.add(options.local);
     const hostsJson = (options.hostsJson ?? HOSTS_JSON) as { hostname: string }[];
     for (const { hostname } of hostsJson) {
       this.hosts.set(hostname, {
@@ -237,25 +239,30 @@ export class SimFleet implements CommandRunner {
     return matching;
   }
 
+  /** Hosts holding the toplevel; the deployment machine built it. */
+  private readonly holding = new Set<string>();
+
   private behaviour(name: string): HostBehaviour {
     return this.options.behaviours?.[name] ?? {};
   }
 
-  /** What a host would substitute from: its zone harmonia, or the public cache. */
-  private substituter(name: string): string {
+  /**
+   * Zone cache of a host, excluding the host itself: what it could pull from
+   * once that cache holds the path. `undefined`: the zone has none.
+   */
+  private zoneCache(name: string): { host: string; url: string } | undefined {
     const fleet = parseFleet(
       this.options.hostsJson ?? HOSTS_JSON,
       this.options.networkJson ?? NETWORK_JSON,
     );
-    if (!fleet.ok) return PUBLIC_CACHE;
+    if (!fleet.ok) return undefined;
     const zone = fleet.value.hosts.find((host) => host.name === name)?.zone;
     const server = fleet.value.services.find(
       (service) => service.name === "harmonia" && service.zone === zone,
     )?.host;
     const ip = fleet.value.hosts.find((host) => host.name === server)?.ip;
-    return server === undefined || server === name || ip === undefined
-      ? PUBLIC_CACHE
-      : `http://${ip}:5000`;
+    if (server === undefined || server === name || ip === undefined) return undefined;
+    return { host: server, url: `http://${ip}:5000` };
   }
 
   private reachable(name: string): boolean {
@@ -327,6 +334,7 @@ export class SimFleet implements CommandRunner {
         at,
       };
     }
+    if (inner.includes("--max-jobs 0")) return { kind: "pull", host, at };
     if (inner.includes("readlink")) return { kind: "origin", host, at };
     const result = RESULT_NAME.exec(inner)?.[1];
     if (inner.includes("[ -f")) {
@@ -470,13 +478,30 @@ export class SimFleet implements CommandRunner {
 
     switch (command.kind) {
       case "copy": {
-        // Counters of the report: the toplevel pushed, one path substituted —
-        // from the zone harmonia when the zone has one, else the public cache.
+        // Counters of the report: the toplevel pushed, one path the host
+        // substitutes itself from the public cache (`--substitute-on-destination`).
         err(`copying path '${storePath(name)}' to 'ssh-ng://nix@${name}'...`);
-        err(`copying path '${storePath(`${name}-dep`)}' from '${this.substituter(name)}'...`);
+        err(`copying path '${storePath(`${name}-dep`)}' from '${PUBLIC_CACHE}'...`);
         const code = behaviour.copyExit ?? 0;
         if (code !== 0) err(`error: cannot copy to '${name}'`);
+        else this.holding.add(name);
         return exit(code);
+      }
+
+      // A host substitutes only what its zone cache already holds: the
+      // publication seeds that cache first, the rest of the zone pulls from it.
+      case "pull": {
+        if (this.holding.has(name)) return ok();
+        const cache = this.zoneCache(name);
+        if (cache === undefined || !this.holding.has(cache.host)) {
+          err(`error: path '${storePath(name)}' is not available and --max-jobs 0`);
+          return exit(1);
+        }
+        for (const path of [storePath(name), storePath(`${name}-dep`)]) {
+          err(`copying path '${path}' from '${cache.url}'...`);
+        }
+        this.holding.add(name);
+        return ok();
       }
       case "maintenance":
         return ok();

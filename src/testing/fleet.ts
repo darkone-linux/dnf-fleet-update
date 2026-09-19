@@ -124,6 +124,9 @@ export const pingOf = (host: string, exitCode: number, once = false): CommandScr
 /** Hosts that answer and deploy: placed last, after the scripts of a test case. */
 export const HAPPY_HOSTS: CommandScript[] = [
   { match: ["ping"] },
+
+  // A freshly built path sits in no cache: the pull fails and the push follows.
+  { match: anywhere("--max-jobs 0"), exitCode: 1 },
   { match: anywhere("dnf-maintenance") },
   { match: anywhere("ssh-ng://") },
   {

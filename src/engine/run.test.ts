@@ -207,7 +207,9 @@ describe("runFleetUpdate", () => {
       hcs: "reverted",
       "gw-ag": "reverted",
       "srv-ag": "reverted",
-      "pc-ag": "built",
+
+      // Published before the waves, never activated: the stop found it `ready`.
+      "pc-ag": "ready",
     });
     expect(end()).toMatchObject({ status: "failed", exitCode: 1 });
     expect(end().report).toContain("run stopped on error");

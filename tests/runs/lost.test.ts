@@ -67,7 +67,9 @@ test("gateway lost, unattended: its rollback waited for, then the run stops", as
 
   // Attempts, then `ssh` + `activation` for the timer and its rollback.
   expect(run.clock.now()).toBeGreaterThanOrEqual(ATTEMPTS_END + 330_000);
-  expect(run.sim.count("copy", "srv-ag")).toBe(0);
+  // Published before the waves; the run stopped before its activation.
+  expect(run.sim.count("copy", "srv-ag")).toBe(1);
+  expect(run.sim.count("activate", "srv-ag")).toBe(0);
   run.sim.tick();
   expect(run.sim.host("gw-ag").system).toBe(ORIGIN_PATH);
 });
@@ -122,7 +124,7 @@ test("--stop-loss, lost during the switch: switched and tested hosts reverted by
   );
 });
 
-test("unreachable when its copy starts: lost before activation, no wait, excluded", async () => {
+test("unreachable when its wave starts: lost before activation, no wait, excluded", async () => {
   let down = false;
   const run = await simulateRun({
     behaviours: { "pc-ag": { reachable: () => !down } },
@@ -133,7 +135,9 @@ test("unreachable when its copy starts: lost before activation, no wait, exclude
   expect(run.statuses["pc-ag"]).toBe("excluded");
   expect(run.sim.count("activate", "pc-ag")).toBe(0);
   expect(run.clock.now()).toBeLessThan(ATTEMPTS_END);
-  expect(run.recorded?.report).toContain("| pc-ag | excluded | unreachable: copy failed: exit 1:");
+  expect(run.recorded?.report).toContain(
+    "| pc-ag | excluded | unreachable: origin not read: exit 255:",
+  );
 });
 
 test("--stop-loss: a gateway's rollback drops its own session, its result read, reverted", async () => {

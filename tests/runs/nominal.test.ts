@@ -44,7 +44,11 @@ test("--skip-test: test omitted, hosts copied then switched wave by wave", async
   expect(run.exitCode).toBe(0);
   expect(run.statuses).toEqual(every("deployed"));
   expect(run.ui.steps.test.status).toBe("omitted");
-  expect(run.sim.count("copy")).toBe(ALL.length);
+
+  // Published before the waves: only the zone caches, and the zone that has
+  // none, are pushed to — the rest of each zone pulls in LAN.
+  for (const name of ["hcs", "srv-ag", "gw-cp"]) expect(run.sim.count("copy", name)).toBe(1);
+  for (const name of ["gw-ag", "pc-ag", "lt-cp"]) expect(run.sim.count("copy", name)).toBe(0);
   for (const name of ALL) {
     expect(run.sim.host(name).history).toEqual([
       "profile set",
@@ -159,7 +163,7 @@ test("copy counters: one report line per host copied to", async () => {
 
   // `srv-ag` runs the zone harmonia, so `gw-ag` pulls from it by name.
   const served = counted?.find((host) => host.name === "gw-ag");
-  expect(served?.copy?.pulled).toEqual([{ source: "harmonia ag", paths: 1 }]);
+  expect(served?.copy?.pulled).toEqual([{ source: "harmonia ag", paths: 2 }]);
 });
 
 test("--on, deployment host in the selection: no ssh, no copy, no timer for it", async () => {
