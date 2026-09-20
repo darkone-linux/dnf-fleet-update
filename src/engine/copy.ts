@@ -7,6 +7,7 @@ import { pathSizes } from "./commands/nix.ts";
 import { emit, log, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
 import type { Fabric } from "./fabric.ts";
+import { RETRY_ATTEMPTS } from "./known-errors.ts";
 import { parseCopyPath, parsePathSize } from "./nix-output.ts";
 import type { OutputLine } from "./ports.ts";
 
@@ -53,13 +54,6 @@ async function volume(context: RunContext, paths: readonly string[]): Promise<nu
   return total;
 }
 
-/**
- * A `nix copy` killed loses the path in flight whole — nix has no partial
- * resume — and gives up on the paths after it. Retried at most twice: the
- * second run skips whatever is already valid (spec § Exécution).
- */
-const ATTEMPTS = 3;
-
 async function push(
   context: RunContext,
   name: string,
@@ -70,14 +64,17 @@ async function push(
   const { params, flow } = context;
   let note: string | undefined;
 
-  for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+  // A `nix copy` killed loses the path in flight whole — nix has no partial
+  // resume — and gives up on the paths after it. Retried at most twice: the
+  // second run skips whatever is already valid (spec § Exécution).
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
     const execution = await execute(context, copyClosure(name, path, params.timeouts, from), {
       signal: flow.halt,
       onLine,
     });
     if (flow.halt.aborted || succeeded(execution.result)) return undefined;
     note = `copy failed: ${describeFailure(execution)}`;
-    if (attempt < ATTEMPTS) log(context, "warn", `${note}, retrying`, name);
+    if (attempt < RETRY_ATTEMPTS) log(context, "warn", `${note}, retrying`, name);
   }
   return note;
 }

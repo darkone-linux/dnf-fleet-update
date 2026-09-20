@@ -46,9 +46,9 @@ export async function execute(
 }
 
 function hint(context: RunContext, { stdout, stderr }: Execution): void {
-  const message = knownError([...stderr, ...stdout].join("\n"));
-  if (message !== undefined && context.known.add(message)) {
-    log(context, "warn", `hint: ${message}`);
+  const known = knownError([...stderr, ...stdout].join("\n"));
+  if (known !== undefined && context.known.add(known.message)) {
+    log(context, "warn", `hint: ${known.message}`);
   }
 }
 

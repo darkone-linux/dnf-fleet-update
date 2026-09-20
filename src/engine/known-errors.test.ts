@@ -1,28 +1,33 @@
-// Signature table: a known trap must read without knowing Nix.
+// Signature table: a known trap must read without knowing Nix, and say what
+// the run may do about it.
 
 import { describe, expect, test } from "bun:test";
 import { KnownErrors, knownError } from "./known-errors.ts";
 
 describe("knownError", () => {
-  test("the narHash mismatch names the nix-eval-jobs mismatch", () => {
+  test("the narHash mismatch names the nix-eval-jobs mismatch, and stops the run", () => {
     const output = [
       "error:",
       "       … while fetching the input 'git+file:///etc/nixos?ref=refs/heads/main'",
       "       error: mismatch in field 'narHash' of input '{\"__final\":true}'",
     ].join("\n");
 
-    expect(knownError(output)).toBe(
-      "nix-eval-jobs is not linked against the same Nix as the system: install the version matching nix --version",
-    );
+    expect(knownError(output)).toEqual({
+      message:
+        "nix-eval-jobs is not linked against the same Nix as the system: install the version matching nix --version",
+      fix: { kind: "stop" },
+    });
   });
 
-  test("the missing signature names the trusted-users setting", () => {
+  test("the missing signature names the trusted-users setting, and stops the run", () => {
     const output =
       "error: cannot add path '/nix/store/0gpc4z-element-web-wrapped-1.12.26' because it lacks a signature by a trusted key";
 
-    expect(knownError(output)).toBe(
-      "the deploy user is not trusted on that host: add nix to its nix.settings.trusted-users",
-    );
+    expect(knownError(output)).toEqual({
+      message:
+        "the deploy user is not trusted on that host: add nix to its nix.settings.trusted-users",
+      fix: { kind: "stop" },
+    });
   });
 
   test("an unknown failure stays unexplained", () => {

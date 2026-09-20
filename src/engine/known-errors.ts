@@ -1,10 +1,36 @@
 // Known errors (spec § Erreurs et réparations): signature of a failed command
-// → what it means, in plain language. Pure; the raw reason is never replaced.
+// → what it means in plain language, and what the run may do about it. Pure;
+// the raw reason is never replaced.
 
-interface Signature {
+/** Attempts of a retried command, unless its signature says otherwise. */
+export const RETRY_ATTEMPTS = 3;
+
+/**
+ * Deterministic answer to a known trap. Declared here, obeyed by the steps
+ * that come with the collection and the repair (spec § Erreurs et réparations).
+ *
+ * - `retry`: transient, `max` attempts in all;
+ * - `exclude`: the host alone is lost, the run goes on without it;
+ * - `stop`: nothing will work until a human acts;
+ * - `ai`: handed over according to `--ai-error-action`;
+ * - `none`: explained, nothing deterministic to do.
+ */
+export type Fix =
+  | { kind: "retry"; max?: number }
+  | { kind: "exclude" }
+  | { kind: "stop" }
+  | { kind: "ai" }
+  | { kind: "none" };
+
+/** What a matched signature says: the plain message, and the answer to it. */
+export interface KnownError {
+  message: string;
+  fix: Fix;
+}
+
+interface Signature extends KnownError {
   /** Searched in the whole output of the command, stderr first. */
   match: RegExp;
-  message: string;
 }
 
 const SIGNATURES: readonly Signature[] = [
@@ -14,6 +40,9 @@ const SIGNATURES: readonly Signature[] = [
     match: /mismatch in field 'narHash'/,
     message:
       "nix-eval-jobs is not linked against the same Nix as the system: install the version matching nix --version",
+
+    // Same tool evaluates every host: nothing is left to go on with.
+    fix: { kind: "stop" },
   },
   {
     // `--no-check-sigs` is honoured for a trusted user only: elsewhere the
@@ -21,12 +50,16 @@ const SIGNATURES: readonly Signature[] = [
     match: /lacks a signature by a trusted key/,
     message:
       "the deploy user is not trusted on that host: add nix to its nix.settings.trusted-users",
+
+    // Retrying pushes the same unsigned paths; the host needs a rebuild first.
+    fix: { kind: "stop" },
   },
 ];
 
-/** Plain message of the first signature found; `undefined` when none matches. */
-export function knownError(output: string): string | undefined {
-  return SIGNATURES.find((signature) => signature.match.test(output))?.message;
+/** The first signature found; `undefined` when none matches. */
+export function knownError(output: string): KnownError | undefined {
+  const found = SIGNATURES.find((signature) => signature.match.test(output));
+  return found && { message: found.message, fix: found.fix };
 }
 
 /** Said once per run: the same trap fires on every command it breaks. */
