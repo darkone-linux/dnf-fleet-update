@@ -56,6 +56,22 @@ export function succeeded(result: CommandResult): boolean {
   return result.exitCode === 0 && !result.timedOut;
 }
 
+/** A failed command as a step reports it (spec § Erreurs et réparations). */
+export interface Failure {
+  /** One line: the reason of the host. */
+  note: string;
+
+  /** Error lines of the output, for the diagnosis; trimmed by the collection. */
+  excerpt: string[];
+}
+
+/** Error lines of a failed command: stderr, or stdout when it said nothing. */
+export function errorLines({ stdout, stderr }: Execution): string[] {
+  const notEmpty = (line: string) => line.trim() !== "";
+  const errors = stderr.filter(notEmpty);
+  return errors.length > 0 ? errors : stdout.filter(notEmpty);
+}
+
 /** Longest error excerpt kept on one feed line. */
 const EXCERPT = 160;
 

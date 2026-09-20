@@ -162,6 +162,21 @@ test("units failed at the test: left in test, not switched, the run is done", as
   expect(run.recorded?.report).toContain("## Hosts left in test\n\n- gw-cp");
 });
 
+test("units failed: the host is asked what failed, its journals kept, report and incidents", async () => {
+  const run = await simulateRun({
+    behaviours: { "gw-cp": { activation: { test: 4 }, failedUnits: ["outline.service"] } },
+  });
+
+  expect(run.statuses["gw-cp"]).toBe("error");
+  expect(run.feed).toContain("warn gw-cp: units failed: outline.service");
+  expect(run.sim.count("journal", "gw-cp")).toBe(1);
+  expect(run.recorded?.state?.hosts.find((host) => host.name === "gw-cp")?.diagnosis).toMatchObject(
+    { units: ["outline.service"] },
+  );
+  expect(run.recorded?.report).toContain("### gw-cp\n\nFailed units: outline.service");
+  expect(run.recorded?.logs.get("gw-cp.diag")?.join("\n")).toContain("journal of outline.service");
+});
+
 test("units failed at the switch: error, switched all the same", async () => {
   const run = await simulateRun({ behaviours: { hcs: { activation: { switch: 4 } } } });
 

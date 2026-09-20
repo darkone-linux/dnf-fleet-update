@@ -10,8 +10,10 @@ import {
   activate,
   asNix,
   copyClosure,
+  failedUnits,
   maintenance,
   onHost,
+  parseFailedUnits,
   parseOrigin,
   ping,
   readOrigin,
@@ -21,6 +23,7 @@ import {
   SETTLE_PENDING,
   setProfile,
   settleResult,
+  unitJournal,
 } from "./host.ts";
 import { buildHost, evalHosts, selectExpression } from "./nix.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
@@ -304,6 +307,40 @@ describe("origin", () => {
     for (const stdout of ["", OLD, `${OLD}\n/etc/nixos\n`, `${OLD}\n${NEW}\n${NEW}`]) {
       expect({ stdout, ok: parseOrigin(stdout).ok }).toEqual({ stdout, ok: false });
     }
+  });
+});
+
+describe("collection", () => {
+  test("failed units read by name, decorations and columns dropped", () => {
+    const listed = [
+      "  outline.service    loaded failed failed Outline",
+      "nginx.service loaded failed failed Nginx",
+      "",
+      "2 loaded units listed.",
+    ].join("\n");
+
+    expect(parseFailedUnits(listed)).toEqual(["outline.service", "nginx.service"]);
+    expect(failedUnits(T).argv).toEqual([
+      "systemctl",
+      "list-units",
+      "--failed",
+      "--plain",
+      "--no-legend",
+      "--no-pager",
+    ]);
+  });
+
+  // The engine holds no wall clock: the window is a span, not a date.
+  test("a journal is bounded by lines and by a relative span, read as root", () => {
+    expect(unitJournal("outline.service", 45.4, 200, T)).toEqual({
+      argv: ["journalctl", "-u", "outline.service", "--no-pager", "-n", "200", "--since=-45s"],
+      root: true,
+      seconds: 30,
+    });
+
+    // A wave that just started still asks for a window.
+    expect(unitJournal("a.service", 0, 10, T).argv).toContain("--since=-1s");
+    expect(() => unitJournal("a.service; rm -rf /", 1, 10, T)).toThrow("unsafe unit");
   });
 });
 

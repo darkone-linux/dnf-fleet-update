@@ -32,6 +32,15 @@ export const AI_ERROR_ACTION = ["none", "analysis", "repair"] as const;
 
 export type AiErrorAction = (typeof AI_ERROR_ACTION)[number];
 
+/** Bounds of the deterministic collection (spec § Erreurs et réparations). */
+export interface Diagnostics {
+  /** Journal lines kept per failed unit, in `logs/<host>.diag`. */
+  journalLines: number;
+
+  /** Error lines of the failing output kept in the state and the report. */
+  excerptLines: number;
+}
+
 export interface RunParams {
   /** Raw `--on` query; absent: the whole fleet. */
   on?: string;
@@ -70,6 +79,7 @@ export interface RunParams {
 
   /** Seconds between two pings of the tracked hosts. */
   pingInterval: number;
+  diagnostics: Diagnostics;
 }
 
 /** Built-in defaults of the options (spec § Options), last in the resolution order. */
@@ -84,6 +94,9 @@ export const DEFAULTS = {
   rollbackTimeout: 600,
   pingInterval: 15,
 } as const;
+
+/** No option and no fleet key today: the resolution point of the two bounds. */
+export const DEFAULT_DIAGNOSTICS: Diagnostics = { journalLines: 200, excerptLines: 20 };
 
 /** Spec § Délais, seconds. */
 export const DEFAULT_TIMEOUTS: Timeouts = {

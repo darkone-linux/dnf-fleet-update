@@ -237,6 +237,60 @@ export function hasPath(path: string, timeouts: Timeouts): HostCommand {
   return { argv: ["nix", "path-info", path], root: false, seconds: timeouts.ssh };
 }
 
+/** Unit names come from `systemctl` output: never a shell metacharacter. */
+const UNIT = /^[a-zA-Z0-9@:_.\\-]+$/;
+
+/** System state and failed unit count (spec § Erreurs et réparations): read by a human. */
+export function systemStatus(timeouts: Timeouts): HostCommand {
+  return { argv: ["systemctl", "status", "--no-pager"], root: false, seconds: timeouts.ssh };
+}
+
+/** One failed unit per line, name first: `--plain --no-legend` drops the decorations. */
+export function failedUnits(timeouts: Timeouts): HostCommand {
+  return {
+    argv: ["systemctl", "list-units", "--failed", "--plain", "--no-legend", "--no-pager"],
+    root: false,
+    seconds: timeouts.ssh,
+  };
+}
+
+/** Names of `systemctl list-units --failed`; anything else on the line is dropped. */
+export function parseFailedUnits(stdout: string): string[] {
+  const units: string[] = [];
+  for (const line of stdout.split("\n")) {
+    const name = line.trim().split(/\s+/)[0];
+    if (name?.includes(".") && UNIT.test(name)) units.push(name);
+  }
+  return units;
+}
+
+/**
+ * Journal of one failed unit since its wave started. Root: the deploy user
+ * reads no system journal. `--since=-<n>s`: a relative span, the engine holds
+ * no wall clock.
+ */
+export function unitJournal(
+  unit: string,
+  since: number,
+  lines: number,
+  timeouts: Timeouts,
+): HostCommand {
+  assertSafe("unit", unit, UNIT);
+  return {
+    argv: [
+      "journalctl",
+      "-u",
+      unit,
+      "--no-pager",
+      "-n",
+      String(lines),
+      `--since=-${Math.max(1, Math.round(since))}s`,
+    ],
+    root: true,
+    seconds: timeouts.ssh,
+  };
+}
+
 /** Two lines: `/run/current-system`, then the system profile target. */
 export function readOrigin(timeouts: Timeouts): HostCommand {
   return {

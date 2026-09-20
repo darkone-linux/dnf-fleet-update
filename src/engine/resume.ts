@@ -5,7 +5,13 @@
 // trusted on its shape.
 
 import { z } from "zod";
-import { AI_ANALYSIS, AI_ERROR_ACTION, DEFAULT_TIMEOUTS, type RunParams } from "../model/params.ts";
+import {
+  AI_ANALYSIS,
+  AI_ERROR_ACTION,
+  DEFAULT_DIAGNOSTICS,
+  DEFAULT_TIMEOUTS,
+  type RunParams,
+} from "../model/params.ts";
 import { type HostStatus, PERSIST_SCHEMA } from "../model/persist.ts";
 import { fail, ok, type Result } from "../model/result.ts";
 import { STORE_PATH } from "./nix-output.ts";
@@ -66,6 +72,14 @@ const savedParams = z.object({
     killGrace: seconds,
   }),
   pingInterval: z.number().int().positive(),
+
+  // Added after 0.4: an older state file resumes with the built-in bounds.
+  diagnostics: z
+    .object({
+      journalLines: z.number().int().positive(),
+      excerptLines: z.number().int().positive(),
+    })
+    .default(DEFAULT_DIAGNOSTICS),
 }) satisfies z.ZodType<RunParams, unknown>;
 
 const savedHost = z.object({

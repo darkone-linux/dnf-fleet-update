@@ -26,6 +26,15 @@ export interface HostCopy {
   pushedBytes: number;
 }
 
+/** Deterministic collection of a failed host (spec § Erreurs et réparations). */
+export interface HostDiagnosis {
+  /** Units the host could not start, as `systemctl` named them. */
+  units: string[];
+
+  /** Last error lines of the build, copy or activation that failed. */
+  excerpt?: string[];
+}
+
 /** Per-host line of the report and of `state.json`. */
 export type HostStatus =
   | "deployed"
@@ -56,6 +65,9 @@ export interface PersistedHost {
 
   /** Absent until the host is copied to: a local host never is. */
   copy?: HostCopy;
+
+  /** Absent until something failed on it and the collection ran. */
+  diagnosis?: HostDiagnosis;
 }
 
 /** `t` in milliseconds since the run start, like the stream. */
@@ -236,6 +248,14 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
       if (event.origin !== undefined) patch.origin = event.origin;
       return { ...state, hosts: patchHost(state, event.host, patch) };
     }
+
+    case "host.diagnosis":
+      return {
+        ...state,
+        hosts: patchHost(state, event.host, {
+          diagnosis: { units: event.units, excerpt: event.excerpt },
+        }),
+      };
 
     case "host.copy":
       return {

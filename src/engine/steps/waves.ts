@@ -51,6 +51,7 @@ async function runWave(
   const { members } = wave;
   presence.untrack(members);
   emit(context, { kind: "wave.start", index: wave.index, total: wave.total, hosts: members });
+  for (const name of members) hosts.get(name).waveStartedAt = context.clock.now();
   await silence(context, hosts, members, true);
   try {
     await pool(members, context.params.maxParallel, context.flow.halt, (name) =>
@@ -178,6 +179,7 @@ async function switchAtOnce(
   if (members.length === 0) return;
 
   log(context, "info", `switching ${members.length} tested hosts`);
+  for (const name of members) hosts.get(name).waveStartedAt = context.clock.now();
   let done = 0;
   await silence(context, hosts, members, true);
   try {

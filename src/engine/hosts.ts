@@ -34,6 +34,9 @@ export interface HostEntry {
 
   /** Unreachable after its wave started: left to its automatic rollback. */
   lost: boolean;
+
+  /** `clock.now()` of the wave it is deployed in: journal window of the collection. */
+  waveStartedAt?: number;
 }
 
 /** Activated during the run, reachable, not reverted yet: what a forced rollback brings back. */

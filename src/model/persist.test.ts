@@ -78,6 +78,18 @@ test("a known exclusion and a skipped update are kept", () => {
   });
 });
 
+test("the collection of a failed host is kept: units, then the error excerpt", () => {
+  const state = fold(loadScenario("ai-repair"));
+  expect(state.hosts.find((host) => host.name === "nlt")?.diagnosis).toEqual({
+    units: ["nginx.service"],
+    excerpt: ["nginx.service: Failed with result 'exit-code'."],
+  });
+
+  // Nothing activated: the build failure keeps an excerpt and no unit.
+  const build = fold(loadScenario("build-failure"));
+  expect(build.hosts.find((host) => host.name === "ms-a2")?.diagnosis).toMatchObject({ units: [] });
+});
+
 test("a repaired host ends deployed", () => {
   expect(statuses(fold(loadScenario("ai-repair"))).nlt).toBe("deployed");
 });

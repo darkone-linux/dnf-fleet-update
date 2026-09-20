@@ -26,6 +26,9 @@ export interface HostBehaviour {
   /** Exit code of `switch-to-configuration` per phase. Default `0`. */
   activation?: Partial<Record<Phase, number>>;
 
+  /** Units `systemctl` reports as failed, once the host has been activated. */
+  failedUnits?: string[];
+
   /** Unreachable from its activation of this phase until its rollback timer fires. */
   dropsOn?: Phase;
   rollbackExit?: number;
@@ -57,6 +60,9 @@ export type SimKind =
   | "maintenance"
   | "origin"
   | "profile"
+  | "system-status"
+  | "failed-units"
+  | "journal"
   | "activate"
   | "settle"
   | "rollback";
@@ -353,6 +359,11 @@ export class SimFleet implements CommandRunner {
     }
     if (inner.includes("--max-jobs 0")) return { kind: "pull", host, at };
     if (inner.includes("readlink")) return { kind: "origin", host, at };
+    if (inner.includes("systemctl status")) return { kind: "system-status", host, at };
+    if (inner.includes("list-units")) return { kind: "failed-units", host, at };
+    if (inner.includes("journalctl")) {
+      return { kind: "journal", host, detail: /-u (\S+)/.exec(inner)?.[1], at };
+    }
     const result = RESULT_NAME.exec(inner)?.[1];
     if (inner.includes("[ -f")) {
       const armed = inner.includes("systemctl stop") ? "armed" : "";
@@ -539,6 +550,23 @@ export class SimFleet implements CommandRunner {
       case "derivation":
       case "drop-links":
       case "maintenance":
+        return ok();
+
+      // Collection of a failed host: `systemctl status` exits non-zero on a
+      // degraded system, and the collection reads its output, not its code.
+      case "system-status": {
+        const units = behaviour.failedUnits ?? [];
+        out(`State: ${units.length > 0 ? "degraded" : "running"}`);
+        out(`Failed: ${units.length} units`);
+        return exit(units.length > 0 ? 1 : 0);
+      }
+      case "failed-units":
+        for (const unit of behaviour.failedUnits ?? []) {
+          out(`${unit} loaded failed failed ${unit}`);
+        }
+        return ok();
+      case "journal":
+        out(`-- journal of ${command.detail ?? "?"} on ${name} --`);
         return ok();
       case "origin":
         out(side.system);

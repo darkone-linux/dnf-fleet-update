@@ -26,6 +26,7 @@
 {"t":4900,"kind":"host.state","host":"gw-ag","state":"built"}
 {"t":5200,"kind":"host.output","host":"ms-a2","phase":"build","line":"error: attribute 'immich-machine-learning' missing"}
 {"t":5400,"kind":"host.state","host":"ms-a2","state":"failed","note":"eval error"}
+{"t":5450,"kind":"host.diagnosis","host":"ms-a2","units":[],"excerpt":["error: attribute 'immich-machine-learning' missing","       at /etc/nixos/usr/machines/ms-a2/services.nix:42:7"]}
 {"t":5500,"kind":"log","host":"ms-a2","level":"error","message":"build failed: attribute 'immich-machine-learning' missing"}
 {"t":5700,"kind":"host.state","host":"gfx","state":"built"}
 {"t":5800,"kind":"host.state","host":"fd-01","state":"built"}

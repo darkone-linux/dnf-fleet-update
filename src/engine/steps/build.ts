@@ -2,6 +2,7 @@
 // per host as soon as its derivation is known, presence pinged meanwhile.
 
 import type { HostState } from "../../model/events.ts";
+import { collect } from "../collect.ts";
 import {
   buildDerivation,
   copyDerivation,
@@ -12,7 +13,7 @@ import {
 import { buildHost, evalHosts } from "../commands/nix.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { decideFailure, type Hosts } from "../decisions.ts";
-import { describeFailure, execute, succeeded } from "../exec.ts";
+import { describeFailure, errorLines, execute, succeeded } from "../exec.ts";
 import type { HostEntry, HostTable } from "../hosts.ts";
 import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
@@ -48,12 +49,16 @@ interface Built {
 
   /** Set: the build failed, this is its reason. */
   note?: string;
+
+  /** Error lines behind the reason, kept for the diagnosis of the host. */
+  excerpt?: string[];
   durationMs: number;
 }
 
 /** One `nix build`, here or on a builder: its log to the host, its reason on failure. */
 async function runBuild(context: RunContext, name: string, spec: CommandSpec): Promise<Built> {
   let lastError: string | undefined;
+  let lastErrorLines: string[] | undefined;
   const output = (line: string) =>
     emit(context, { kind: "host.output", host: name, phase: "build", line });
 
@@ -75,6 +80,7 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
           return output(`warning: ${entry.message}`);
         case "error":
           lastError = errorSummary(entry.message);
+          lastErrorLines = entry.message.split("\n");
           for (const text of entry.message.split("\n")) output(text);
           return;
       }
@@ -87,7 +93,11 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
       durationMs,
     };
   }
-  return { note: lastError ?? describeFailure(execution), durationMs };
+  return {
+    note: lastError ?? describeFailure(execution),
+    excerpt: lastErrorLines ?? errorLines(execution),
+    durationMs,
+  };
 }
 
 /**
@@ -165,6 +175,9 @@ async function buildOne(
   } else {
     hosts.set(name, "failed", { note: built.note });
     log(context, "error", `build failed: ${built.note}`, name);
+
+    // Nothing was activated: the excerpt is all the diagnosis can hold.
+    await collect(context, hosts, name, built.excerpt);
   }
 }
 

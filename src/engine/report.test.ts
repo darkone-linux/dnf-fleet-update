@@ -209,6 +209,33 @@ describe("renderReport", () => {
     expect(renderReport({ ...input, state: deployed }).incident).toBeUndefined();
   });
 
+  test("diagnostics: failed units per host, then the error that got it there", () => {
+    const collected = [
+      ...EVENTS,
+      {
+        t: 61_060,
+        kind: "host.diagnosis" as const,
+        host: "gw-ag",
+        units: ["outline.service"],
+        excerpt: ["error: unit failed", "see journalctl"],
+      },
+      { t: 62_010, kind: "host.diagnosis" as const, host: "nlt", units: [], excerpt: ["error: x"] },
+    ].reduce(persist, initialPersisted());
+    const { markdown, incident } = renderReport({ ...BASE, state: collected });
+
+    expect(markdown).toContain(
+      "## Diagnostics\n\n### gw-ag\n\nFailed units: outline.service\n\n```\nerror: unit failed\nsee journalctl\n```",
+    );
+
+    // Nothing was activated on `nlt`: an excerpt, no unit line.
+    expect(markdown).toContain("### nlt\n\n```\nerror: x\n```");
+
+    // Critical host: the incidents room says what it could not start.
+    expect(incident).toBe(
+      "## Critical hosts not deployed\n\n- gw-ag (gateway): error, some units failed, units failed: outline.service\n",
+    );
+  });
+
   test("copy counters, one line per host copied to", () => {
     const counted = EVENTS_WITH_COPIES.reduce(persist, initialPersisted());
     const { markdown } = renderReport({ ...BASE, state: counted });

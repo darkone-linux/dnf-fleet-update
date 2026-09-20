@@ -45,6 +45,7 @@
 {"t":14120,"kind":"host.state","host":"nlt","state":"testing"}
 {"t":14600,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: Failed with result 'exit-code'"}
 {"t":14800,"kind":"host.state","host":"nlt","state":"error","note":"nginx.service failed"}
+{"t":14860,"kind":"host.diagnosis","host":"nlt","units":["nginx.service"],"excerpt":["nginx.service: Failed with result 'exit-code'."]}
 {"t":14900,"kind":"log","host":"nlt","level":"error","message":"activation failed: 1 unit failed (nginx.service)"}
 {"t":15000,"kind":"host.state","host":"gfx","state":"tested"}
 {"t":15400,"kind":"ai","id":"a1","message":"analysing nlt: nginx.service failed during activation"}

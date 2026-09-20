@@ -159,4 +159,9 @@ export const HAPPY_HOSTS: CommandScript[] = [
   { match: anywhere("nix-env") },
   { match: anywhere("rc=$?") },
   { match: anywhere("[ -f"), output: [{ stream: "stdout", line: "0" }] },
+
+  // Collection of a failed host (spec § Erreurs et réparations): nothing failed.
+  { match: anywhere("systemctl status"), output: [{ stream: "stdout", line: "State: running" }] },
+  { match: anywhere("list-units") },
+  { match: anywhere("journalctl") },
 ];

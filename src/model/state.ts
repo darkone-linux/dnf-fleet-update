@@ -151,7 +151,9 @@ function apply(state: RunState, event: Event): RunState {
     // Report material, persisted by `persist.ts`: nothing to draw live.
     case "commit":
     case "plan":
+    // Counters and collection belong to the report; the feed says what matters.
     case "host.copy":
+    case "host.diagnosis":
       return state;
 
     case "host.add":

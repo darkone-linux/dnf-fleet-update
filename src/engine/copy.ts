@@ -5,7 +5,7 @@ import type { PullSource } from "../model/events.ts";
 import { copyClosure, onHost, pullClosure, type Target } from "./commands/host.ts";
 import { pathSizes } from "./commands/nix.ts";
 import { emit, log, type RunContext } from "./context.ts";
-import { describeFailure, execute, succeeded } from "./exec.ts";
+import { describeFailure, errorLines, execute, type Failure, succeeded } from "./exec.ts";
 import type { Fabric } from "./fabric.ts";
 import { RETRY_ATTEMPTS } from "./known-errors.ts";
 import { parseCopyPath, parsePathSize } from "./nix-output.ts";
@@ -60,9 +60,9 @@ async function push(
   path: string,
   from: string | undefined,
   onLine: (line: OutputLine) => void,
-): Promise<string | undefined> {
+): Promise<Failure | undefined> {
   const { params, flow } = context;
-  let note: string | undefined;
+  let failure: Failure | undefined;
 
   // A `nix copy` killed loses the path in flight whole — nix has no partial
   // resume — and gives up on the paths after it. Retried at most twice: the
@@ -73,10 +73,13 @@ async function push(
       onLine,
     });
     if (flow.halt.aborted || succeeded(execution.result)) return undefined;
-    note = `copy failed: ${describeFailure(execution)}`;
-    if (attempt < RETRY_ATTEMPTS) log(context, "warn", `${note}, retrying`, name);
+    failure = {
+      note: `copy failed: ${describeFailure(execution)}`,
+      excerpt: errorLines(execution),
+    };
+    if (attempt < RETRY_ATTEMPTS) log(context, "warn", `${failure.note}, retrying`, name);
   }
-  return note;
+  return failure;
 }
 
 export interface Served {
@@ -93,15 +96,15 @@ export interface Served {
 /**
  * Puts the closure on the host: pulled by the host from its own substituters
  * first, pushed from the store that holds it when nothing can serve it (spec
- * § Publication). Emits the copy counters of the host. Returns the failure
- * note, `undefined` when the host holds the closure or a halt cut the work.
+ * § Publication). Emits the copy counters of the host. Returns the failure,
+ * `undefined` when the host holds the closure or a halt cut the work.
  */
 export async function serveHost(
   context: RunContext,
   fabric: Fabric,
   served: Served,
   onLine: (line: OutputLine) => void,
-): Promise<string | undefined> {
+): Promise<Failure | undefined> {
   const { params, flow } = context;
   const { target, path, builder } = served;
   const tally: Tally = { pulled: new Map(), pushed: new Set() };
@@ -117,18 +120,18 @@ export async function serveHost(
 
   // A freshly built path sits in no cache: a failed pull is the ordinary case,
   // not an incident, and the push behind it is the fallback, not a repair.
-  let note: string | undefined;
+  let failure: Failure | undefined;
   if (!succeeded((await pull()).result) && !flow.halt.aborted) {
     const from = builder === context.local.hostname() ? undefined : builder;
-    note = await push(context, target.host, path, from, watch);
+    failure = await push(context, target.host, path, from, watch);
 
     // Roots what the push landed: same command, instant from the local store.
-    if (note === undefined && !flow.halt.aborted) await pull();
+    if (failure === undefined && !flow.halt.aborted) await pull();
   }
 
   // Aborted `now`: the process is being killed, no time left to measure.
   if (!context.signal.aborted) await report(context, served, tally);
-  return note;
+  return failure;
 }
 
 async function report(context: RunContext, served: Served, tally: Tally): Promise<void> {

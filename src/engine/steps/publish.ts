@@ -28,18 +28,18 @@ async function serve(
     hosts.set(name, "ready");
     return false;
   }
-  const note = await serveHost(
+  const failure = await serveHost(
     context,
     hosts.fabric,
     { target: { host: name, local: false }, path, builder: host.builder },
     ({ line }) => emit(context, { kind: "host.output", host: name, phase: "publish", line }),
   );
   if (context.flow.halt.aborted) return true;
-  if (note === undefined) {
+  if (failure === undefined) {
     hosts.set(name, "ready");
     return false;
   }
-  await failedBeforeActivation(context, hosts, presence, name, note);
+  await failedBeforeActivation(context, hosts, presence, name, failure.note, failure.excerpt);
   return true;
 }
 

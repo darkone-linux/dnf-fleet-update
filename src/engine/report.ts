@@ -146,8 +146,35 @@ const INCIDENT_STATUSES: readonly HostStatus[] = [
   "reverted",
 ];
 
-const incidentLine = (host: PersistedHost) =>
-  `- ${host.name} (${host.profile}): ${host.status}${host.note === undefined ? "" : `, ${host.note}`}`;
+const incidentLine = (host: PersistedHost) => {
+  const units = host.diagnosis?.units ?? [];
+  const detail = [
+    host.status,
+    host.note,
+    units.length > 0 ? `units failed: ${units.join(", ")}` : undefined,
+  ].filter((part) => part !== undefined);
+  return `- ${host.name} (${host.profile}): ${detail.join(", ")}`;
+};
+
+/**
+ * What the deterministic collection brought back, per host (spec § Erreurs et
+ * réparations): failed units, then the error that got the host there.
+ */
+function diagnostics(hosts: readonly PersistedHost[]): string[] {
+  const blocks = hosts.flatMap((host) => {
+    const diagnosis = host.diagnosis;
+    if (diagnosis === undefined) return [];
+    const units = diagnosis.units;
+    const excerpt = diagnosis.excerpt ?? [];
+    return [
+      "",
+      `### ${host.name}`,
+      ...(units.length > 0 ? ["", `Failed units: ${units.join(", ")}`] : []),
+      ...(excerpt.length > 0 ? ["", "```", ...excerpt, "```"] : []),
+    ];
+  });
+  return blocks.length > 0 ? ["", "## Diagnostics", ...blocks] : [];
+}
 
 /**
  * Message of the incidents room (spec § Rapport): critical hosts the run left
@@ -287,6 +314,8 @@ export function renderReport(input: ReportInput): Report {
   if (inTest.length > 0) {
     markdown.push("", "## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`));
   }
+
+  markdown.push(...diagnostics(hosts));
 
   if (knownErrors.length > 0) {
     markdown.push("", "## Known errors", "", ...knownErrors.map((message) => `- ${message}`));

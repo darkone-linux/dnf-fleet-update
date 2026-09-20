@@ -146,6 +146,9 @@ export type Event =
       pushed: number;
       pushedBytes: number;
     })
+  // Deterministic collection of a failed host (spec § Erreurs et réparations):
+  // what it could not start, and the error that got it there.
+  | (Base & { kind: "host.diagnosis"; host: string; units: string[]; excerpt?: string[] })
   | (Base & { kind: "log"; host?: string; level: Level; message: string })
 
   // AI answers stream: `ai` opens the block, `ai.line` appends, `ai.end` closes

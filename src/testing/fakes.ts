@@ -26,7 +26,12 @@ import {
   type SavedRun,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
-import { DEFAULT_TIMEOUTS, DEFAULTS, type RunParams } from "../model/params.ts";
+import {
+  DEFAULT_DIAGNOSTICS,
+  DEFAULT_TIMEOUTS,
+  DEFAULTS,
+  type RunParams,
+} from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
 
 /** Reply for the first command whose argv starts with `match`, or satisfies it. */
@@ -305,6 +310,7 @@ export function testParams(overrides: Partial<RunParams> = {}): RunParams {
     rollbackTimeout: DEFAULTS.rollbackTimeout,
     timeouts: DEFAULT_TIMEOUTS,
     pingInterval: DEFAULTS.pingInterval,
+    diagnostics: DEFAULT_DIAGNOSTICS,
     ...overrides,
   };
 }

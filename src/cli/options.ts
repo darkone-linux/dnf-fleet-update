@@ -12,6 +12,7 @@ import {
   AI_ERROR_ACTION,
   type AiAnalysis,
   type AiErrorAction,
+  DEFAULT_DIAGNOSTICS,
   DEFAULT_TIMEOUTS,
   DEFAULTS,
   type RunParams,
@@ -234,6 +235,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     rollbackTimeout: options.rollbackTimeout ?? DEFAULTS.rollbackTimeout,
     timeouts: { ...DEFAULT_TIMEOUTS, ...fleet.timeouts },
     pingInterval: fleet.pingInterval ?? DEFAULTS.pingInterval,
+    diagnostics: { ...DEFAULT_DIAGNOSTICS },
   });
 }
 
