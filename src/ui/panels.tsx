@@ -98,7 +98,17 @@ const ACTIVE_LABEL: Partial<Record<ShownState, string>> = {
   copying: "copying",
   testing: "testing",
   switching: "switching",
+  repairing: "under repair",
+  "ai-analysing": "AI analysis",
+  "ai-repairing": "AI repair",
 };
+
+/** Someone is working on that host right now: the label blinks (§ États affichés). */
+const BLINKING: ReadonlySet<ShownState> = new Set<ShownState>([
+  "repairing",
+  "ai-analysing",
+  "ai-repairing",
+]);
 
 /**
  * Only `vertical` is ever drawn: the blocks carry a left border and nothing
@@ -451,7 +461,11 @@ function HostRows({
               {host.name}
             </text>
             <box flexGrow={1} backgroundColor={background} />
-            <text fg={stateColor} bg={background}>
+            <text
+              fg={stateColor}
+              bg={background}
+              attributes={BLINKING.has(shown) ? TextAttributes.BLINK : TextAttributes.NONE}
+            >
               {label}
             </text>
           </box>

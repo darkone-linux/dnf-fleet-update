@@ -48,6 +48,11 @@
 {"t":14860,"kind":"host.diagnosis","host":"nlt","units":["nginx.service"],"excerpt":["nginx.service: Failed with result 'exit-code'."]}
 {"t":14900,"kind":"log","host":"nlt","level":"error","message":"activation failed: 1 unit failed (nginx.service)"}
 {"t":15000,"kind":"host.state","host":"gfx","state":"tested"}
+{"t":15050,"kind":"host.state","host":"nlt","state":"repairing","note":"restarting nginx.service"}
+{"t":15100,"kind":"log","host":"nlt","level":"info","message":"restarting failed units"}
+{"t":15300,"kind":"host.state","host":"nlt","state":"error","note":"nginx.service failed again"}
+{"t":15320,"kind":"log","host":"nlt","level":"warn","message":"units still failed after the restart, asking the AI"}
+{"t":15350,"kind":"host.state","host":"nlt","state":"ai-analysing"}
 {"t":15400,"kind":"ai","id":"a1","message":"analysing nlt: nginx.service failed during activation"}
 {"t":15700,"kind":"ai.line","id":"a1","line":"Collecting deterministic evidence first."}
 {"t":16000,"kind":"ai.line","id":"a1","line":"systemctl status nginx.service -> failed (Result: exit-code)"}
@@ -70,6 +75,7 @@
 {"t":21100,"kind":"ai.line","id":"a1","line":"Recommending the restart, reporting the ordering issue."}
 {"t":21400,"kind":"ai.end","id":"a1"}
 {"t":21800,"kind":"ask","id":"repair","question":"Restart nginx.service on nlt?","options":[{"value":"yes","label":"yes"},{"value":"exclude","label":"exclude"},{"value":"stop","label":"stop"}]}
+{"t":21950,"kind":"host.state","host":"nlt","state":"ai-repairing"}
 {"t":22000,"kind":"log","host":"nlt","level":"info","message":"AI action: systemctl restart nginx.service"}
 {"t":22400,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: active (running)"}
 {"t":23100,"kind":"host.state","host":"nlt","state":"tested"}

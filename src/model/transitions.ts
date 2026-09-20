@@ -24,8 +24,33 @@ const NEXT: Record<HostState, readonly HostState[]> = {
   deployed: ["reverted", "failed"],
 
   // Units restarted: back to the state the activation aimed at.
-  error: ["tested", "deployed", "reverted", "failed", "excluded"],
-  failed: ["reverted", "excluded"],
+  error: [
+    "repairing",
+    "ai-analysing",
+    "ai-repairing",
+    "tested",
+    "deployed",
+    "reverted",
+    "failed",
+    "excluded",
+  ],
+  failed: ["repairing", "ai-analysing", "ai-repairing", "reverted", "excluded"],
+
+  // Deterministic first, the AI after it (spec § Erreurs et réparations).
+  repairing: [
+    "ai-analysing",
+    "ai-repairing",
+    "tested",
+    "deployed",
+    "error",
+    "failed",
+    "reverted",
+    "excluded",
+  ],
+
+  // An analysis alone repairs nothing: the host goes back where it failed.
+  "ai-analysing": ["ai-repairing", "error", "failed", "reverted", "excluded"],
+  "ai-repairing": ["tested", "deployed", "error", "failed", "reverted", "excluded"],
   reverted: [],
   excluded: [],
 };

@@ -54,6 +54,9 @@ export const hostGlyph: Record<ShownState, string> = {
 
   // A unit that did not start is a lighter failure than a broken host.
   error: "🌦️",
+  repairing: "",
+  "ai-analysing": "",
+  "ai-repairing": "",
   failed: "🌧️",
   reverted: "🔄",
   excluded: "⛔",
@@ -74,6 +77,11 @@ export const hostStateColor: Record<ShownState, string> = {
   deployed: color.ok,
   error: color.warn,
   failed: color.error,
+
+  // Blinking (§ États affichés): a repair is someone working, not a result.
+  repairing: color.warn,
+  "ai-analysing": color.magenta,
+  "ai-repairing": color.magenta,
   reverted: color.dim,
   excluded: color.dim,
   interrupted: color.warn,

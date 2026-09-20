@@ -147,6 +147,11 @@ export function hostStatus(host: Pick<PersistedHost, "state" | "online">): HostS
     case "copying":
     case "testing":
     case "switching":
+
+    // Caught mid-repair by the end of the run: nothing was settled.
+    case "repairing":
+    case "ai-analysing":
+    case "ai-repairing":
       return "remaining";
   }
 }

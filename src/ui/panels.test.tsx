@@ -1,6 +1,7 @@
 // Active region: the columns must hold whatever the output line measures.
 
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { TextAttributes } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
@@ -89,6 +90,45 @@ test("the phase of an active host is white, the output line dim", async () => {
 
   expect(fgHex(setup, "copy ")).toBe("ffffff");
   expect(fgHex(setup, "copying path")).toBe("7a7a7a");
+});
+
+/** Attributes of the first span starting with `text`. */
+function attributesOf(setup: Setup, text: string): number | undefined {
+  return setup
+    .captureSpans()
+    .lines.flatMap((line) => line.spans)
+    .find((span) => span.text.startsWith(text))?.attributes;
+}
+
+const REPAIRS: Event[] = [
+  ...add("vbox-umi"),
+  { t: 0, kind: "host.presence", host: "vbox-umi", online: true },
+  { t: 0, kind: "host.state", host: "vbox-umi", state: "testing" },
+  { t: 0, kind: "host.state", host: "vbox-umi", state: "error", note: "nginx.service failed" },
+  { t: 0, kind: "host.state", host: "vbox-umi", state: "repairing" },
+  ...add("vbox-test"),
+  { t: 0, kind: "host.presence", host: "vbox-test", online: true },
+  { t: 0, kind: "host.state", host: "vbox-test", state: "testing" },
+  { t: 0, kind: "host.state", host: "vbox-test", state: "failed", note: "boom" },
+  { t: 0, kind: "host.state", host: "vbox-test", state: "ai-repairing" },
+];
+
+// Someone is working on the host: yellow for the tool, magenta for the AI.
+test("a host under repair: label blinking at the right of its row, with its spinner", async () => {
+  const setup = await testRender(<App preload={REPAIRS} />, { width: 110, height: 30 });
+  current = setup;
+  await setup.waitForVisualIdle();
+
+  const rows = setup.captureCharFrame().split("\n");
+  expect(rows.find((row) => row.includes("vbox-umi"))).toContain("under repair");
+  expect(rows.find((row) => row.includes("vbox-test"))).toContain("AI repair");
+  expect(fgHex(setup, "under repair")).toBe("e0b341");
+  expect(fgHex(setup, "AI repair")).toBe("d75fd7");
+  expect(attributesOf(setup, "under repair")).toBe(TextAttributes.BLINK);
+  expect(attributesOf(setup, "AI repair")).toBe(TextAttributes.BLINK);
+
+  // Active state: the weather glyph gives way to the host spinner.
+  expect(rows.find((row) => row.includes("vbox-umi"))).not.toContain("\u{1F326}");
 });
 
 // Over an hour of run: the chronometer has to carry its hours column.

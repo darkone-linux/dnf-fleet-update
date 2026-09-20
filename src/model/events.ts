@@ -36,6 +36,8 @@ export const STEP_LABELS: Record<StepId, string> = {
  * - `ready`: closure on the host, waiting for its wave;
  * - `error`: activation done, at least one unit failed;
  * - `failed`: any other failure;
+ * - `repairing`: deterministic repair under way (units restarted, bounded retry);
+ * - `ai-analysing` / `ai-repairing`: handed to the AI (spec § Intégration IA);
  * - `reverted`: rolled back on purpose to its origin.
  */
 export type HostState =
@@ -50,6 +52,9 @@ export type HostState =
   | "deployed"
   | "error"
   | "failed"
+  | "repairing"
+  | "ai-analysing"
+  | "ai-repairing"
   | "reverted"
   | "excluded";
 
@@ -173,6 +178,9 @@ const ACTIVE: ReadonlySet<HostState> = new Set<HostState>([
   "copying",
   "testing",
   "switching",
+  "repairing",
+  "ai-analysing",
+  "ai-repairing",
 ]);
 
 export function isActive(state: HostState): boolean {
