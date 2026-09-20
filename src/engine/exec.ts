@@ -2,13 +2,16 @@
 
 import { shellJoin } from "./commands/shell.ts";
 import { log, type RunContext } from "./context.ts";
-import { knownError } from "./known-errors.ts";
+import { type KnownError, RETRY_ATTEMPTS } from "./known-errors.ts";
 import type { CommandResult, CommandSpec, LogName, OutputLine } from "./ports.ts";
 
 export interface Execution {
   result: CommandResult;
   stdout: string[];
   stderr: string[];
+
+  /** Trap recognised in the output of a failure (spec § Erreurs et réparations). */
+  known?: KnownError;
 }
 
 export interface ExecOptions {
@@ -18,6 +21,9 @@ export interface ExecOptions {
   /** Default: `now` of the run. `null`: runs even after an abort, bounded by its timeout. */
   signal?: AbortSignal | null;
   onLine?: (line: OutputLine) => void;
+
+  /** Replayable command: a trap asking for a retry is obeyed here. */
+  retryable?: boolean;
 }
 
 export async function execute(
@@ -25,31 +31,50 @@ export async function execute(
   spec: CommandSpec,
   options: ExecOptions = {},
 ): Promise<Execution> {
-  const { log, onLine } = options;
+  let execution = await runOnce(context, spec, options);
+  if (!options.retryable) return execution;
+
+  // Transient trap: the same command again, its own bound (spec § Erreurs et
+  // réparations). Attempt 1 has already run.
+  const fix = execution.known?.fix;
+  if (fix?.kind !== "retry") return execution;
+  const attempts = fix.max ?? RETRY_ATTEMPTS;
+  for (let attempt = 2; attempt <= attempts && !context.signal.aborted; attempt += 1) {
+    log(context, "warn", `${execution.known?.message ?? "known error"}, retrying`);
+    execution = await runOnce(context, spec, options);
+    if (succeeded(execution.result) || execution.known?.fix.kind !== "retry") break;
+  }
+  return execution;
+}
+
+async function runOnce(
+  context: RunContext,
+  spec: CommandSpec,
+  options: ExecOptions,
+): Promise<Execution> {
+  const { log: logName, onLine } = options;
   const stdout: string[] = [];
   const stderr: string[] = [];
-  if (log) context.run.appendLog(log, `$ ${shellJoin(spec.argv)}`);
+  if (logName) context.run.appendLog(logName, `$ ${shellJoin(spec.argv)}`);
 
   const result = await context.commands.run(spec, {
     signal: options.signal === null ? undefined : (options.signal ?? context.signal),
     onLine: (line) => {
       (line.stream === "stdout" ? stdout : stderr).push(line.line);
-      if (log) context.run.appendLog(log, line.line);
+      if (logName) context.run.appendLog(logName, line.line);
       onLine?.(line);
     },
   });
-  const execution = { result, stdout, stderr };
+  if (succeeded(result)) return { result, stdout, stderr };
 
   // Known trap behind a failure: said in plain language, the reason untouched.
-  if (!succeeded(result)) hint(context, execution);
-  return execution;
-}
+  const known = context.known.match([...stderr, ...stdout].join("\n"));
 
-function hint(context: RunContext, { stdout, stderr }: Execution): void {
-  const known = knownError([...stderr, ...stdout].join("\n"));
+  // Said once per run: the same trap fires on every command it breaks.
   if (known !== undefined && context.known.add(known.message)) {
     log(context, "warn", `hint: ${known.message}`);
   }
+  return { result, stdout, stderr, ...(known === undefined ? {} : { known }) };
 }
 
 export function succeeded(result: CommandResult): boolean {
@@ -62,7 +87,16 @@ export interface Failure {
   note: string;
 
   /** Error lines of the output, for the diagnosis; trimmed by the collection. */
-  excerpt: string[];
+  excerpt?: string[];
+
+  /** Recognised trap: its action is applied instead of a question. */
+  known?: KnownError;
+}
+
+/** The failure of one command, as the steps pass it around. */
+export function failureOf(execution: Execution, note: string): Failure {
+  const known = execution.known;
+  return { note, excerpt: errorLines(execution), ...(known === undefined ? {} : { known }) };
 }
 
 /** Error lines of a failed command: stderr, or stdout when it said nothing. */

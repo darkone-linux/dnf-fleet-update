@@ -177,6 +177,27 @@ test("units failed: the host is asked what failed, its journals kept, report and
   expect(run.recorded?.logs.get("gw-cp.diag")?.join("\n")).toContain("journal of outline.service");
 });
 
+// `--no-check-sigs` is honoured for a trusted user only: every host would fail.
+test("a trap the table knows decides by itself: the run stops, nothing asked", async () => {
+  const run = await simulateRun({
+    behaviours: {
+      hcs: {
+        copyExit: 1,
+        copyError:
+          "error: cannot add path '/nix/store/x-element-web' because it lacks a signature by a trusted key",
+      },
+    },
+  });
+
+  expect(run.exitCode).toBe(1);
+  expect(run.events.some((event) => event.kind === "ask")).toBe(false);
+  expect(run.feed).toContain(
+    "warn hint: the deploy user is not trusted on that host: add nix to its nix.settings.trusted-users",
+  );
+  expect(run.feed).toContain("warn known error decides: stop");
+  expect(run.recorded?.report).toContain("## Known errors");
+});
+
 test("units restarted and back up: the host goes on, the report blames the order", async () => {
   const run = await simulateRun({
     behaviours: {

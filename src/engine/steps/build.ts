@@ -15,6 +15,7 @@ import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { decideFailure, type Hosts } from "../decisions.ts";
 import { describeFailure, errorLines, execute, succeeded } from "../exec.ts";
 import type { HostEntry, HostTable } from "../hosts.ts";
+import type { KnownError } from "../known-errors.ts";
 import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
 import type { Presence } from "../presence.ts";
@@ -52,6 +53,9 @@ interface Built {
 
   /** Error lines behind the reason, kept for the diagnosis of the host. */
   excerpt?: string[];
+
+  /** Trap recognised behind the failure: decides instead of the question. */
+  known?: KnownError;
   durationMs: number;
 }
 
@@ -64,6 +68,7 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
 
   const execution = await execute(context, spec, {
     signal: context.flow.halt,
+    retryable: true,
     onLine: ({ stream, line }) => {
       if (stream === "stdout") return;
       const entry = parseNixLog(line);
@@ -96,6 +101,7 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
   return {
     note: lastError ?? describeFailure(execution),
     excerpt: lastErrorLines ?? errorLines(execution),
+    ...(execution.known === undefined ? {} : { known: execution.known }),
     durationMs,
   };
 }
@@ -119,6 +125,7 @@ async function delegate(
 
   const copied = await execute(context, copyDerivation(builder, job.drvPath, timeouts), {
     signal: context.flow.halt,
+    retryable: true,
     onLine: ({ line }) => emit(context, { kind: "host.output", host: name, phase: "build", line }),
   });
   if (context.flow.halt.aborted) return undefined;
@@ -174,6 +181,7 @@ async function buildOne(
     log(context, "ok", `build ok ${seconds(built.durationMs)}`, name);
   } else {
     hosts.set(name, "failed", { note: built.note });
+    entry.knownError = built.known;
     log(context, "error", `build failed: ${built.note}`, name);
 
     // Nothing was activated: the excerpt is all the diagnosis can hold.

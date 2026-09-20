@@ -6,10 +6,28 @@
 
 import type { AskOption, Level } from "../model/events.ts";
 import { askHoldingQueue, log, type RunContext } from "./context.ts";
-import { type HostTable, rollbackTarget } from "./hosts.ts";
+import { type HostEntry, type HostTable, rollbackTarget } from "./hosts.ts";
 
 /** `revert` is carried out by the caller, outside the question queue. */
 export type Decision = "exclude" | "revert" | "keep" | "stop" | "rollback";
+
+/**
+ * Decision a recognised trap takes by itself (spec § Erreurs et réparations),
+ * question or not: a deterministic answer comes before asking. `goOn` is what
+ * losing this host alone means here — `revert` once it was activated.
+ * `undefined`: nothing decided — `retry` is spent, `ai` belongs to the AI.
+ */
+function byTable(host: HostEntry, goOn: Decision): Decision | undefined {
+  const fix = host.knownError?.fix;
+  switch (fix?.kind) {
+    case "exclude":
+      return goOn;
+    case "stop":
+      return "stop";
+    default:
+      return undefined;
+  }
+}
 
 const STOP: readonly AskOption[] = [
   { value: "stop", label: "stop", description: "start nothing more, leave hosts as they are" },
@@ -63,6 +81,9 @@ function decide(
   names: Hosts,
   question: { id: string; text: string; options: readonly AskOption[] },
   unattended: Decision,
+
+  /** Taken without asking, interactive or not: the table already knows. */
+  forced?: Decision,
   before?: () => Promise<void>,
 ): Promise<Decision | undefined> {
   return context.questions.run(async () => {
@@ -72,6 +93,13 @@ function decide(
     // Hosts change while the question waits its turn: offered options read now.
     const rollback = hosts.all().some(rollbackTarget);
     const options = question.options.filter((option) => rollback || option.value !== "rollback");
+
+    if (forced !== undefined) {
+      log(context, "warn", `known error decides: ${forced}`);
+      apply(context, hosts, names, forced);
+      return forced;
+    }
+
     const decision = !context.params.interactive
       ? unattended
       : options.length === 1
@@ -100,10 +128,11 @@ export function decideFailure(
       ? `${first} failed${reason}`
       : `${names.length} hosts failed${reason} (${names.join(", ")})`;
   const options = activated === undefined ? OPTIONS : ACTIVATED_OPTIONS;
-  const goOn = activated === undefined ? "exclude" : "revert";
+  const goOn: Decision = activated === undefined ? "exclude" : "revert";
   const unattended = context.params.stopLoss ? "rollback" : goOn;
   const id = `failed-${names.join("+")}`;
-  return decide(context, hosts, names, { id, text, options }, unattended);
+  const forced = byTable(hosts.get(first), goOn);
+  return decide(context, hosts, names, { id, text, options }, unattended, forced);
 }
 
 /**
@@ -121,6 +150,7 @@ export function decideLost(
   const text = `${name} unreachable`;
   if (!hosts.get(name).gateway) {
     const unattended = params.stopLoss ? "rollback" : "exclude";
+    // No table decision on a lost host: nothing of its own was read.
     return decide(
       context,
       hosts,
@@ -146,6 +176,7 @@ export function decideLost(
     [name],
     { id: `lost-${name}`, text, options },
     unattended,
+    undefined,
     waitRollback,
   );
 }

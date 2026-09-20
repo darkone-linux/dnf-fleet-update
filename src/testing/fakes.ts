@@ -5,7 +5,7 @@
 
 import { QuestionQueue, type RunContext } from "../engine/context.ts";
 import { RunFlow } from "../engine/flow.ts";
-import { KnownErrors } from "../engine/known-errors.ts";
+import { KnownErrors, type Signature } from "../engine/known-errors.ts";
 import {
   type Clock,
   type CommandResult,
@@ -327,6 +327,9 @@ export interface FakeRunContext extends RunContext {
 
 export interface FakeRunOptions {
   commands?: CommandScript[];
+
+  /** Signature table of the run; the real one by default. */
+  signatures?: Signature[];
   answers?: Record<string, string>;
   params?: Partial<RunParams>;
   codev?: boolean;
@@ -349,7 +352,7 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     local: new FakeLocalHost(options.hostname ?? "deployer", options.addresses ?? []),
     run: new MemoryRunStore("20260917T020000Z-full"),
     questions: new QuestionQueue(),
-    known: new KnownErrors(),
+    known: new KnownErrors(options.signatures),
     startedAt: 0,
   };
 }

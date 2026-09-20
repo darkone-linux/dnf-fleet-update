@@ -39,7 +39,7 @@ async function serve(
     hosts.set(name, "ready");
     return false;
   }
-  await failedBeforeActivation(context, hosts, presence, name, failure.note, failure.excerpt);
+  await failedBeforeActivation(context, hosts, presence, name, failure);
   return true;
 }
 

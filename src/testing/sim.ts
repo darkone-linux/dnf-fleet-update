@@ -23,6 +23,9 @@ export interface HostBehaviour {
   buildError?: string;
   copyExit?: number;
 
+  /** What the failed copy prints: a line the signature table may recognise. */
+  copyError?: string;
+
   /** Exit code of `switch-to-configuration` per phase. Default `0`. */
   activation?: Partial<Record<Phase, number>>;
 
@@ -536,7 +539,7 @@ export class SimFleet implements CommandRunner {
         err(`copying path '${storePath(name)}' to 'ssh-ng://nix@${name}'...`);
         err(`copying path '${storePath(`${name}-dep`)}' from '${PUBLIC_CACHE}'...`);
         const code = behaviour.copyExit ?? 0;
-        if (code !== 0) err(`error: cannot copy to '${name}'`);
+        if (code !== 0) err(behaviour.copyError ?? `error: cannot copy to '${name}'`);
         else this.holding.add(name);
         return exit(code);
       }

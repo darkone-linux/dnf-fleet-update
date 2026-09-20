@@ -28,7 +28,7 @@ export interface KnownError {
   fix: Fix;
 }
 
-interface Signature extends KnownError {
+export interface Signature extends KnownError {
   /** Searched in the whole output of the command, stderr first. */
   match: RegExp;
 }
@@ -57,14 +57,27 @@ const SIGNATURES: readonly Signature[] = [
 ];
 
 /** The first signature found; `undefined` when none matches. */
-export function knownError(output: string): KnownError | undefined {
-  const found = SIGNATURES.find((signature) => signature.match.test(output));
+export function knownError(
+  output: string,
+  signatures: readonly Signature[] = SIGNATURES,
+): KnownError | undefined {
+  const found = signatures.find((signature) => signature.match.test(output));
   return found && { message: found.message, fix: found.fix };
 }
 
-/** Said once per run: the same trap fires on every command it breaks. */
+/**
+ * Table of a run, and what it already said: the same trap fires on every
+ * command it breaks, and is explained once. Consumer-declared signatures will
+ * extend the table here (spec § Erreurs et réparations).
+ */
 export class KnownErrors {
   private readonly seen = new Set<string>();
+
+  constructor(private readonly signatures: readonly Signature[] = SIGNATURES) {}
+
+  match(output: string): KnownError | undefined {
+    return knownError(output, this.signatures);
+  }
 
   /** `true` the first time this message is seen. */
   add(message: string): boolean {

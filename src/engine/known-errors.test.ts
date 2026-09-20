@@ -35,6 +35,23 @@ describe("knownError", () => {
   });
 });
 
+test("the table of a run can be replaced: a consumer signature is one more entry", () => {
+  const known = new KnownErrors([
+    { match: /connection reset/, message: "the link dropped", fix: { kind: "retry", max: 2 } },
+  ]);
+
+  expect(known.match("error: connection reset by peer")).toEqual({
+    message: "the link dropped",
+    fix: { kind: "retry", max: 2 },
+  });
+
+  // The built-in entries are not behind it: the table given is the table used.
+  expect(known.match("error: mismatch in field 'narHash'")).toBeUndefined();
+  expect(new KnownErrors().match("error: mismatch in field 'narHash'")?.fix).toEqual({
+    kind: "stop",
+  });
+});
+
 test("the same trap is said once per run", () => {
   const known = new KnownErrors();
   expect(known.add("boom")).toBe(true);

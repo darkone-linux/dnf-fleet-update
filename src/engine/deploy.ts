@@ -14,7 +14,15 @@ import {
 import { emit, log, type RunContext } from "./context.ts";
 import { serveHost } from "./copy.ts";
 import { decideFailure, decideLost } from "./decisions.ts";
-import { describeFailure, type Execution, errorLines, execute, succeeded } from "./exec.ts";
+import {
+  describeFailure,
+  type Execution,
+  errorLines,
+  execute,
+  type Failure,
+  failureOf,
+  succeeded,
+} from "./exec.ts";
 import type { HostTable } from "./hosts.ts";
 import type { OutputLine } from "./ports.ts";
 import type { Presence } from "./presence.ts";
@@ -29,10 +37,11 @@ async function failed(
   context: RunContext,
   hosts: HostTable,
   name: string,
-  note: string,
-  excerpt?: readonly string[],
+  failure: Failure,
 ): Promise<void> {
+  const { note, excerpt, known } = failure;
   hosts.set(name, "failed", { note });
+  hosts.get(name).knownError = known;
   log(context, "error", note, name);
 
   // Collected before the question: the decision is taken on what the host says.
@@ -49,13 +58,13 @@ export async function failedBeforeActivation(
   hosts: HostTable,
   presence: Presence,
   name: string,
-  note: string,
-  excerpt?: readonly string[],
+  failure: Failure,
 ): Promise<void> {
   await presence.check([name]);
   if (context.signal.aborted) return;
-  if (hosts.get(name).online) return failed(context, hosts, name, note, excerpt);
+  if (hosts.get(name).online) return failed(context, hosts, name, failure);
 
+  const { note, excerpt } = failure;
   hosts.get(name).lost = true;
   hosts.set(name, "failed", { note: `unreachable: ${note}` });
   log(context, "error", `unreachable: ${note}`, name);
@@ -84,7 +93,7 @@ async function concluded(
     await repairUnits(context, hosts, name, units, phase);
   } else {
     const note = `${phase} failed: switch-to-configuration exit ${code}`;
-    await failed(context, hosts, name, note, errorLines(activation));
+    await failed(context, hosts, name, failureOf(activation, note));
   }
 }
 
@@ -120,8 +129,7 @@ export async function deployHost(
       const copied = await serveHost(context, hosts.fabric, served, output("copy"));
       if (flow.halt.aborted) return;
       if (copied !== undefined) {
-        const { note, excerpt } = copied;
-        return failedBeforeActivation(context, hosts, presence, name, note, excerpt);
+        return failedBeforeActivation(context, hosts, presence, name, copied);
       }
     }
   }
@@ -135,10 +143,10 @@ export async function deployHost(
     if (flow.halt.aborted) return;
     if (!succeeded(execution.result)) {
       const note = `origin not read: ${describeFailure(execution)}`;
-      return failedBeforeActivation(context, hosts, presence, name, note, errorLines(execution));
+      return failedBeforeActivation(context, hosts, presence, name, failureOf(execution, note));
     }
     const parsed = parseOrigin(execution.stdout.join("\n"));
-    if (!parsed.ok) return failed(context, hosts, name, parsed.error);
+    if (!parsed.ok) return failed(context, hosts, name, { note: parsed.error });
     origin = parsed.value;
     read = true;
   }
@@ -151,7 +159,7 @@ export async function deployHost(
     if (context.signal.aborted) return;
     if (!succeeded(profile.result)) {
       const note = `profile not set: ${describeFailure(profile)}`;
-      return failedBeforeActivation(context, hosts, presence, name, note, errorLines(profile));
+      return failedBeforeActivation(context, hosts, presence, name, failureOf(profile, note));
     }
   }
 
@@ -171,8 +179,12 @@ export async function deployHost(
 
   if (host.local) {
     if (run.result.exitCode === null || run.result.timedOut) {
-      const note = `${phase} failed: ${describeFailure(run)}`;
-      return failed(context, hosts, name, note, errorLines(run));
+      return failed(
+        context,
+        hosts,
+        name,
+        failureOf(run, `${phase} failed: ${describeFailure(run)}`),
+      );
     }
     return concluded(context, hosts, name, phase, run.result.exitCode, run);
   }
@@ -188,11 +200,10 @@ export async function deployHost(
         context,
         hosts,
         name,
-        `${phase} did not run: ${describeFailure(run)}`,
-        errorLines(run),
+        failureOf(run, `${phase} did not run: ${describeFailure(run)}`),
       );
     case "failed":
-      return failed(context, hosts, name, settled.detail, errorLines(run));
+      return failed(context, hosts, name, failureOf(run, settled.detail));
     case "lost":
       host.lost = true;
       hosts.presence(name, false);

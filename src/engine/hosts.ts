@@ -6,6 +6,7 @@ import { canTransition } from "../model/transitions.ts";
 import type { Phase } from "./commands/host.ts";
 import { emit, type RunContext } from "./context.ts";
 import type { Fabric } from "./fabric.ts";
+import type { KnownError } from "./known-errors.ts";
 import type { Selection } from "./steps/select.ts";
 
 export interface HostEntry {
@@ -37,6 +38,9 @@ export interface HostEntry {
 
   /** `clock.now()` of the wave it is deployed in: journal window of the collection. */
   waveStartedAt?: number;
+
+  /** Trap recognised behind its failure: decides instead of the question. */
+  knownError?: KnownError;
 }
 
 /** Activated during the run, reachable, not reverted yet: what a forced rollback brings back. */

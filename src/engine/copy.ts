@@ -5,7 +5,7 @@ import type { PullSource } from "../model/events.ts";
 import { copyClosure, onHost, pullClosure, type Target } from "./commands/host.ts";
 import { pathSizes } from "./commands/nix.ts";
 import { emit, log, type RunContext } from "./context.ts";
-import { describeFailure, errorLines, execute, type Failure, succeeded } from "./exec.ts";
+import { describeFailure, execute, type Failure, failureOf, succeeded } from "./exec.ts";
 import type { Fabric } from "./fabric.ts";
 import { RETRY_ATTEMPTS } from "./known-errors.ts";
 import { parseCopyPath, parsePathSize } from "./nix-output.ts";
@@ -73,10 +73,7 @@ async function push(
       onLine,
     });
     if (flow.halt.aborted || succeeded(execution.result)) return undefined;
-    failure = {
-      note: `copy failed: ${describeFailure(execution)}`,
-      excerpt: errorLines(execution),
-    };
+    failure = failureOf(execution, `copy failed: ${describeFailure(execution)}`);
     if (attempt < RETRY_ATTEMPTS) log(context, "warn", `${failure.note}, retrying`, name);
   }
   return failure;
@@ -116,6 +113,7 @@ export async function serveHost(
     execute(context, onHost(target, pullClosure(path, params.timeouts), params.timeouts), {
       signal: flow.halt,
       onLine: watch,
+      retryable: true,
     });
 
   // A freshly built path sits in no cache: a failed pull is the ordinary case,
