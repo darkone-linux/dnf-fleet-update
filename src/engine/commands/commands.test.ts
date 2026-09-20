@@ -157,10 +157,15 @@ describe("placement", () => {
 
   test("ping waits for one answer", () => {
     expect(ping("fd-01", T)).toEqual({
-      argv: ["ping", "-c", "1", "-W", "5", "fd-01"],
-      timeoutMs: 15_000,
-      killGraceMs: 10_000,
+      argv: ["ping", "-c", "2", "-W", String(T.ping), "fd-01"],
+      timeoutMs: (T.ping + T.killGrace) * 1000,
+      killGraceMs: T.killGrace * 1000,
     });
+  });
+
+  test("no argv carries a locale-dependent decimal", () => {
+    // iputils parses numbers with the locale: `fr_FR` refuses `-i 0.3`.
+    expect(ping("fd-01", T).argv.filter((arg) => /^\d+[.,]\d+$/.test(arg))).toEqual([]);
   });
 
   test("unvalidated host names or paths are programmer errors", () => {

@@ -1,9 +1,11 @@
 // Synthetic fleet of the engine tests: generator-shaped JSON, private and
 // documentation address ranges only.
 
+import { ping } from "../engine/commands/host.ts";
 import { Fabric } from "../engine/fabric.ts";
 import { parseFleet } from "../engine/fleet.ts";
 import type { Selection } from "../engine/steps/select.ts";
+import { DEFAULT_TIMEOUTS } from "../model/params.ts";
 import type { CommandScript } from "./fakes.ts";
 
 /**
@@ -133,7 +135,7 @@ export const anywhere = (word: string) => (argv: readonly string[]) =>
   argv.join(" ").includes(word);
 
 export const pingOf = (host: string, exitCode: number, once = false): CommandScript => ({
-  match: ["ping", "-c", "1", "-W", "5", host],
+  match: [...ping(host, DEFAULT_TIMEOUTS).argv],
   exitCode,
   once,
 });

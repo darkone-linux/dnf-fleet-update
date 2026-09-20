@@ -1,14 +1,16 @@
 // Presence on fakes: rounds at start, every `pingInterval`, on `p`, tracked hosts only.
 
 import { describe, expect, test } from "bun:test";
+import { DEFAULT_TIMEOUTS, DEFAULTS } from "../model/params.ts";
 import { type CommandScript, fakeRunContext, flush } from "../testing/fakes.ts";
 import { fleetSelection } from "../testing/fleet.ts";
+import { ping } from "./commands/host.ts";
 import { HostTable } from "./hosts.ts";
 import { Presence } from "./presence.ts";
 
 const answers = (host: string, ...codes: number[]): CommandScript[] =>
   codes.map((exitCode, index) => ({
-    match: ["ping", "-c", "1", "-W", "5", host],
+    match: [...ping(host, DEFAULT_TIMEOUTS).argv],
     exitCode,
     once: index < codes.length - 1,
   }));
@@ -44,7 +46,7 @@ describe("Presence", () => {
     await flush();
     expect(changes()).toEqual(["srv-ag down"]);
 
-    context.clock.advance(15_000);
+    context.clock.advance(DEFAULTS.pingInterval * 1000);
     await flush();
     expect(changes()).toEqual(["srv-ag down", "srv-ag up"]);
 
@@ -62,7 +64,7 @@ describe("Presence", () => {
     await flush();
 
     presence.untrack(["gw-ag"]);
-    context.clock.advance(15_000);
+    context.clock.advance(DEFAULTS.pingInterval * 1000);
     await flush();
     expect(context.commands.calls.map((call) => call.argv.at(-1))).toEqual([
       "gw-ag",
@@ -72,7 +74,7 @@ describe("Presence", () => {
 
     context.flow.stop("stop");
     await presence.stop();
-    context.clock.advance(15_000);
+    context.clock.advance(DEFAULTS.pingInterval * 1000);
     await flush();
     expect(context.commands.calls).toHaveLength(3);
   });

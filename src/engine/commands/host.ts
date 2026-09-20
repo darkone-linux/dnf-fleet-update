@@ -96,11 +96,15 @@ export function onHost(target: Target, command: HostCommand, timeouts: Timeouts)
   return asNix(ssh, command.seconds + timeouts.ssh, timeouts);
 }
 
-/** `-W`: seconds to wait for the answer. */
+/**
+ * `-W`: seconds to wait for an answer. Two probes, exit `0` as soon as either
+ * answers: one packet lost inter-zone is not an outage. Default 1 s interval,
+ * no `-i`: iputils parses it with the locale, `fr_FR` rejects `0.3`.
+ */
 export function ping(host: string, timeouts: Timeouts): CommandSpec {
   assertSafe("host", host, HOSTNAME);
   return {
-    argv: ["ping", "-c", "1", "-W", String(timeouts.ping), host],
+    argv: ["ping", "-c", "2", "-W", String(timeouts.ping), host],
     ...limits(timeouts.ping + timeouts.killGrace, timeouts),
   };
 }
