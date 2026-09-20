@@ -100,6 +100,9 @@ export interface PersistedState {
   waves: PersistedWave[];
   hosts: PersistedHost[];
 
+  /** Report notes, in order (spec § Rapport). */
+  notes: { host?: string; message: string }[];
+
   /** Every closed question: decisions of the run, AI actions included. */
   answers: { id: string; value: string; t: number }[];
   end?: { status: "done" | "failed" | "aborted"; exitCode: ExitCode };
@@ -119,6 +122,7 @@ export function initialPersisted(): PersistedState {
     steps,
     waves: [],
     hosts: [],
+    notes: [],
     answers: [],
     lastEventAt: 0,
   };
@@ -273,6 +277,12 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
             pushedBytes: event.pushedBytes,
           },
         }),
+      };
+
+    case "note":
+      return {
+        ...state,
+        notes: [...state.notes, { host: event.host, message: event.message }],
       };
 
     case "ask.close":

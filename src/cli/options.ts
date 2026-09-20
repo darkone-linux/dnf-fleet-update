@@ -13,6 +13,7 @@ import {
   type AiAnalysis,
   type AiErrorAction,
   DEFAULT_DIAGNOSTICS,
+  DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
   DEFAULTS,
   type RunParams,
@@ -236,6 +237,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     timeouts: { ...DEFAULT_TIMEOUTS, ...fleet.timeouts },
     pingInterval: fleet.pingInterval ?? DEFAULTS.pingInterval,
     diagnostics: { ...DEFAULT_DIAGNOSTICS },
+    repair: { ...DEFAULT_REPAIR },
   });
 }
 

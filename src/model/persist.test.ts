@@ -90,8 +90,12 @@ test("the collection of a failed host is kept: units, then the error excerpt", (
   expect(build.hosts.find((host) => host.name === "ms-a2")?.diagnosis).toMatchObject({ units: [] });
 });
 
-test("a repaired host ends deployed", () => {
-  expect(statuses(fold(loadScenario("ai-repair"))).nlt).toBe("deployed");
+test("a repaired host ends deployed, its note kept for the report", () => {
+  const state = fold(loadScenario("ai-repair"));
+  expect(statuses(state).nlt).toBe("deployed");
+  expect(state.notes).toEqual([
+    { host: "nlt", message: "units recovered after a restart: probable activation ordering issue" },
+  ]);
 });
 
 // Recorded streams stop at `ask`: the replayer closes it once answered.

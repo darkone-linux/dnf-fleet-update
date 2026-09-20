@@ -29,6 +29,9 @@ export interface HostBehaviour {
   /** Units `systemctl` reports as failed, once the host has been activated. */
   failedUnits?: string[];
 
+  /** Those units come back up when restarted: the activation order was at fault. */
+  unitsRecover?: boolean;
+
   /** Unreachable from its activation of this phase until its rollback timer fires. */
   dropsOn?: Phase;
   rollbackExit?: number;
@@ -63,6 +66,7 @@ export type SimKind =
   | "system-status"
   | "failed-units"
   | "journal"
+  | "restart"
   | "activate"
   | "settle"
   | "rollback";
@@ -90,6 +94,9 @@ export interface SimHook {
 export interface HostSide {
   system: string;
   profile: string;
+
+  /** Units currently failed; a restart clears them when the host recovers. */
+  failedUnits: Set<string>;
   /** Result files by name: `test`, `switch`, `rollback`. */
   results: Map<string, number>;
   timers: Map<Phase, number>;
@@ -165,6 +172,7 @@ export class SimFleet implements CommandRunner {
       this.hosts.set(hostname, {
         system: ORIGIN_PATH,
         profile: ORIGIN_PATH,
+        failedUnits: new Set(options.behaviours?.[hostname]?.failedUnits ?? []),
         results: new Map(),
         timers: new Map(),
         dropped: false,
@@ -360,6 +368,7 @@ export class SimFleet implements CommandRunner {
     if (inner.includes("--max-jobs 0")) return { kind: "pull", host, at };
     if (inner.includes("readlink")) return { kind: "origin", host, at };
     if (inner.includes("systemctl status")) return { kind: "system-status", host, at };
+    if (inner.includes("systemctl restart")) return { kind: "restart", host, at };
     if (inner.includes("list-units")) return { kind: "failed-units", host, at };
     if (inner.includes("journalctl")) {
       return { kind: "journal", host, detail: /-u (\S+)/.exec(inner)?.[1], at };
@@ -555,16 +564,21 @@ export class SimFleet implements CommandRunner {
       // Collection of a failed host: `systemctl status` exits non-zero on a
       // degraded system, and the collection reads its output, not its code.
       case "system-status": {
-        const units = behaviour.failedUnits ?? [];
+        const units = [...side.failedUnits];
         out(`State: ${units.length > 0 ? "degraded" : "running"}`);
         out(`Failed: ${units.length} units`);
         return exit(units.length > 0 ? 1 : 0);
       }
       case "failed-units":
-        for (const unit of behaviour.failedUnits ?? []) {
-          out(`${unit} loaded failed failed ${unit}`);
-        }
+        for (const unit of side.failedUnits) out(`${unit} loaded failed failed ${unit}`);
         return ok();
+
+      // Deterministic repair: the units come back up only when told to.
+      case "restart":
+        if (behaviour.unitsRecover) side.failedUnits.clear();
+        else for (const unit of side.failedUnits) err(`Job for ${unit} failed`);
+        side.history.push("units restarted");
+        return exit(behaviour.unitsRecover ? 0 : 1);
       case "journal":
         out(`-- journal of ${command.detail ?? "?"} on ${name} --`);
         return ok();

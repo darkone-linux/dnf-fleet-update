@@ -177,6 +177,35 @@ test("units failed: the host is asked what failed, its journals kept, report and
   expect(run.recorded?.logs.get("gw-cp.diag")?.join("\n")).toContain("journal of outline.service");
 });
 
+test("units restarted and back up: the host goes on, the report blames the order", async () => {
+  const run = await simulateRun({
+    behaviours: {
+      "gw-cp": { activation: { test: 4 }, failedUnits: ["outline.service"], unitsRecover: true },
+    },
+  });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses["gw-cp"]).toBe("deployed");
+  expect(run.states["gw-cp"]).toBe("deployed");
+  expect(run.sim.host("gw-cp").history).toContain("units restarted");
+  expect(run.feed).toContain(
+    "ok gw-cp: units recovered after a restart: probable activation ordering issue",
+  );
+  expect(run.recorded?.report).toContain(
+    "## Notes\n\n- gw-cp: units recovered after a restart: probable activation ordering issue",
+  );
+});
+
+test("units that resist the restart: the host stays in error, left in test", async () => {
+  const run = await simulateRun({
+    behaviours: { "gw-cp": { activation: { test: 4 }, failedUnits: ["outline.service"] } },
+  });
+
+  expect(run.statuses["gw-cp"]).toBe("error");
+  expect(run.feed).toContain("warn gw-cp: units still failed after a restart: outline.service");
+  expect(run.recorded?.report).not.toContain("## Notes");
+});
+
 test("units failed at the switch: error, switched all the same", async () => {
   const run = await simulateRun({ behaviours: { hcs: { activation: { switch: 4 } } } });
 

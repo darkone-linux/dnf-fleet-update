@@ -9,6 +9,7 @@ import {
   AI_ANALYSIS,
   AI_ERROR_ACTION,
   DEFAULT_DIAGNOSTICS,
+  DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
   type RunParams,
 } from "../model/params.ts";
@@ -80,6 +81,7 @@ const savedParams = z.object({
       excerptLines: z.number().int().positive(),
     })
     .default(DEFAULT_DIAGNOSTICS),
+  repair: z.object({ settleSeconds: seconds }).default(DEFAULT_REPAIR),
 }) satisfies z.ZodType<RunParams, unknown>;
 
 const savedHost = z.object({

@@ -26,6 +26,16 @@ function since(context: RunContext, host: HostEntry): number {
   return (context.clock.now() - startedAt) / 1000;
 }
 
+/** Units the host reports as failed, nothing else: read again after a repair. */
+export async function readFailedUnits(context: RunContext, host: HostEntry): Promise<string[]> {
+  const { timeouts } = context.params;
+  const target: Target = { host: host.name, local: host.local };
+  const listed = await execute(context, onHost(target, failedUnits(timeouts), timeouts), {
+    log: { host: host.name, phase: DIAG },
+  });
+  return parseFailedUnits(listed.stdout.join("\n"));
+}
+
 /** Failed units of the host, their journals appended to the collection log. */
 async function units(context: RunContext, host: HostEntry): Promise<string[]> {
   const { timeouts, diagnostics } = context.params;
@@ -34,8 +44,7 @@ async function units(context: RunContext, host: HostEntry): Promise<string[]> {
 
   // Non-zero on a degraded system: the state is what the log keeps, not the code.
   await execute(context, onHost(target, systemStatus(timeouts), timeouts), options);
-  const listed = await execute(context, onHost(target, failedUnits(timeouts), timeouts), options);
-  const names = parseFailedUnits(listed.stdout.join("\n"));
+  const names = await readFailedUnits(context, host);
 
   const window = since(context, host);
   for (const unit of names) {

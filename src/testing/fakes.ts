@@ -28,6 +28,7 @@ import {
 import type { Event, RunInfo } from "../model/events.ts";
 import {
   DEFAULT_DIAGNOSTICS,
+  DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
   DEFAULTS,
   type RunParams,
@@ -311,6 +312,7 @@ export function testParams(overrides: Partial<RunParams> = {}): RunParams {
     timeouts: DEFAULT_TIMEOUTS,
     pingInterval: DEFAULTS.pingInterval,
     diagnostics: DEFAULT_DIAGNOSTICS,
+    repair: DEFAULT_REPAIR,
     ...overrides,
   };
 }

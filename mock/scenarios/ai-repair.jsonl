@@ -80,6 +80,7 @@
 {"t":22400,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: active (running)"}
 {"t":23100,"kind":"host.state","host":"nlt","state":"tested"}
 {"t":23200,"kind":"log","host":"nlt","level":"ok","message":"nginx recovered, activation order issue reported"}
+{"t":23300,"kind":"note","host":"nlt","message":"units recovered after a restart: probable activation ordering issue"}
 {"t":23400,"kind":"step.progress","step":"test","done":2,"total":2}
 {"t":23500,"kind":"step.end","step":"test","status":"ok"}
 {"t":23700,"kind":"step.start","step":"switch","total":3}

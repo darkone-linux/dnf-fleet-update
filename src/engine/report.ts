@@ -317,6 +317,12 @@ export function renderReport(input: ReportInput): Report {
 
   markdown.push(...diagnostics(hosts));
 
+  if (state.notes.length > 0) {
+    const line = (note: PersistedState["notes"][number]) =>
+      `- ${note.host === undefined ? "" : `${note.host}: `}${note.message}`;
+    markdown.push("", "## Notes", "", ...state.notes.map(line));
+  }
+
   if (knownErrors.length > 0) {
     markdown.push("", "## Known errors", "", ...knownErrors.map((message) => `- ${message}`));
   }

@@ -154,6 +154,9 @@ export type Event =
   // Deterministic collection of a failed host (spec § Erreurs et réparations):
   // what it could not start, and the error that got it there.
   | (Base & { kind: "host.diagnosis"; host: string; units: string[]; excerpt?: string[] })
+  // What the report must say beyond a host state (spec § Rapport): activation
+  // order after a restart, unlock not re-tested. `host`: absent when general.
+  | (Base & { kind: "note"; host?: string; message: string })
   | (Base & { kind: "log"; host?: string; level: Level; message: string })
 
   // AI answers stream: `ai` opens the block, `ai.line` appends, `ai.end` closes

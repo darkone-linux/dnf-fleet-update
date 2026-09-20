@@ -265,6 +265,21 @@ export function parseFailedUnits(stdout: string): string[] {
 }
 
 /**
+ * Failed units back up, together and in one go: their own dependencies order
+ * them, which is exactly what a restart is meant to settle.
+ */
+export function restartUnits(units: readonly string[], timeouts: Timeouts): HostCommand {
+  const [first, ...rest] = units;
+  if (first === undefined) throw new Error("restart without a unit");
+  for (const unit of units) assertSafe("unit", unit, UNIT);
+  return {
+    argv: ["systemctl", "restart", first, ...rest],
+    root: true,
+    seconds: timeouts.activation,
+  };
+}
+
+/**
  * Journal of one failed unit since its wave started. Root: the deploy user
  * reads no system journal. `--since=-<n>s`: a relative span, the engine holds
  * no wall clock.

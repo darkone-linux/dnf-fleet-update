@@ -41,6 +41,12 @@ export interface Diagnostics {
   excerptLines: number;
 }
 
+/** Deterministic repair of a host in `error` (spec § Erreurs et réparations). */
+export interface Repair {
+  /** Seconds waited before restarting the failed units: a slow start is not a failure. */
+  settleSeconds: number;
+}
+
 export interface RunParams {
   /** Raw `--on` query; absent: the whole fleet. */
   on?: string;
@@ -80,6 +86,7 @@ export interface RunParams {
   /** Seconds between two pings of the tracked hosts. */
   pingInterval: number;
   diagnostics: Diagnostics;
+  repair: Repair;
 }
 
 /** Built-in defaults of the options (spec § Options), last in the resolution order. */
@@ -97,6 +104,9 @@ export const DEFAULTS = {
 
 /** No option and no fleet key today: the resolution point of the two bounds. */
 export const DEFAULT_DIAGNOSTICS: Diagnostics = { journalLines: 200, excerptLines: 20 };
+
+/** One restart, no loop: a bounded retry belongs to the signature table. */
+export const DEFAULT_REPAIR: Repair = { settleSeconds: 10 };
 
 /** Spec § Délais, seconds. */
 export const DEFAULT_TIMEOUTS: Timeouts = {

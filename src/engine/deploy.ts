@@ -18,6 +18,7 @@ import { describeFailure, type Execution, errorLines, execute, succeeded } from 
 import type { HostTable } from "./hosts.ts";
 import type { OutputLine } from "./ports.ts";
 import type { Presence } from "./presence.ts";
+import { repairUnits } from "./repair.ts";
 import { revertHost } from "./rollback.ts";
 import { settle, transportFailed } from "./settle.ts";
 
@@ -78,8 +79,9 @@ async function concluded(
     hosts.set(name, "error", { note: "some units failed" });
     log(context, "warn", `${phase}: some units failed`, name);
 
-    // Names of the units: read by the report, and by their restart.
-    await collect(context, hosts, name, errorLines(activation));
+    // Names of the units: read by the report, then restarted once.
+    const units = await collect(context, hosts, name, errorLines(activation));
+    await repairUnits(context, hosts, name, units, phase);
   } else {
     const note = `${phase} failed: switch-to-configuration exit ${code}`;
     await failed(context, hosts, name, note, errorLines(activation));
