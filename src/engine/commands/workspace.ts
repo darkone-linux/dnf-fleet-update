@@ -39,7 +39,7 @@ export function flakeUpdate(repo: string, timeouts: Timeouts): CommandSpec {
   };
 }
 
-/** Codev: the consumer lock follows `dnf/` HEAD, even under `--no-consumer-flake`. */
+/** Codev: the consumer lock follows `dnf/` HEAD, even under `--no-flake`. */
 export function realignDnfLock(workspace: string, timeouts: Timeouts): CommandSpec {
   return {
     argv: ["nix", "flake", "update", "dnf"],

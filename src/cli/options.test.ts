@@ -63,10 +63,10 @@ describe("parsing", () => {
       "gateway",
       "--no-current-zone-before",
       "--no-dnf-flake",
-      "--no-consumer-flake",
-      "--dnf-message",
+      "--no-flake",
+      "--dnf-commit-message",
       "chore(update): dnf",
-      "--consumer-message",
+      "--commit-message",
       "chore(update): consumer",
       "--build-only",
       "--skip-test",
@@ -134,8 +134,8 @@ describe("validation", () => {
     [["--max-parallel", "0"], '--max-parallel: expected an integer >= 1, got "0"'],
     [["--max-parallel", "2.5"], '--max-parallel: expected an integer >= 1, got "2.5"'],
     [["--rollback-timeout=-1"], '--rollback-timeout: expected an integer >= 0, got "-1"'],
-    [["--dnf-message", " "], "--dnf-message: expected one non-empty line"],
-    [["--consumer-message", "a\nb"], "--consumer-message: expected one non-empty line"],
+    [["--dnf-commit-message", " "], "--dnf-commit-message: expected one non-empty line"],
+    [["--commit-message", "a\nb"], "--commit-message: expected one non-empty line"],
   ];
 
   for (const [argv, expected] of cases) {
@@ -236,11 +236,18 @@ describe("--resume", () => {
   test("every other option is refused, all named at once", () => {
     const result = resumeParams(
       saved,
-      options(["--resume", "--no-dnf-flake", "--deployment-order", "hcs", "--dnf-message", "x"]),
+      options([
+        "--resume",
+        "--no-dnf-flake",
+        "--deployment-order",
+        "hcs",
+        "--dnf-commit-message",
+        "x",
+      ]),
     );
     expect(result).toEqual({
       ok: false,
-      error: "--resume does not accept --deployment-order, --no-dnf-flake, --dnf-message",
+      error: "--resume does not accept --deployment-order, --no-dnf-flake, --dnf-commit-message",
     });
   });
 });

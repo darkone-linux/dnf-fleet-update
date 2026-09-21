@@ -7,7 +7,7 @@
 {"t":20,"kind":"host.add","host":"vbox-test","profile":"vbox","zone":"ag"}
 {"t":22,"kind":"host.add","host":"vbox-umi","profile":"umi","zone":"ag"}
 {"t":300,"kind":"step.end","step":"update","status":"skipped"}
-{"t":400,"kind":"log","level":"info","message":"--no-consumer-flake: inputs left untouched"}
+{"t":400,"kind":"log","level":"info","message":"--no-flake: inputs left untouched"}
 {"t":600,"kind":"step.start","step":"select"}
 {"t":1200,"kind":"log","level":"ok","message":"7 hosts selected in zone ag"}
 {"t":1300,"kind":"step.end","step":"select","status":"ok"}

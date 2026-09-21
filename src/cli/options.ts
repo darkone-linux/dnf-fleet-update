@@ -74,9 +74,9 @@ const OPTIONS = {
   "critical-profiles": text,
   "no-current-zone-before": flag,
   "no-dnf-flake": flag,
-  "no-consumer-flake": flag,
-  "dnf-message": text,
-  "consumer-message": text,
+  "no-flake": flag,
+  "dnf-commit-message": text,
+  "commit-message": text,
   "build-only": flag,
   "skip-test": flag,
   "skip-switch": flag,
@@ -150,7 +150,7 @@ export function parseCli(argv: readonly string[]): CliCommand {
     const model = parseAiModel(values["ai-model"]);
     if (!model.ok) return invalid(model.error);
   }
-  for (const name of ["dnf-message", "consumer-message"] as const) {
+  for (const name of ["dnf-commit-message", "commit-message"] as const) {
     const error = checkMessage(name, values[name]);
     if (error) return invalid(error);
   }
@@ -172,9 +172,9 @@ export function parseCli(argv: readonly string[]): CliCommand {
       criticalProfiles: values["critical-profiles"],
       noCurrentZoneBefore: values["no-current-zone-before"] ?? false,
       noDnfFlake: values["no-dnf-flake"] ?? false,
-      noConsumerFlake: values["no-consumer-flake"] ?? false,
-      dnfMessage: values["dnf-message"],
-      consumerMessage: values["consumer-message"],
+      noConsumerFlake: values["no-flake"] ?? false,
+      dnfMessage: values["dnf-commit-message"],
+      consumerMessage: values["commit-message"],
       buildOnly: values["build-only"] ?? false,
       skipTest: values["skip-test"] ?? false,
       skipSwitch: values["skip-switch"] ?? false,
@@ -259,9 +259,9 @@ export function resumeParams(saved: RunParams, options: CliOptions): Result<Resu
     options.criticalProfiles !== undefined && "--critical-profiles",
     options.noCurrentZoneBefore && "--no-current-zone-before",
     options.noDnfFlake && "--no-dnf-flake",
-    options.noConsumerFlake && "--no-consumer-flake",
-    options.dnfMessage !== undefined && "--dnf-message",
-    options.consumerMessage !== undefined && "--consumer-message",
+    options.noConsumerFlake && "--no-flake",
+    options.dnfMessage !== undefined && "--dnf-commit-message",
+    options.consumerMessage !== undefined && "--commit-message",
   ].filter((name): name is string => name !== false);
   if (refused.length > 0) return fail(`--resume does not accept ${refused.join(", ")}`);
 

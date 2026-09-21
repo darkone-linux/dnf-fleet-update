@@ -114,9 +114,9 @@ network:
 | Option | Default | Description |
 |---|---|---|
 | `--no-dnf-flake` | | skip `nix flake update` of `dnf/` (codev only) |
-| `--no-consumer-flake` | | skip `nix flake update` of the consumer |
-| `--dnf-message <msg>` | `chore(update): regular flake upgrade` | commit message in `dnf/` (codev only) |
-| `--consumer-message <msg>` | `chore(update): full fleet` | commit message in the consumer (`chore(update): <--on>` for a partial run) |
+| `--no-flake` | | skip `nix flake update` of the consumer |
+| `--dnf-commit-message <msg>` | `chore(update): regular flake upgrade` | commit message in `dnf/` (codev only) |
+| `--commit-message <msg>` | `chore(update): full fleet` | commit message in the consumer (`chore(update): <--on>` for a partial run) |
 
 ### Flow
 

@@ -100,7 +100,7 @@ async function steps(context: RunContext): Promise<boolean> {
   if (codev) {
     if (!(await commitChanges(context, "dnf", dnf, params.dnfMessage))) return false;
 
-    // Even under `--no-consumer-flake`: the consumer deploys the committed `dnf/`.
+    // Even under `--no-flake`: the consumer deploys the committed `dnf/`.
     const realigned = await run(
       context,
       "nix flake update dnf",

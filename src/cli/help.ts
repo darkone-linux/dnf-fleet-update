@@ -12,9 +12,9 @@ Selection and order
 
 Update
   --no-dnf-flake                  skip "nix flake update" of dnf/ (co-development only)
-  --no-consumer-flake             skip "nix flake update" of the consumer
-  --dnf-message <msg>             dnf/ commit message (default "chore(update): regular flake upgrade")
-  --consumer-message <msg>        consumer commit message (default "chore(update): full fleet" or "chore(update): <--on>")
+  --no-flake                      skip "nix flake update" of the consumer
+  --dnf-commit-message <msg>      dnf/ commit message (default "chore(update): regular flake upgrade")
+  --commit-message <msg>          consumer commit message (default "chore(update): full fleet" or "chore(update): <--on>")
 
 Flow
   --build-only                    stop after the build; interactive: ask to continue
