@@ -146,6 +146,21 @@ test("the chronometer rides the Update row, magenta, on the engine clock", async
 
   expect(row).toContain("01:02:05");
   expect(fgHex(setup, "01:02:05")).toBe("d75fd7");
+
+  // The running step names the current action: yellow, not the plain white.
+  // The feed heading before it spells the same word in step purple: take the
+  // one on the sidebar row, right of the chronometer.
+  const label = setup
+    .captureSpans()
+    .lines.find((line) => line.spans.some((span) => span.text.startsWith("01:02:05")));
+  const update = [...(label?.spans ?? [])].reverse().find((span) => span.text.startsWith("Update"));
+  expect(
+    update?.fg
+      ?.toInts()
+      .slice(0, 3)
+      .map((p) => p.toString(16).padStart(2, "0"))
+      .join(""),
+  ).toBe("e0b341");
 });
 
 // A wide run summary: the narrow footer has to give segments up.

@@ -401,7 +401,7 @@ function StepRows({
             <text fg={stepColor[row.status]} bg={color.panel}>
               {`${glyph} `}
             </text>
-            <text fg={running ? color.white : name} bg={color.panel}>
+            <text fg={running ? color.accentYellow : name} bg={color.panel}>
               {STEP_LABELS[step]}
             </text>
             <box flexGrow={1} backgroundColor={color.panel} />
