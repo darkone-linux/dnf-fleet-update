@@ -4,8 +4,8 @@
 // here on the **resolved** one: a symlink leading out of a root is an escape,
 // not a shortcut.
 
-import { realpath } from "node:fs/promises";
-import { resolve, sep } from "node:path";
+import { mkdir, realpath, writeFile } from "node:fs/promises";
+import { dirname, resolve, sep } from "node:path";
 import type { Excerpt, SourceFiles } from "../engine/ports.ts";
 import { fail, ok, type Result } from "../model/result.ts";
 import { headLines } from "./tail.ts";
@@ -44,5 +44,28 @@ export class DirectorySources implements SourceFiles {
 
     const excerpt = await headLines(target, lines);
     return excerpt === undefined ? fail(`cannot read: ${path}`) : ok(excerpt);
+  }
+
+  // The path is resolved without `realpath`: a file the repair creates does not
+  // exist yet. Its parent is, which is where a symlink leading out is caught.
+  async write(path: string, content: string): Promise<Result<void>> {
+    const target = resolve(path);
+    let parent: string;
+    try {
+      parent = await realpath(dirname(target));
+    } catch {
+      return fail(`no such directory: ${dirname(path)}`);
+    }
+    const roots = await this.roots();
+    if (!roots.some((root) => within(root, parent))) {
+      return fail(`outside the readable trees: ${path}`);
+    }
+    try {
+      await mkdir(parent, { recursive: true });
+      await writeFile(target, content, "utf8");
+      return ok(undefined);
+    } catch (error) {
+      return fail(`cannot write: ${path}: ${error instanceof Error ? error.message : "failed"}`);
+    }
   }
 }

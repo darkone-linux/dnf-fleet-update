@@ -137,6 +137,12 @@ export interface Excerpt {
 export interface SourceFiles {
   /** Head of the file: a module is read from its header down. */
   read(path: string, lines: number): Promise<Result<Excerpt>>;
+
+  /**
+   * Whole file, created or replaced (spec § réparation). The caller has already
+   * decided the path may be written; this refuses only what the disk refuses.
+   */
+  write(path: string, content: string): Promise<Result<void>>;
 }
 
 /** Last run directory, as `--resume` finds it (spec § État et reprise). */

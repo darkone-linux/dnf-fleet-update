@@ -1,7 +1,7 @@
 // Confinement of what the AI may read: pure, before any filesystem access.
 
 import { describe, expect, test } from "bun:test";
-import { confine, readableRoots } from "./paths.ts";
+import { confine, readableRoots, writable } from "./paths.ts";
 
 const roots = readableRoots("/ws");
 
@@ -44,9 +44,47 @@ describe("confine", () => {
     expect(refused("usr/secrets/keys.yaml")).toBe("not readable: usr/secrets");
     expect(refused(".trash/old.nix")).toBe("not readable: .trash");
     expect(refused(".git/config")).toBe("not readable: .git");
+
+    // `dnf/` sits inside the workspace: the deepest root must decide, not the first.
+    expect(refused("dnf/.git/config")).toBe("not readable: .git");
   });
 
   test("an empty path is refused before anything else", () => {
     expect(refused("  ")).toBe("path is empty");
+  });
+});
+
+describe("writable", () => {
+  const denied = (path: string, codev = true): string => {
+    const result = writable(roots, path, codev);
+    if (result.ok) throw new Error(`expected a refusal for ${path}`);
+    return result.error;
+  };
+
+  test("a module of the consumer, and one of dnf/ in co-development", () => {
+    expect(writable(roots, "usr/modules/nginx.nix", true)).toEqual({
+      ok: true,
+      value: "/ws/usr/modules/nginx.nix",
+    });
+    expect(writable(roots, "dnf/modules/service/nginx.nix", true).ok).toBe(true);
+  });
+
+  test("outside co-development dnf/ is a store path: writing it changes nothing", () => {
+    expect(denied("dnf/modules/service/nginx.nix", false)).toBe(
+      "not writable outside co-development: dnf/modules/service/nginx.nix",
+    );
+    expect(writable(roots, "usr/modules/nginx.nix", false).ok).toBe(true);
+  });
+
+  test("generated data, the declaration and every lock stay out of reach", () => {
+    expect(denied("var/generated/hosts.nix")).toBe("not writable: var/generated");
+    expect(denied("etc/config.yaml")).toBe("not writable: etc/config.yaml");
+    expect(denied("flake.lock")).toBe("not writable: a lock is regenerated, not edited");
+    expect(denied("dnf/flake.lock")).toBe("not writable: a lock is regenerated, not edited");
+  });
+
+  test("what a read refuses, a write refuses first", () => {
+    expect(denied("usr/secrets/keys.yaml")).toBe("not readable: usr/secrets");
+    expect(denied("/etc/shadow")).toContain("outside the readable trees");
   });
 });

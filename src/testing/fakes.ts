@@ -209,8 +209,18 @@ export class MemoryRunStore implements RunStore {
 /** Files a test lets the AI read, keyed by the path the tool asks for. */
 export class MemorySources implements SourceFiles {
   readonly reads: string[] = [];
+  readonly writes: { path: string; content: string }[] = [];
+  private readonly files: Record<string, string[]>;
 
-  constructor(private readonly files: Readonly<Record<string, string[]>> = {}) {}
+  constructor(files: Readonly<Record<string, string[]>> = {}) {
+    this.files = { ...files };
+  }
+
+  write(path: string, content: string): Promise<Result<void>> {
+    this.writes.push({ path, content });
+    this.files[path] = content.split("\n");
+    return Promise.resolve(ok(undefined));
+  }
 
   read(path: string, lines: number): Promise<Result<Excerpt>> {
     this.reads.push(path);
