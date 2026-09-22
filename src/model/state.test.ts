@@ -40,6 +40,7 @@ const presence = (online: boolean): Event => ({ t: 1, kind: "host.presence", hos
 test("every scenario is discoverable", () => {
   expect(listScenarios().sort()).toEqual([
     "abort",
+    "ai-analysis",
     "ai-repair",
     "build-failure",
     "nominal",
@@ -90,6 +91,26 @@ test("ai repair recovers the failed host", () => {
 
   // The failure must survive in the feed even once the host recovered.
   expect(state.feed.some((item) => item.level === "error")).toBe(true);
+});
+
+test("ai analysis explains, repairs nothing, and leaves its three blocks", () => {
+  const state = fold("ai-analysis");
+  expect(countState(state, "deployed")).toBe(2);
+
+  // Analysed, then back where it failed: an analysis is not a repair.
+  const failed = state.hosts.find((host) => host.name === "srv-cp");
+  expect(failed?.state).toBe("error");
+  expect(failed?.note).toBe("outline.service failed again");
+
+  // One per analysed host, then the end-of-run summary.
+  const blocks = state.feed.filter((item) => item.kind === "ai");
+  expect(blocks.map((block) => block.message)).toEqual([
+    "analysing lt-cp",
+    "analysing srv-cp: outline.service failed during activation",
+    "summarising the run",
+  ]);
+  expect(blocks.every((block) => block.streaming === false)).toBe(true);
+  expect(state.end?.exitCode).toBe(0);
 });
 
 test("abort stops mid-build with nothing deployed", () => {

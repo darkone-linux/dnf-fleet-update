@@ -32,33 +32,33 @@ profiles and zones come from your configuration, nothing is hardcoded.
   unreachable.
 - 🔁 **Resumable.** Every event is written to `var/deployments/`; after an
   interruption, `--resume` picks up the hosts left, reusing what was built.
-- 🤖 **AI on call, on a leash.** AI (local or remote) analyses failures from deterministic
-  evidence (`systemctl status`, `journalctl`, build logs) and can propose a
-  repair. It only acts through the tool's own guarded actions (no free shell,
-  no free SSH) and every action is logged and confirmed. Being built, see
-  [Status](#status).
+- 🤖 **AI on call, on a leash.** AI (local or remote) analyses failures from
+  deterministic evidence (`systemctl status`, `journalctl`, build logs). It
+  reaches them through an MCP server the run serves on loopback, and the level
+  you asked for is the list of tools it is shown — no free shell, no free SSH,
+  every call traced. Repair is being built, see [Status](#status).
 - 🖥️ **A terminal interface built for reading.** A feed of what happened,
   panels for what needs attention, and the state of every step and host at a
   glance. Open any host's logs without losing the overview.
 - ⏰ **Unattended too.** `--no-ui` produces plain text for a systemd timer, with
-  meaningful exit codes (and, once built, a Matrix report to the alert rooms).
+  meaningful exit codes and a Matrix report to the alert rooms.
 - 🔒 **One run at a time.** A kernel `flock` that cannot be orphaned.
 
 ## Status
 
-**Alpha.** v0.3.0 updates, builds, tests and switches a real fleet end to end,
-from the DNF consumer project it runs in. Two parts of the contract below are
-specified and still being built — refused outright rather than half-done:
+**Alpha.** v0.5.0 updates, builds, tests and switches a real fleet end to end
+from the DNF consumer project it runs in, and reports to the Matrix alert rooms.
+On `main`, the AI analyses a failure through its own guarded tools. One part of
+the contract below is specified and still being built:
 
 | Not yet | Options | Today |
 |---|---|---|
-| Matrix report | `--send-report` | refused, exit `2` |
-| AI analysis and repair | `--ai-analysis`, `--ai-error-action` | accepted, no effect — `a` asks the tool, nothing else does |
+| AI repair | `--ai-error-action repair` | accepted, behaves like `analysis`: the AI explains, it never acts |
 
 ```bash
 nix develop            # or: nix-shell
 just install
-just mock ai-repair    # nominal, offline, build-failure, ai-repair, abort
+just mock ai-analysis  # nominal, offline, build-failure, ai-analysis, ai-repair, abort
 ```
 
 `just mock` replays a recorded event stream in the real interface. The replay
@@ -143,13 +143,25 @@ network:
 | `--ai-analysis none\|passive\|active` | `none` | analysis depth and AI-enriched report |
 | `--ai-error-action none\|analysis\|repair` | `none` | what the AI may do when something fails |
 
-The level sets the tools the AI can use, never more:
+Both default to `none`: nothing reaches an AI until you ask. The level is the
+higher of the two, and it *is* the list of tools published to the model — what
+it is not shown, it cannot ask for:
 
 | Level | Tools |
 |---|---|
-| `passive` | deployment state, build and activation logs, failed units and their journal |
-| `active` / `analysis` | + read the code (consumer, `dnf/`), host journals and units, read-only |
-| `repair` | + act on a service, edit the code, validate, commit, retry, exclude a host, give up after 3 attempts |
+| `passive` | deployment state, host diagnosis, build and activation logs |
+| `active` / `analysis` | + read the code (consumer, `dnf/`), host units and journals, read-only |
+| `repair` | + act on a service, edit the code, validate, commit, retry, exclude a host — being built |
+
+The built-in tools of `claude` and `opencode` are denied, and so is the project
+context they would otherwise pick up (`CLAUDE.md`, user settings). A path leaves
+the two readable trees, names `usr/secrets/`, or a host or unit is not one of
+the run's — the call is refused, and the refusal is traced like any other call.
+
+Every tool call leaves a feed line (`AI reads usr/modules/nginx.nix`) and a line
+in `logs/ai.log`. `report.md` gains an **AI analysis** section: one block per
+host analysed, then the end-of-run summary, which also rides along — trimmed —
+on the Matrix message. The analysis never replaces a host's raw reason.
 
 ### Execution
 
@@ -199,10 +211,10 @@ overridden:
 fleet-update --resume --on "nlt"
 ```
 
-**Let the AI repair**, with a confirmation before each action:
+**Let the AI explain what failed**, with the code in reach and nothing else:
 
 ```bash
-fleet-update --ai-analysis active --ai-error-action repair
+fleet-update --ai-analysis passive --ai-error-action analysis
 ```
 
 **Unattended nightly run** — what the `darkone.admin.fleet-update` module
@@ -261,7 +273,9 @@ neighbouring text looks glued and colours are lost. Use the capture harness.
 | Path | Role |
 |---|---|
 | `src/model/` | event contract (`events.ts`), state fold (`state.ts`), exit codes, theme — pure, no I/O |
-| `src/engine/` | engine side: side-effect ports (`ports.ts`), today the scenario player |
+| `src/engine/` | orchestration: ports (`ports.ts`), steps, waves, host table, decisions, report |
+| `src/adapters/` | real ports: processes, `flock`, run store, loopback MCP server |
+| `src/ai/` | the AI as an executable: argv, prompts, tool registry, JSON-RPC, triggers |
 | `src/ui/` | OpenTUI components, presentation only |
 | `src/testing/` | deterministic frame capture, fakes of the engine ports |
 | `src/main.tsx` | composition root: binds a run source to the interface |

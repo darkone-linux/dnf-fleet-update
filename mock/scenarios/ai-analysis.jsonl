@@ -1,0 +1,99 @@
+{"t": 0, "kind": "run.start", "run": {"version": "0.7.0", "selection": "@zone-cp", "mode": "partial", "codev": false, "aiModel": "claude:opus@high", "maxParallel": 10}}
+{"t": 10, "kind": "host.add", "host": "gw-cp", "profile": "gateway", "zone": "cp"}
+{"t": 12, "kind": "host.add", "host": "srv-cp", "profile": "server", "zone": "cp"}
+{"t": 14, "kind": "host.add", "host": "lt-cp", "profile": "laptop", "zone": "cp"}
+{"t": 200, "kind": "step.start", "step": "update"}
+{"t": 1400, "kind": "log", "level": "ok", "message": "inputs updated, just clean ok"}
+{"t": 1600, "kind": "step.end", "step": "update", "status": "ok"}
+{"t": 1700, "kind": "step.start", "step": "select"}
+{"t": 2000, "kind": "log", "level": "ok", "message": "3 hosts selected, 2 waves"}
+{"t": 2100, "kind": "step.end", "step": "select", "status": "ok"}
+{"t": 2300, "kind": "step.start", "step": "build", "total": 3}
+{"t": 2310, "kind": "host.presence", "host": "gw-cp", "online": true}
+{"t": 2312, "kind": "host.presence", "host": "srv-cp", "online": true}
+{"t": 2314, "kind": "host.presence", "host": "lt-cp", "online": true}
+{"t": 2400, "kind": "host.state", "host": "gw-cp", "state": "building"}
+{"t": 2420, "kind": "host.state", "host": "srv-cp", "state": "building"}
+{"t": 2440, "kind": "host.state", "host": "lt-cp", "state": "building"}
+{"t": 3200, "kind": "host.output", "host": "srv-cp", "phase": "build", "line": "building outline-1.10.1.drv"}
+{"t": 3600, "kind": "host.state", "host": "gw-cp", "state": "built"}
+{"t": 3700, "kind": "host.state", "host": "srv-cp", "state": "built"}
+{"t": 3800, "kind": "host.state", "host": "lt-cp", "state": "built"}
+{"t": 3900, "kind": "step.progress", "step": "build", "done": 3, "total": 3}
+{"t": 4000, "kind": "step.end", "step": "build", "status": "ok"}
+{"t": 4100, "kind": "step.start", "step": "publish", "total": 3}
+{"t": 4200, "kind": "host.state", "host": "gw-cp", "state": "copying"}
+{"t": 4260, "kind": "host.state", "host": "gw-cp", "state": "ready"}
+{"t": 4270, "kind": "step.progress", "step": "publish", "done": 1, "total": 3}
+{"t": 4400, "kind": "host.state", "host": "srv-cp", "state": "copying"}
+{"t": 4460, "kind": "host.state", "host": "srv-cp", "state": "ready"}
+{"t": 4470, "kind": "step.progress", "step": "publish", "done": 2, "total": 3}
+{"t": 4600, "kind": "host.state", "host": "lt-cp", "state": "copying"}
+{"t": 4660, "kind": "host.state", "host": "lt-cp", "state": "ready"}
+{"t": 4670, "kind": "step.progress", "step": "publish", "done": 3, "total": 3}
+{"t": 4700, "kind": "step.end", "step": "publish", "status": "ok"}
+{"t": 4800, "kind": "step.start", "step": "test", "total": 3}
+{"t": 4900, "kind": "wave.start", "index": 1, "total": 2, "hosts": ["gw-cp"]}
+{"t": 5100, "kind": "host.state", "host": "gw-cp", "state": "testing"}
+{"t": 5900, "kind": "host.state", "host": "gw-cp", "state": "tested"}
+{"t": 6000, "kind": "step.progress", "step": "test", "done": 1, "total": 3}
+{"t": 6200, "kind": "wave.start", "index": 2, "total": 2, "hosts": ["srv-cp", "lt-cp"]}
+{"t": 6400, "kind": "host.state", "host": "srv-cp", "state": "testing"}
+{"t": 6420, "kind": "host.state", "host": "lt-cp", "state": "testing"}
+{"t": 7000, "kind": "host.output", "host": "lt-cp", "phase": "activate", "line": "prometheus-node-exporter.service: Failed with result 'exit-code'"}
+{"t": 7100, "kind": "host.state", "host": "lt-cp", "state": "error", "note": "prometheus-node-exporter.service failed"}
+{"t": 7160, "kind": "host.diagnosis", "host": "lt-cp", "units": ["prometheus-node-exporter.service"], "excerpt": ["listen tcp 127.0.0.1:9100: bind: address already in use", "prometheus-node-exporter.service: Failed with result 'exit-code'"]}
+{"t": 7200, "kind": "log", "host": "lt-cp", "level": "error", "message": "activation failed: 1 unit failed (prometheus-node-exporter.service)"}
+{"t": 7600, "kind": "host.output", "host": "srv-cp", "phase": "activate", "line": "outline.service: Failed with result 'exit-code'"}
+{"t": 7700, "kind": "host.state", "host": "srv-cp", "state": "error", "note": "outline.service failed"}
+{"t": 7760, "kind": "host.diagnosis", "host": "srv-cp", "units": ["outline.service"], "excerpt": ["Error: connect ECONNREFUSED 127.0.0.1:5432", "outline.service: Main process exited, code=exited, status=1"]}
+{"t": 7800, "kind": "log", "host": "srv-cp", "level": "error", "message": "activation failed: 1 unit failed (outline.service)"}
+{"t": 17200, "kind": "host.state", "host": "lt-cp", "state": "repairing", "note": "restarting prometheus-node-exporter.service"}
+{"t": 17300, "kind": "log", "host": "lt-cp", "level": "info", "message": "restarting failed units"}
+{"t": 18000, "kind": "host.state", "host": "lt-cp", "state": "tested"}
+{"t": 18100, "kind": "log", "host": "lt-cp", "level": "ok", "message": "units recovered after the restart"}
+{"t": 18150, "kind": "note", "host": "lt-cp", "message": "units recovered after a restart: probable activation ordering issue"}
+{"t": 18200, "kind": "host.state", "host": "srv-cp", "state": "repairing", "note": "restarting outline.service"}
+{"t": 18300, "kind": "log", "host": "srv-cp", "level": "info", "message": "restarting failed units"}
+{"t": 19000, "kind": "host.state", "host": "srv-cp", "state": "error", "note": "outline.service failed again"}
+{"t": 19100, "kind": "log", "host": "srv-cp", "level": "warn", "message": "units still failed after the restart"}
+{"t": 19300, "kind": "ai", "id": "a1", "message": "analysing lt-cp"}
+{"t": 19400, "kind": "ai.line", "id": "a1", "line": "prometheus-node-exporter came back on the restart, so the unit itself is fine."}
+{"t": 19600, "kind": "ai.line", "id": "a1", "line": "journalctl of the failed start: bind: address already in use, on :9100."}
+{"t": 19800, "kind": "ai.line", "id": "a1", "line": "The previous exporter still held the port when the new one was started."}
+{"t": 20000, "kind": "ai.line", "id": "a1", "line": "switch-to-configuration restarts the unit without waiting for the port to free."}
+{"t": 20200, "kind": "ai.line", "id": "a1", "line": "Nothing to do on lt-cp: it runs the new generation and the unit is active."}
+{"t": 20400, "kind": "ai.line", "id": "a1", "line": "Worth knowing: the same race can bite any host running this exporter."}
+{"t": 20600, "kind": "ai.end", "id": "a1"}
+{"t": 20800, "kind": "host.state", "host": "srv-cp", "state": "ai-analysing"}
+{"t": 20900, "kind": "ai", "id": "a2", "message": "analysing srv-cp: outline.service failed during activation"}
+{"t": 21000, "kind": "ai.line", "id": "a2", "line": "outline.service cannot reach PostgreSQL on 127.0.0.1:5432."}
+{"t": 21200, "kind": "ai.line", "id": "a2", "line": "systemctl status postgresql.service on srv-cp: inactive (dead), not enabled."}
+{"t": 21400, "kind": "ai.line", "id": "a2", "line": "Reading usr/machines/srv-cp/default.nix: darkone.service.outline.enable = true."}
+{"t": 21600, "kind": "ai.line", "id": "a2", "line": "No darkone.service.postgresql on this host, nor in the server profile."}
+{"t": 21800, "kind": "ai.line", "id": "a2", "line": "So this is a gap in the configuration, not an activation race."}
+{"t": 22000, "kind": "ai.line", "id": "a2", "line": "A restart cannot help: there is no database for the service to reach."}
+{"t": 22200, "kind": "ai.line", "id": "a2", "line": "Fix belongs in the code — declare postgresql on srv-cp, then deploy it again."}
+{"t": 22400, "kind": "ai.line", "id": "a2", "line": "Out of scope here: nothing in this run can supply a missing declaration."}
+{"t": 22600, "kind": "ai.end", "id": "a2"}
+{"t": 22800, "kind": "host.state", "host": "srv-cp", "state": "error", "note": "outline.service failed again"}
+{"t": 23000, "kind": "step.progress", "step": "test", "done": 3, "total": 3}
+{"t": 23100, "kind": "step.end", "step": "test", "status": "ok"}
+{"t": 23200, "kind": "step.start", "step": "switch", "total": 2}
+{"t": 23300, "kind": "host.state", "host": "gw-cp", "state": "switching"}
+{"t": 23450, "kind": "host.state", "host": "gw-cp", "state": "deployed"}
+{"t": 23550, "kind": "host.state", "host": "lt-cp", "state": "switching"}
+{"t": 23700, "kind": "host.state", "host": "lt-cp", "state": "deployed"}
+{"t": 23900, "kind": "step.progress", "step": "switch", "done": 2, "total": 2}
+{"t": 24000, "kind": "step.end", "step": "switch", "status": "ok"}
+{"t": 24200, "kind": "ai", "id": "a3", "message": "summarising the run"}
+{"t": 24300, "kind": "ai.line", "id": "a3", "line": "2 of the 3 hosts are on the new generation: gw-cp and lt-cp."}
+{"t": 24500, "kind": "ai.line", "id": "a3", "line": "srv-cp is left in test, with outline.service down, and that is the right call."}
+{"t": 24700, "kind": "ai.line", "id": "a3", "line": "One cause, one gap: outline is enabled on srv-cp without a database beside it."}
+{"t": 24900, "kind": "ai.line", "id": "a3", "line": "Declare darkone.service.postgresql on srv-cp, then run again on that host alone."}
+{"t": 25100, "kind": "ai.line", "id": "a3", "line": "lt-cp needed one restart of its node exporter: an activation-order race,"}
+{"t": 25300, "kind": "ai.line", "id": "a3", "line": "harmless this time, but it will return on any host running that exporter."}
+{"t": 25500, "kind": "ai.end", "id": "a3"}
+{"t": 25600, "kind": "step.start", "step": "report"}
+{"t": 26000, "kind": "step.end", "step": "report", "status": "ok"}
+{"t": 26100, "kind": "run.end", "status": "done", "exitCode": 0, "report": ["2 deployed, 1 with failed units (srv-cp)", "duration 26s"]}
