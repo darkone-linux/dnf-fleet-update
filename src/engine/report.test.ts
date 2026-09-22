@@ -291,6 +291,35 @@ describe("renderReport", () => {
     expect(markdown).toContain("| gw-ag | restart nginx.service | done |  |");
   });
 
+  test("a repair that committed splits the fleet, and the header says so", () => {
+    const committed = [
+      {
+        t: 1,
+        kind: "ai.action" as const,
+        host: "gw-ag",
+        action: "edit usr/x.nix",
+        outcome: "done" as const,
+      },
+      {
+        t: 2,
+        kind: "ai.action" as const,
+        host: "gw-ag",
+        action: "commit gw-ag",
+        outcome: "done" as const,
+        spends: false,
+      },
+    ].reduce(persist, state);
+    const { facts, markdown } = renderReport({ ...BASE, state: committed });
+
+    expect(facts).toContain(
+      "Repaired in flight: gw-ag — the fleet runs two revisions until the next run",
+    );
+    expect(markdown).toContain("- Repaired in flight: gw-ag");
+
+    // Nothing committed: nothing said.
+    expect(renderReport({ ...BASE, state }).facts).toHaveLength(3);
+  });
+
   test("no AI analysis: no section, no room summary", () => {
     const { markdown, summary } = renderReport({ ...BASE, state });
 

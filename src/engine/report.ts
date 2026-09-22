@@ -214,6 +214,25 @@ function aiRepair(actions: readonly AiAction[]): string[] {
 }
 
 /**
+ * Hosts a repair commit sent out on new code (spec § réparation, Ce que ça
+ * fait au reste du run). Said in the header, so the alert room carries it too:
+ * the fleet is split across two revisions until the next run.
+ */
+function repairedInFlight(actions: readonly AiAction[]): string | undefined {
+  const hosts = [
+    ...new Set(
+      actions.flatMap((entry) =>
+        entry.outcome === "done" && entry.action.startsWith("commit ") && entry.host !== undefined
+          ? [entry.host]
+          : [],
+      ),
+    ),
+  ];
+  if (hosts.length === 0) return undefined;
+  return `Repaired in flight: ${hosts.join(", ")} — the fleet runs two revisions until the next run`;
+}
+
+/**
  * Message of the incidents room (spec § Rapport): critical hosts the run left
  * out, and, after a stop, hosts left in `test` — a reboot takes those back to
  * their previous generation. `undefined`: nothing to raise.
@@ -255,12 +274,14 @@ export function renderReport(input: ReportInput): Report {
   const run = state.run;
   const started = startedAt(runId);
   const duration = formatDuration(durationMs);
+  const repaired = repairedInFlight(state.actions);
   const facts = [
     started === undefined
       ? `Duration: ${duration}`
       : `Started at ${started}, duration: ${duration}`,
     `Options: ${mainOptions(run)}`,
     `Hosts: ${summary(hosts, true)}`,
+    ...(repaired === undefined ? [] : [repaired]),
   ];
   const commits = state.commits.map(
     (commit) =>

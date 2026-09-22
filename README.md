@@ -48,13 +48,9 @@ profiles and zones come from your configuration, nothing is hardcoded.
 
 **Alpha.** v0.6.0 updates, builds, tests and switches a real fleet end to end
 from the DNF consumer project it runs in, and reports to the Matrix alert rooms.
-On `main`, the AI analyses a failure through its own guarded tools and may act
-on the units that fell. One part of the contract below is specified and still
-being built:
-
-| Not yet | Options | Today |
-|---|---|---|
-| AI repair through the code | `--ai-error-action repair` | the AI acts on services; editing, validating and committing a fix comes next |
+On `main`, the whole AI contract is in place: the AI analyses a failure through
+its own guarded tools, acts on the units that fell, and — when nothing else
+helps — fixes the code, validates it and redeploys that host alone.
 
 ```bash
 nix develop            # or: nix-shell
@@ -152,18 +148,29 @@ it is not shown, it cannot ask for:
 |---|---|
 | `passive` | deployment state, host diagnosis, build and activation logs |
 | `active` / `analysis` | + read the code (consumer, `dnf/`), host units and journals, read-only |
-| `repair` | + one action on the units this run saw fall, and nothing else |
+| `repair` | + one action on the units this run saw fall, and the code that describes them |
 
 The built-in tools of `claude` and `opencode` are denied, and so is the project
 context they would otherwise pick up (`CLAUDE.md`, user settings). A path leaves
 the two readable trees, names `usr/secrets/`, or a host or unit is not one of
 the run's — the call is refused, and the refusal is traced like any other call.
 
-At `repair` the AI gets a second session on a failed host, in state `AI repair`,
-with one added tool: `systemctl start`, `stop`, `restart` or `reset-failed` on
-**the units this run saw fall**, and nothing else. Three attempts per host,
-refusals not counted, a confirmation before each one when interactive, and no
-action at all once the run is stopping.
+At `repair` the AI gets a second session on a failed host, in state `AI repair`.
+It may act on services — `systemctl start`, `stop`, `restart`, `reset-failed`,
+on **the units this run saw fall** — and, when that cannot help, rewrite a file
+of the sources, validate it (`just clean`, then a rebuild of **that host
+alone**) and commit it as `fix(<host>): <subject>`. The host is then served once
+more by its own wave. Three attempts per host: an attempt is a *change*, so a
+validation and a commit cost none. Refusals cost none either, a confirmation is
+asked before each action when interactive, and nothing at all happens once the
+run is stopping.
+
+A repair that commits leaves the fleet on **two revisions** until the next run —
+only the repaired host is rebuilt. The report header and the Matrix message say
+so (`Repaired in flight: …`), and `--resume` then rebuilds everything rather
+than redeploy paths built before the fix. Writes never reach `usr/secrets/`,
+`var/generated/`, `etc/config.yaml` or a lock; outside co-development `dnf/` is
+a store path and is refused.
 
 Every tool *call* leaves a feed line (`AI reads usr/modules/nginx.nix`) and a
 line in `logs/ai.log`; every tool *action* is counted into `state.json` and the
@@ -225,7 +232,8 @@ fleet-update --resume --on "nlt"
 fleet-update --ai-analysis passive --ai-error-action analysis
 ```
 
-**Let it restart what fell too**, confirming each action:
+**Let it repair**, confirming each action — a service restart first, the code
+when that cannot help:
 
 ```bash
 fleet-update --ai-error-action repair
