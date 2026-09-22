@@ -50,6 +50,7 @@ export interface FleetService {
 export interface FleetDefaults {
   deploymentOrder?: string;
   criticalProfiles?: string;
+  aiModel?: string;
   timeouts: Partial<Timeouts>;
   pingInterval?: number;
 }
@@ -100,6 +101,7 @@ const networkSchema = z.object({
     .strictObject({
       deploymentOrder: z.string().nullish(),
       criticalProfiles: z.string().nullish(),
+      aiModel: z.string().nullish(),
       timeouts: z.partialRecord(z.enum(TIMEOUT_KEYS), seconds).nullish(),
       pingInterval: seconds.nullish(),
     })
@@ -155,6 +157,7 @@ export function parseNetwork(json: unknown): Result<Omit<Fleet, "hosts">> {
     defaults: {
       deploymentOrder: orUndefined(declared?.deploymentOrder),
       criticalProfiles: orUndefined(declared?.criticalProfiles),
+      aiModel: orUndefined(declared?.aiModel),
       timeouts: declared?.timeouts ?? {},
       pingInterval: orUndefined(declared?.pingInterval),
     },

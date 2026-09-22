@@ -152,6 +152,7 @@ describe("resolution order", () => {
   const fleet: FleetDefaults = {
     deploymentOrder: "hcs:[others]",
     criticalProfiles: "hcs",
+    aiModel: "opencode:ollama/qwen3:32b",
     timeouts: { build: 7200 },
     pingInterval: 30,
   };
@@ -161,6 +162,7 @@ describe("resolution order", () => {
     expect(resolved).toMatchObject({
       deploymentOrder: "hcs:[others]",
       criticalProfiles: "hcs",
+      aiModel: "opencode:ollama/qwen3:32b",
       pingInterval: 30,
     });
     expect(resolved.timeouts).toEqual({ ...DEFAULT_TIMEOUTS, build: 7200 });
@@ -170,6 +172,7 @@ describe("resolution order", () => {
     expect(params(["--deployment-order", "gateway:hcs"], fleet).deploymentOrder).toBe(
       "gateway:hcs",
     );
+    expect(params(["--ai-model", "claude:opus@max"], fleet).aiModel).toBe("claude:opus@max");
   });
 
   test("an invalid fleet default is reported with its source", () => {

@@ -120,6 +120,7 @@ describe("fleet", () => {
       fleetUpdate: {
         deploymentOrder: "hcs:gateway:[others]",
         criticalProfiles: "hcs:gateway",
+        aiModel: "claude:opus@high",
         timeouts: { build: 7200, killGrace: 20 },
         pingInterval: 30,
       },
@@ -128,6 +129,7 @@ describe("fleet", () => {
     expect(result.ok && result.value.defaults).toEqual({
       deploymentOrder: "hcs:gateway:[others]",
       criticalProfiles: "hcs:gateway",
+      aiModel: "claude:opus@high",
       timeouts: { build: 7200, killGrace: 20 },
       pingInterval: 30,
     });

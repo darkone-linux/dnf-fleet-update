@@ -218,7 +218,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     stopLoss: options.stopLoss,
     ui: !options.noUi,
     sendReport: options.sendReport,
-    aiModel: options.aiModel ?? DEFAULTS.aiModel,
+    aiModel: options.aiModel ?? fleet.aiModel ?? DEFAULTS.aiModel,
     aiAnalysis: options.aiAnalysis ?? DEFAULTS.aiAnalysis,
     aiErrorAction: options.aiErrorAction ?? DEFAULTS.aiErrorAction,
     maxParallel: options.maxParallel ?? DEFAULTS.maxParallel,
