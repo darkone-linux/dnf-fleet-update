@@ -74,24 +74,32 @@
 {"t":20800,"kind":"ai.line","id":"a1","line":"That durable fix is a code change: out of scope for this run."}
 {"t":21100,"kind":"ai.line","id":"a1","line":"Recommending the restart, reporting the ordering issue."}
 {"t":21400,"kind":"ai.end","id":"a1"}
-{"t":21800,"kind":"ask","id":"repair","question":"Restart nginx.service on nlt?","options":[{"value":"yes","label":"yes"},{"value":"exclude","label":"exclude"},{"value":"stop","label":"stop"}]}
-{"t":21950,"kind":"host.state","host":"nlt","state":"ai-repairing"}
-{"t":22000,"kind":"log","host":"nlt","level":"info","message":"AI action: systemctl restart nginx.service"}
-{"t":22400,"kind":"host.output","host":"nlt","phase":"activate","line":"nginx.service: active (running)"}
-{"t":23100,"kind":"host.state","host":"nlt","state":"tested"}
-{"t":23200,"kind":"log","host":"nlt","level":"ok","message":"nginx recovered, activation order issue reported"}
-{"t":23300,"kind":"note","host":"nlt","message":"units recovered after a restart: probable activation ordering issue"}
-{"t":23400,"kind":"step.progress","step":"test","done":2,"total":2}
-{"t":23500,"kind":"step.end","step":"test","status":"ok"}
-{"t":23700,"kind":"step.start","step":"switch","total":3}
-{"t":23900,"kind":"host.state","host":"gw-ag","state":"switching"}
-{"t":24100,"kind":"host.state","host":"gw-ag","state":"deployed"}
-{"t":24200,"kind":"host.state","host":"gfx","state":"switching"}
-{"t":24200,"kind":"host.state","host":"gfx","state":"deployed"}
-{"t":24300,"kind":"host.state","host":"nlt","state":"switching"}
-{"t":24300,"kind":"host.state","host":"nlt","state":"deployed"}
-{"t":24400,"kind":"step.progress","step":"switch","done":3,"total":3}
-{"t":24500,"kind":"step.end","step":"switch","status":"ok"}
-{"t":24700,"kind":"step.start","step":"report"}
-{"t":25200,"kind":"step.end","step":"report","status":"ok"}
-{"t":25300,"kind":"run.end","status":"done","exitCode":0,"report":["3 deployed","nlt needed one service restart: activation ordering","suggested durable fix: After= on the ACME unit"]}
+{"t": 21600, "kind": "host.state", "host": "nlt", "state": "ai-repairing"}
+{"t": 21700, "kind": "ai", "id": "a2", "message": "repairing nlt: nginx.service is still down"}
+{"t": 21900, "kind": "ai.line", "id": "a2", "line": "The certificate is on disk now, so the unit only needs a restart."}
+{"t": 22100, "kind": "ai.line", "id": "a2", "line": "Restarting nginx.service alone: nothing else is failed on nlt."}
+{"t": 22300, "kind": "log", "host": "nlt", "level": "info", "message": "AI restarts nginx.service on nlt"}
+{"t": 22400, "kind": "ask", "id": "repair-nlt-1", "question": "restart nginx.service on nlt?", "options": [{"value": "apply", "label": "apply", "description": "run it on the host"}, {"value": "skip", "label": "skip", "description": "leave the unit as it is"}]}
+{"t": 22900, "kind": "host.output", "host": "nlt", "phase": "ai", "line": "nginx.service: active (running)"}
+{"t": 23000, "kind": "ai.action", "host": "nlt", "action": "restart nginx.service", "outcome": "done"}
+{"t": 23050, "kind": "log", "host": "nlt", "level": "ok", "message": "restart nginx.service: done"}
+{"t": 23200, "kind": "ai.line", "id": "a2", "line": "nginx is up and no unit is failed on nlt any more."}
+{"t": 23400, "kind": "ai.line", "id": "a2", "line": "Durable fix stays a code change: After= on the ACME unit."}
+{"t": 23600, "kind": "ai.end", "id": "a2"}
+{"t": 23800, "kind": "host.state", "host": "nlt", "state": "tested"}
+{"t": 23900, "kind": "log", "host": "nlt", "level": "ok", "message": "AI repair recovered the host"}
+{"t": 24000, "kind": "note", "host": "nlt", "message": "recovered by an AI repair: restart nginx.service"}
+{"t": 24100, "kind": "step.progress", "step": "test", "done": 2, "total": 2}
+{"t": 24200, "kind": "step.end", "step": "test", "status": "ok"}
+{"t": 24400, "kind": "step.start", "step": "switch", "total": 3}
+{"t": 24600, "kind": "host.state", "host": "gw-ag", "state": "switching"}
+{"t": 24750, "kind": "host.state", "host": "gw-ag", "state": "deployed"}
+{"t": 24900, "kind": "host.state", "host": "gfx", "state": "switching"}
+{"t": 25050, "kind": "host.state", "host": "gfx", "state": "deployed"}
+{"t": 25200, "kind": "host.state", "host": "nlt", "state": "switching"}
+{"t": 25350, "kind": "host.state", "host": "nlt", "state": "deployed"}
+{"t": 25600, "kind": "step.progress", "step": "switch", "done": 3, "total": 3}
+{"t": 25700, "kind": "step.end", "step": "switch", "status": "ok"}
+{"t": 25900, "kind": "step.start", "step": "report"}
+{"t": 26400, "kind": "step.end", "step": "report", "status": "ok"}
+{"t": 26500, "kind": "run.end", "status": "done", "exitCode": 0, "report": ["3 deployed", "duration 26s"]}

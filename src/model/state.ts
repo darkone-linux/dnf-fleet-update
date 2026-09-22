@@ -155,6 +155,8 @@ function apply(state: RunState, event: Event): RunState {
     case "host.copy":
     case "host.diagnosis":
     case "note":
+    // Counted by `persist.ts`; the engine says it at the feed with a `log`.
+    case "ai.action":
       return state;
 
     case "host.add":

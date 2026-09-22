@@ -6,6 +6,7 @@
 import { expect, test } from "bun:test";
 import { listScenarios, loadScenario } from "../testing/replay.ts";
 import { type Event, type HostState, STEPS } from "./events.ts";
+import { initialPersisted, persist, spentAttempts } from "./persist.ts";
 import {
   activeHosts,
   excludedCount,
@@ -89,6 +90,13 @@ test("ai repair recovers the failed host", () => {
   expect(countState(state, "deployed")).toBe(3);
   expect(countState(state, "failed")).toBe(0);
 
+  // The action is counted in `state.json`, not drawn: the feed carries a log.
+  const saved = loadScenario("ai-repair").reduce(persist, initialPersisted());
+  expect(saved.actions).toEqual([
+    { host: "nlt", action: "restart nginx.service", outcome: "done" },
+  ]);
+  expect(spentAttempts(saved, "nlt")).toBe(1);
+
   // The failure must survive in the feed even once the host recovered.
   expect(state.feed.some((item) => item.level === "error")).toBe(true);
 });
@@ -151,14 +159,16 @@ test("each started step opens a heading in the feed", () => {
 
 test("a streamed AI answer accumulates and closes", () => {
   const state = fold("ai-repair");
+
+  // One block to analyse, one to repair: two sessions, two host states.
   const blocks = state.feed.filter((item) => item.kind === "ai");
-  expect(blocks).toHaveLength(1);
+  expect(blocks).toHaveLength(2);
 
   const block = blocks[0]!;
   // Longer than the 8-row streaming window of panels.tsx, so the scenario
   // exercises the rolling view and the collapse that follows it.
   expect(block.detail?.length).toBeGreaterThan(8);
-  expect(block.streaming).toBe(false);
+  expect(blocks.every((item) => item.streaming === false)).toBe(true);
 });
 
 test("a skipped step still counts as settled", () => {

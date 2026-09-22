@@ -10,6 +10,7 @@ import {
   PERSIST_SCHEMA,
   type PersistedState,
   persist,
+  spentAttempts,
 } from "./persist.ts";
 
 function fold(events: Event[]): PersistedState {
@@ -94,8 +95,27 @@ test("a repaired host ends deployed, its note kept for the report", () => {
   const state = fold(loadScenario("ai-repair"));
   expect(statuses(state).nlt).toBe("deployed");
   expect(state.notes).toEqual([
-    { host: "nlt", message: "units recovered after a restart: probable activation ordering issue" },
+    { host: "nlt", message: "recovered by an AI repair: restart nginx.service" },
   ]);
+});
+
+test("a refused action is kept, and costs no attempt", () => {
+  const state = fold([
+    { t: 1, kind: "host.add", host: "nlt", profile: "lan", zone: "ag" },
+    {
+      t: 2,
+      kind: "ai.action",
+      host: "nlt",
+      action: "restart sshd.service",
+      outcome: "refused",
+      detail: "not a failed unit",
+    },
+    { t: 3, kind: "ai.action", host: "nlt", action: "restart nginx.service", outcome: "failed" },
+  ]);
+
+  expect(state.actions).toHaveLength(2);
+  expect(spentAttempts(state, "nlt")).toBe(1);
+  expect(spentAttempts(state, "gfx")).toBe(0);
 });
 
 // Recorded streams stop at `ask`: the replayer closes it once answered.

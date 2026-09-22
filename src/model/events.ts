@@ -164,6 +164,21 @@ export type Event =
   | (Base & { kind: "ai"; id?: string; message: string; detail?: string[] })
   | (Base & { kind: "ai.line"; id?: string; line: string })
   | (Base & { kind: "ai.end"; id?: string })
+
+  // One action the AI took on the fleet (spec § réparation, État et rapport).
+  // A read is traced, an action is counted: the report and the attempt budget
+  // both read this back. `host`: absent when the action is not one host's.
+  | (Base & {
+      kind: "ai.action";
+      host?: string;
+
+      /** What was done, as the feed says it: `restart nginx.service`. */
+      action: string;
+      outcome: AiOutcome;
+
+      /** Why it was refused, or how it failed. */
+      detail?: string;
+    })
   | (Base & { kind: "ask"; id: string; question: string; options: AskOption[] })
   | (Base & { kind: "ask.close"; id: string; value: string })
   | (Base & {
@@ -172,6 +187,9 @@ export type Event =
       exitCode: ExitCode;
       report?: string[];
     });
+
+/** `refused`: a guard or the operator said no — it costs no attempt. */
+export type AiOutcome = "done" | "failed" | "refused";
 
 export type EventKind = Event["kind"];
 

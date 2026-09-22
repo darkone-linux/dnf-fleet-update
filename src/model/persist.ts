@@ -4,6 +4,7 @@
 // need: no feed, no live output.
 
 import {
+  type AiOutcome,
   type Event,
   type HostOrigin,
   type HostState,
@@ -24,6 +25,20 @@ export interface HostCopy {
   pulled: PullSource[];
   pushed: number;
   pushedBytes: number;
+}
+
+/** One action of the AI (spec § réparation): `refused` ones cost no attempt. */
+export interface AiAction {
+  host?: string;
+  action: string;
+  outcome: AiOutcome;
+  detail?: string;
+}
+
+/** Attempts a host has spent: refusals do not count (spec § réparation, Essais). */
+export function spentAttempts(state: PersistedState, host: string): number {
+  return state.actions.filter((action) => action.host === host && action.outcome !== "refused")
+    .length;
 }
 
 /** Deterministic collection of a failed host (spec § Erreurs et réparations). */
@@ -103,6 +118,9 @@ export interface PersistedState {
   /** Report notes, in order (spec § Rapport). */
   notes: { host?: string; message: string }[];
 
+  /** What the AI did, in order (spec § réparation, État et rapport). */
+  actions: AiAction[];
+
   /** Every closed question: decisions of the run, AI actions included. */
   answers: { id: string; value: string; t: number }[];
   end?: { status: "done" | "failed" | "aborted"; exitCode: ExitCode };
@@ -123,6 +141,7 @@ export function initialPersisted(): PersistedState {
     waves: [],
     hosts: [],
     notes: [],
+    actions: [],
     answers: [],
     lastEventAt: 0,
   };
@@ -283,6 +302,20 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
       return {
         ...state,
         notes: [...state.notes, { host: event.host, message: event.message }],
+      };
+
+    case "ai.action":
+      return {
+        ...state,
+        actions: [
+          ...state.actions,
+          {
+            ...(event.host === undefined ? {} : { host: event.host }),
+            action: event.action,
+            outcome: event.outcome,
+            ...(event.detail === undefined ? {} : { detail: event.detail }),
+          },
+        ],
       };
 
     case "ask.close":
