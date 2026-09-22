@@ -9,6 +9,30 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-22
+
+### ⚠ Breaking
+
+- **model**: Default --ai-error-action to none, hide the AI segment
+
+### Added
+
+- **ai**: Build the argv of the claude and opencode tools
+- **ai**: Stream a tool answer into the feed
+- **ui**: Send the free question to the real tool
+- **engine**: Read the fleet AI model from the generator
+- **fleet-update**: Optional AI tools on the unattended run PATH
+- **adapters**: Bounded reads of run logs and readable sources
+- **ai**: A level-filtered registry of guarded tools
+- **ai**: Serve the tools over MCP on the loopback
+- **ai**: Point both executables at the run's MCP server
+- **ai**: Analyse a failure where the engine decides
+- **engine**: Carry the AI analysis into the report and the rooms
+
+### Documentation
+
+- **ai**: Document the AI analysis, record an analysis-only scenario
+
 ## [0.5.0] - 2026-09-22
 
 ### ⚠ Breaking
@@ -157,7 +181,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.0...v0.3.1
