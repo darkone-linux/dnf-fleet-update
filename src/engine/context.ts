@@ -94,6 +94,9 @@ export interface RunContext extends EngineContext {
   /** What the AI concluded, for the report (spec § analyse, Rapport). */
   analyses: AiAnalyses;
 
+  /** Toplevel a repair rebuilt, by host: the wave serves it on its next pass. */
+  repaired: Map<string, string>;
+
   /** `clock.now()` at the start of the run: `t` of every event counts from it. */
   startedAt: number;
 }

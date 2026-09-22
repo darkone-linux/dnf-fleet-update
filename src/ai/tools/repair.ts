@@ -155,4 +155,34 @@ const editCode = defineTool({
   },
 });
 
-export const repairTools: readonly RegisteredTool[] = [serviceAction, editCode];
+const validate = defineTool({
+  name: "validate",
+  level: "repair",
+  description:
+    "Check an edit: runs the project's own clean-up, then re-evaluates and rebuilds this host alone. Costs no repair attempt, and changes nothing on the fleet — but the host is redeployed from what it builds, so call it once the code is right.",
+  input: z.strictObject({
+    host: z.string().describe("host under repair, the only one rebuilt"),
+  }),
+  summary: (args) => `validates the repair of ${args.host}`,
+  run: async (context, args) => {
+    const host = context.host(args.host);
+    const label = `validate ${host.name}`;
+    if (context.halting()) refuse(context, host.name, label, "the run is stopping");
+    if (host.state !== "ai-repairing") {
+      refuse(context, host.name, label, `${host.name} is not under repair right now`);
+    }
+
+    const built = await context.rebuild(host.name);
+    if (built.path === undefined) {
+      const detail = built.note ?? "no result";
+      context.record({ host: host.name, action: label, outcome: "failed", spends: false, detail });
+      throw new ToolError(
+        `${detail}${built.excerpt === undefined ? "" : `\n${built.excerpt.join("\n")}`}`,
+      );
+    }
+    context.record({ host: host.name, action: label, outcome: "done", spends: false });
+    return { lines: [`builds: ${built.path}`, `${host.name} will be redeployed from it`] };
+  },
+});
+
+export const repairTools: readonly RegisteredTool[] = [serviceAction, editCode, validate];

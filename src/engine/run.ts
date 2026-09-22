@@ -284,6 +284,7 @@ export async function runFleetUpdate(
       state: () => recorder.state,
       tools: new AiToolSession(),
       analyses: new AiAnalyses(),
+      repaired: new Map(),
       startedAt,
     };
     emit(context, {

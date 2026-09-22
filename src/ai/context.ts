@@ -8,6 +8,7 @@ import { gitDiff, gitStatus } from "../engine/commands/workspace.ts";
 import { ask, emit, log, type RunContext } from "../engine/context.ts";
 import { describeFailure, execute, succeeded } from "../engine/exec.ts";
 import type { Excerpt, LogName } from "../engine/ports.ts";
+import { rebuildHost } from "../engine/steps/build.ts";
 import type { AskOption } from "../model/events.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import { confine, readableRoots, repoOf, writable } from "./paths.ts";
@@ -95,6 +96,17 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
 
     onHost: runOnHost,
 
+    async rebuild(name) {
+      const host = hostOf(name);
+      const built = await rebuildHost(context, {
+        name: host.name,
+        builder: host.builder ?? context.local.hostname(),
+        ...(host.online === undefined ? {} : { online: host.online }),
+      });
+      if (built.path !== undefined) context.repaired.set(host.name, built.path);
+      return built;
+    },
+
     halting: () => context.flow.halt.aborted || context.flow.ending !== undefined,
 
     async confirm(id, question) {
@@ -110,6 +122,7 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
         ...(entry.host === undefined ? {} : { host: entry.host }),
         action: entry.action,
         outcome: entry.outcome,
+        ...(entry.spends === undefined ? {} : { spends: entry.spends }),
         ...(entry.detail === undefined ? {} : { detail: entry.detail }),
       });
       const detail = entry.detail === undefined ? "" : `: ${entry.detail}`;

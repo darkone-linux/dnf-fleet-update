@@ -428,6 +428,7 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     state: () => events.persisted,
     tools: new AiToolSession(),
     analyses: new AiAnalyses(),
+    repaired: new Map(),
     startedAt: 0,
   };
 }

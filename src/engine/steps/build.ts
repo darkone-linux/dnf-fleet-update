@@ -11,6 +11,7 @@ import {
   type Target,
 } from "../commands/host.ts";
 import { buildHost, evalHosts } from "../commands/nix.ts";
+import { justClean } from "../commands/workspace.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { decideFailure, type Hosts } from "../decisions.ts";
 import { describeFailure, errorLines, execute, succeeded } from "../exec.ts";
@@ -143,6 +144,46 @@ async function delegate(
   return give(built.note);
 }
 
+/** Where a host is built: elected builder, or the deployment machine itself. */
+interface Where {
+  name: string;
+  builder: string;
+  online?: boolean;
+}
+
+/**
+ * One derivation built, on its builder or here. Mutates nothing: the caller
+ * decides what the outcome means, and `where.builder` is the builder that
+ * actually ran once it returns.
+ */
+async function buildJob(context: RunContext, where: Where, job: Job): Promise<Built | undefined> {
+  const { name } = where;
+  const here = context.local.hostname();
+  let built: Built | undefined;
+
+  // Auto-build on a host the last ping lost: the delegation would only spend
+  // the copy timeout to fail (spec § Substituteurs). Presence unknown: delegate.
+  if (where.builder === name && where.online === false) {
+    log(context, "warn", "auto-build host offline, building here", name);
+    where.builder = here;
+  }
+
+  if (where.builder !== here) {
+    built = await delegate(context, name, where.builder, job);
+    if (context.flow.halt.aborted) return undefined;
+
+    // Whatever the builder failed on, the deployment machine takes over: no
+    // host fails because of the delegation (spec § Erreurs et réparations).
+    if (built === undefined) where.builder = here;
+  }
+  built ??= await runBuild(
+    context,
+    name,
+    buildHost(job.drvPath, context.run.outLink(name), context.params.timeouts),
+  );
+  return context.flow.halt.aborted ? undefined : built;
+}
+
 async function buildOne(
   context: RunContext,
   hosts: HostTable,
@@ -150,32 +191,16 @@ async function buildOne(
   job: Job,
 ): Promise<void> {
   const entry = hosts.get(name);
-  const here = context.local.hostname();
-  let built: Built | undefined;
-
-  // Auto-build on a host the last ping lost: the delegation would only spend
-  // the copy timeout to fail (spec § Substituteurs). Presence unknown: delegate.
-  if (entry.builder === name && entry.online === false) {
-    log(context, "warn", "auto-build host offline, building here", name);
-    entry.builder = here;
-  }
-
-  if (entry.builder !== here) {
-    built = await delegate(context, name, entry.builder, job);
-    if (context.flow.halt.aborted) return;
-
-    // Whatever the builder failed on, the deployment machine takes over: no
-    // host fails because of the delegation (spec § Erreurs et réparations).
-    if (built === undefined) entry.builder = here;
-  }
-  built ??= await runBuild(
-    context,
+  const where: Where = {
     name,
-    buildHost(job.drvPath, context.run.outLink(name), context.params.timeouts),
-  );
+    builder: entry.builder,
+    ...(entry.online === undefined ? {} : { online: entry.online }),
+  };
+  const built = await buildJob(context, where, job);
+  entry.builder = where.builder;
 
   // Halted: the build was cancelled, the host is left as it is.
-  if (context.flow.halt.aborted) return;
+  if (built === undefined) return;
   if (built.note === undefined) {
     hosts.set(name, "built", { path: built.path ?? job.outPath, builder: entry.builder });
     log(context, "ok", `build ok ${seconds(built.durationMs)}`, name);
@@ -254,6 +279,68 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
     }
   }
   return { warnings: [...warnings], evaluated: total, evaluationFailed: failed && missing };
+}
+
+/** One host evaluated alone: its job, or why the evaluation gave none. */
+async function evaluateOne(context: RunContext, name: string): Promise<Job | string> {
+  let job: Job | undefined;
+  let failure: string | undefined;
+  const spec = evalHosts(context.workspace, [name], context.params.timeouts);
+  const execution = await execute(context, spec, {
+    log: { host: name, phase: "build" },
+    signal: context.flow.halt,
+    onLine: ({ stream, line }) => {
+      if (stream === "stderr") return;
+      const parsed = parseEvalJob(line);
+      if (parsed.kind === "invalid" || parsed.host !== name) return;
+      if (parsed.kind === "error") failure = errorSummary(parsed.message);
+      else job = parsed;
+    },
+  });
+  if (failure !== undefined) return failure;
+  if (job !== undefined) return job;
+  return succeeded(execution.result) ? "no result" : describeFailure(execution);
+}
+
+export interface Rebuilt {
+  /** Store path of the new toplevel; absent when something failed. */
+  path?: string;
+  note?: string;
+  excerpt?: string[];
+}
+
+/**
+ * Validation of a repair (spec § réparation, J8): `just clean`, then this host
+ * alone re-evaluated and rebuilt. Touches no host state — the caller decides
+ * what the outcome means — and leaves every other host on the run's own paths.
+ */
+export async function rebuildHost(
+  context: RunContext,
+  target: { name: string; builder: string; online?: boolean },
+): Promise<Rebuilt> {
+  const { timeouts } = context.params;
+  const cleaned = await execute(context, justClean(context.workspace, timeouts), {
+    log: { host: target.name, phase: "repair" },
+    signal: context.flow.halt,
+  });
+  if (context.flow.halt.aborted) return { note: "run stopping" };
+  if (!succeeded(cleaned.result)) {
+    return { note: `just clean failed: ${describeFailure(cleaned)}`, excerpt: errorLines(cleaned) };
+  }
+
+  const job = await evaluateOne(context, target.name);
+  if (typeof job === "string") return { note: `evaluation failed: ${job}` };
+
+  const where: Where = { ...target };
+  const built = await buildJob(context, where, job);
+  if (built === undefined) return { note: "run stopping" };
+  if (built.note !== undefined) {
+    return {
+      note: `build failed: ${built.note}`,
+      ...(built.excerpt === undefined ? {} : { excerpt: built.excerpt }),
+    };
+  }
+  return { path: built.path ?? job.outPath };
 }
 
 /** Failed hosts sharing a reason, in fleet order: one decision each. */

@@ -176,6 +176,9 @@ export type Event =
       action: string;
       outcome: AiOutcome;
 
+      /** `false`: a check or a commit, not a change — it costs no repair attempt. */
+      spends?: boolean;
+
       /** Why it was refused, or how it failed. */
       detail?: string;
     })

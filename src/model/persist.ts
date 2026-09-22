@@ -32,13 +32,21 @@ export interface AiAction {
   host?: string;
   action: string;
   outcome: AiOutcome;
+
+  /** `false`: a check or a commit, not a change (spec § réparation, Essais). */
+  spends?: boolean;
   detail?: string;
 }
 
-/** Attempts a host has spent: refusals do not count (spec § réparation, Essais). */
+/**
+ * Attempts a host has spent (spec § réparation, Essais): a change, succeeded or
+ * not. A refusal costs nothing, and neither does a check or a commit — an
+ * attempt is a change, else repairing would cost three times restarting.
+ */
 export function spentAttempts(state: PersistedState, host: string): number {
-  return state.actions.filter((action) => action.host === host && action.outcome !== "refused")
-    .length;
+  return state.actions.filter(
+    (action) => action.host === host && action.outcome !== "refused" && action.spends !== false,
+  ).length;
 }
 
 /** Deterministic collection of a failed host (spec § Erreurs et réparations). */
@@ -313,6 +321,7 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
             ...(event.host === undefined ? {} : { host: event.host }),
             action: event.action,
             outcome: event.outcome,
+            ...(event.spends === undefined ? {} : { spends: event.spends }),
             ...(event.detail === undefined ? {} : { detail: event.detail }),
           },
         ],

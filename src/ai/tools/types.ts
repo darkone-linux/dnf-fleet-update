@@ -8,6 +8,7 @@
 import { z } from "zod";
 import type { HostCommand } from "../../engine/commands/host.ts";
 import type { Excerpt, LogName } from "../../engine/ports.ts";
+import type { Rebuilt } from "../../engine/steps/build.ts";
 import type { RunParams } from "../../model/params.ts";
 import type { AiAction, PersistedHost, PersistedState } from "../../model/persist.ts";
 
@@ -62,6 +63,12 @@ export interface ToolContext {
 
   /** Places the command on the host, as the steps do. Throws `ToolError` on failure. */
   onHost(host: string, command: HostCommand): Promise<Excerpt>;
+
+  /**
+   * `just clean`, then this host alone re-evaluated and rebuilt. On success the
+   * new toplevel is kept for the redeploy; nothing else on the fleet moves.
+   */
+  rebuild(host: string): Promise<Rebuilt>;
 
   /** Run on its way out (stop, rollback, abort): a repair is a new operation. */
   halting(): boolean;

@@ -50,6 +50,7 @@ describe("registry", () => {
       ...active,
       "service_action",
       "edit_code",
+      "validate",
     ]);
     expect(toolByName("passive", "read_code")).toBeUndefined();
     expect(toolByName("active", "service_action")).toBeUndefined();
@@ -399,6 +400,73 @@ describe("service_action", () => {
       "not writable outside co-development",
     );
     expect(context.sources.writes).toEqual([]);
+  });
+
+  test("validate cleans, rebuilds the host alone, and costs no attempt", async () => {
+    const { context, tool } = tools(
+      {
+        commands: [
+          { match: ["just", "clean"] },
+          {
+            match: (argv) => argv[0] === "nix-eval-jobs",
+            output: [
+              {
+                stream: "stdout",
+                line: JSON.stringify({
+                  attr: "gfx",
+                  drvPath: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-gfx.drv",
+                  outputs: { out: "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx" },
+                }),
+              },
+            ],
+          },
+          {
+            match: (argv) => argv[0] === "nix",
+            output: [
+              {
+                stream: "stdout",
+                line: "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx",
+              },
+            ],
+          },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+
+    const result = await call(tool, "repair", "validate", { host: "gfx" });
+
+    expect(result.lines[0]).toBe(
+      "builds: /nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx",
+    );
+    expect(context.repaired.get("gfx")).toBe(
+      "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx",
+    );
+
+    // A check is not a change: the host keeps its three attempts.
+    expect(spentAttempts(context.state(), "gfx")).toBe(0);
+    expect(context.state().actions.at(-1)).toMatchObject({ outcome: "done", spends: false });
+  });
+
+  test("a validation that fails is said, and still costs no attempt", async () => {
+    const { context, tool } = tools(
+      {
+        commands: [
+          {
+            match: ["just", "clean"],
+            exitCode: 1,
+            output: [{ stream: "stderr", line: "statix: usr/x.nix" }],
+          },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+
+    await expect(call(tool, "repair", "validate", { host: "gfx" })).rejects.toThrow(
+      "just clean failed",
+    );
+    expect(spentAttempts(context.state(), "gfx")).toBe(0);
+    expect(context.repaired.size).toBe(0);
   });
 
   test("a unit still failed after the action is said, and the attempt is spent", async () => {
