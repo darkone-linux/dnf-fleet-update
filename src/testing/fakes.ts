@@ -3,6 +3,8 @@
 // Deterministic by construction: no process, no timer, no network. Strict too:
 // an unscripted command or an unanswered question fails the test, never passes.
 
+import { AiAnalyses } from "../ai/analysis.ts";
+import { AiToolSession } from "../ai/server.ts";
 import { AiGate, QuestionQueue, type RunContext } from "../engine/context.ts";
 import { RunFlow } from "../engine/flow.ts";
 import { KnownErrors, type Signature } from "../engine/known-errors.ts";
@@ -38,7 +40,7 @@ import {
   DEFAULTS,
   type RunParams,
 } from "../model/params.ts";
-import type { PersistedState } from "../model/persist.ts";
+import { initialPersisted, type PersistedState, persist } from "../model/persist.ts";
 import { fail, ok, type Result } from "../model/result.ts";
 
 /** Reply for the first command whose argv starts with `match`, or satisfies it. */
@@ -147,10 +149,14 @@ export class FakeClock implements Clock {
 export class RecordingChannel implements EventChannel {
   readonly events: Event[] = [];
 
+  /** Folded as it records: a test reads the same state the run would. */
+  persisted: PersistedState = initialPersisted();
+
   constructor(private readonly answers: Readonly<Record<string, string>> = {}) {}
 
   emit(event: Event): void {
     this.events.push(event);
+    this.persisted = persist(this.persisted, event);
   }
 
   answer(id: string): Promise<string> {
@@ -392,10 +398,11 @@ export interface FakeRunOptions {
 /** Workspace `/ws`, deployment host `deployer` outside the fleet unless told otherwise. */
 export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
   const flow = new RunFlow();
+  const events = new RecordingChannel(options.answers);
   return {
     commands: new FakeCommands(options.commands),
     clock: new FakeClock(),
-    events: new RecordingChannel(options.answers),
+    events,
     signal: flow.now,
     flow,
     params: testParams(options.params),
@@ -408,6 +415,9 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     questions: new QuestionQueue(),
     known: new KnownErrors(options.signatures),
     ai: new AiGate(),
+    state: () => events.persisted,
+    tools: new AiToolSession(),
+    analyses: new AiAnalyses(),
     startedAt: 0,
   };
 }

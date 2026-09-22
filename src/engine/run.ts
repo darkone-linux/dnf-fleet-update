@@ -1,7 +1,8 @@
 // Run orchestration (spec § Étapes): lock, parameters, prerequisites, the
 // steps in order, early ends, report, exit code.
 
-import { askAi } from "../ai/session.ts";
+import { AiAnalyses, analyseFree, analyseRun } from "../ai/analysis.ts";
+import { AiToolSession } from "../ai/server.ts";
 import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULT_TIMEOUTS, type RunParams, runMode } from "../model/params.ts";
@@ -280,6 +281,9 @@ export async function runFleetUpdate(
       questions: new QuestionQueue(),
       known: new KnownErrors(),
       ai: new AiGate(),
+      state: () => recorder.state,
+      tools: new AiToolSession(),
+      analyses: new AiAnalyses(),
       startedAt,
     };
     emit(context, {
@@ -327,9 +331,7 @@ export async function runFleetUpdate(
       asked += 1;
       const id = `a${asked}`;
       log(context, "info", `you: ${question}`);
-      answering = answering.then(() =>
-        askAi(context, { id, summary: question, prompt: question }, aiSignal),
-      );
+      answering = answering.then(() => analyseFree(context, id, question, aiSignal));
     });
     const progress: Progress = { failed: false, warnings: [] };
     try {
@@ -349,6 +351,10 @@ export async function runFleetUpdate(
       aiRunning.abort(new Error("run finished"));
       await answering;
     }
+
+    // Summary of the whole run, before the report that carries it.
+    await analyseRun(context);
+    await context.tools.stop(context);
 
     // Cut by `now`, or by an internal error: the step never ended on its own.
     const cut = recorder.state.currentStep;

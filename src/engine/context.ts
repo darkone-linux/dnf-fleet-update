@@ -1,7 +1,10 @@
 // Run context of the steps: ports, parameters, run clock, questions.
 
+import type { AiAnalyses } from "../ai/analysis.ts";
+import type { AiToolSession } from "../ai/server.ts";
 import type { AskOption, Event, Level } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
+import type { PersistedState } from "../model/persist.ts";
 import type { RunFlow } from "./flow.ts";
 import type { KnownErrors } from "./known-errors.ts";
 import type { EngineContext, LocalHost, RunStore, SourceFiles, ToolServer } from "./ports.ts";
@@ -81,6 +84,15 @@ export interface RunContext extends EngineContext {
 
   /** Once closed, no AI tool is launched again (spec § Intégration IA). */
   ai: AiGate;
+
+  /** Fold of the run so far: what the report reads, and what a prompt is built from. */
+  state: () => PersistedState;
+
+  /** MCP endpoint of the run, opened on the first call that needs it. */
+  tools: AiToolSession;
+
+  /** What the AI concluded, for the report (spec § analyse, Rapport). */
+  analyses: AiAnalyses;
 
   /** `clock.now()` at the start of the run: `t` of every event counts from it. */
   startedAt: number;

@@ -17,6 +17,9 @@ export interface AiQuestion {
 
   /** MCP endpoint and published names; absent: the tool answers without tools. */
   tools?: AiTools;
+
+  /** Replaces the tool's own system prompt (spec § analyse, Prompts). */
+  system?: string;
 }
 
 /**
@@ -43,10 +46,13 @@ export async function askAi(
 
   const spec = aiCommand(
     target.value,
-    prompt,
+    {
+      prompt,
+      ...(question.system === undefined ? {} : { system: question.system }),
+      ...(question.tools === undefined ? {} : { tools: question.tools }),
+    },
     context.params.ai,
     context.params.timeouts,
-    question.tools,
   );
   emit(context, { kind: "ai", id, message: summary });
   try {

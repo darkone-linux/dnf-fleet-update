@@ -28,6 +28,16 @@ const OPENCODE_TOOLS = [
   "todoread",
 ];
 
+/** One call: what the AI is asked, what it is told to be, what it may use. */
+export interface AiCall {
+  /** User prompt, on stdin. */
+  prompt: string;
+
+  /** Replaces the tool's own system prompt; absent: the tool keeps its default. */
+  system?: string;
+  tools?: AiTools;
+}
+
 /** Endpoint of the run and the tool names its level publishes. */
 export interface AiTools {
   endpoint: ToolEndpoint;
@@ -39,7 +49,8 @@ export interface AiTools {
 const headers = (endpoint: ToolEndpoint) => ({ Authorization: `Bearer ${endpoint.token}` });
 
 /** `OPENCODE_CONFIG_CONTENT`: an inline config outranks the operator's own. */
-function opencodeConfig(tools: AiTools | undefined): string {
+function opencodeConfig(call: AiCall): string {
+  const { tools, system } = call;
   const denied: Record<string, boolean> = { "*": false };
   for (const name of OPENCODE_TOOLS) denied[name] = false;
 
@@ -57,16 +68,25 @@ function opencodeConfig(tools: AiTools | undefined): string {
           },
         };
   const allowed = tools === undefined ? {} : { [`${MCP_SERVER}*`]: true };
+
+  // `prompt` is opencode's system prompt; `--system-prompt` is claude's.
   return JSON.stringify({
     ...mcp,
-    agent: { [OPENCODE_AGENT]: { tools: { ...denied, ...allowed } } },
+    agent: {
+      [OPENCODE_AGENT]: {
+        ...(system === undefined ? {} : { prompt: system }),
+        tools: { ...denied, ...allowed },
+      },
+    },
   });
 }
 
-function claudeArgv(target: AiTarget, ai: Ai, tools: AiTools | undefined): [string, ...string[]] {
+function claudeArgv(target: AiTarget, ai: Ai, call: AiCall): [string, ...string[]] {
+  const { tools, system } = call;
   const argv: [string, ...string[]] = ["claude", "-p"];
   if (target.model !== undefined) argv.push("--model", target.model);
   if (target.effort !== undefined) argv.push("--effort", target.effort);
+  if (system !== undefined) argv.push("--system-prompt", system);
 
   // `--tools ""` empties the built-in set only: MCP tools live on (verified).
   // `--restricted` and `--setting-sources ""` cut the `CLAUDE.md` the workspace
@@ -110,19 +130,13 @@ function opencodeArgv(target: AiTarget): [string, ...string[]] {
 }
 
 /** One question, one answer. The prompt travels on stdin, never in argv. */
-export function aiCommand(
-  target: AiTarget,
-  prompt: string,
-  ai: Ai,
-  timeouts: Timeouts,
-  tools?: AiTools,
-): CommandSpec {
-  const base = { stdin: prompt, ...limits(ai.timeoutSeconds, timeouts) };
+export function aiCommand(target: AiTarget, call: AiCall, ai: Ai, timeouts: Timeouts): CommandSpec {
+  const base = { stdin: call.prompt, ...limits(ai.timeoutSeconds, timeouts) };
   return target.tool === "claude"
-    ? { argv: claudeArgv(target, ai, tools), ...base }
+    ? { argv: claudeArgv(target, ai, call), ...base }
     : {
         argv: opencodeArgv(target),
-        env: { OPENCODE_CONFIG_CONTENT: opencodeConfig(tools) },
+        env: { OPENCODE_CONFIG_CONTENT: opencodeConfig(call) },
         ...base,
       };
 }

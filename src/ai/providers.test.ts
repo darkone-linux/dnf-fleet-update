@@ -12,8 +12,17 @@ const TOOLS: AiTools = {
   names: ["mcp__fleet-update__deployment_state", "mcp__fleet-update__host_log"],
 };
 
-const command = (target: AiTarget, tools?: AiTools) =>
-  aiCommand(target, PROMPT, DEFAULT_AI, DEFAULT_TIMEOUTS, tools);
+const command = (target: AiTarget, tools?: AiTools, system?: string) =>
+  aiCommand(
+    target,
+    {
+      prompt: PROMPT,
+      ...(tools === undefined ? {} : { tools }),
+      ...(system === undefined ? {} : { system }),
+    },
+    DEFAULT_AI,
+    DEFAULT_TIMEOUTS,
+  );
 
 /** Value following `flag` in the argv. */
 const after = (argv: readonly string[], flag: string) => argv[argv.indexOf(flag) + 1];

@@ -1,6 +1,7 @@
 // One host in a wave (spec § Exécution): copy, origin, activation, then a new
 // connection that reads the result and cancels the rollback timer.
 
+import { analyseHost } from "../ai/analysis.ts";
 import { collect } from "./collect.ts";
 import {
   activate,
@@ -46,6 +47,14 @@ async function failed(
 
   // Collected before the question: the decision is taken on what the host says.
   await collect(context, hosts, name, excerpt);
+
+  // Then the AI, if it may: after an activation (spec § Erreurs, parcours), or
+  // because the signature table handed this failure to it.
+  const entry = hosts.get(name);
+  const handed = entry.activated !== undefined || entry.knownError?.fix.kind === "ai";
+  if (handed && context.params.aiErrorAction !== "none") {
+    await analyseHost(context, hosts, name);
+  }
   const decision = await decideFailure(context, hosts, [name]);
 
   // Decided before a stop: a revert not started yet is a new operation.
@@ -91,6 +100,15 @@ async function concluded(
     // Names of the units: read by the report, then restarted once.
     const units = await collect(context, hosts, name, errorLines(activation));
     await repairUnits(context, hosts, name, units, phase);
+
+    // Deterministic repair spent: the AI explains what is left, or why a
+    // restart was enough (spec § analyse, Déclencheurs 2 et 3).
+    const { params } = context;
+    if (hosts.get(name).state === "error") {
+      if (params.aiErrorAction !== "none") await analyseHost(context, hosts, name);
+    } else if (params.aiAnalysis !== "none") {
+      await analyseHost(context, hosts, name, { mark: false });
+    }
   } else {
     const note = `${phase} failed: switch-to-configuration exit ${code}`;
     await failed(context, hosts, name, failureOf(activation, note));
