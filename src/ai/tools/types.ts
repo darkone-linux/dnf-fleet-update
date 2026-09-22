@@ -53,6 +53,13 @@ export interface ToolContext {
   /** Throws `ToolError` when the path leaves the readable trees. */
   readSource(path: string, lines: number): Promise<Excerpt>;
 
+  /**
+   * Writes a whole file of the repairable trees and returns its diff, already
+   * in `logs/ai.log`. Throws `ToolError` on a path a human or a generator owns,
+   * and on a tree that was not clean to start with.
+   */
+  writeSource(path: string, content: string): Promise<string[]>;
+
   /** Places the command on the host, as the steps do. Throws `ToolError` on failure. */
   onHost(host: string, command: HostCommand): Promise<Excerpt>;
 

@@ -4,12 +4,13 @@
 // cannot widen its own reach — it has no other handle on the run.
 
 import { type HostCommand, onHost as place } from "../engine/commands/host.ts";
+import { gitDiff, gitStatus } from "../engine/commands/workspace.ts";
 import { ask, emit, log, type RunContext } from "../engine/context.ts";
 import { describeFailure, execute, succeeded } from "../engine/exec.ts";
 import type { Excerpt, LogName } from "../engine/ports.ts";
 import type { AskOption } from "../model/events.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
-import { confine, readableRoots } from "./paths.ts";
+import { confine, readableRoots, repoOf, writable } from "./paths.ts";
 import { type ToolContext, ToolError } from "./tools/types.ts";
 
 /** Log of the run holding every AI call, questions and tool calls alike. */
@@ -29,6 +30,21 @@ function bounded(lines: readonly string[], keep: number): Excerpt {
 
 export function toolContext(context: RunContext, state: () => PersistedState): ToolContext {
   const roots = readableRoots(context.workspace);
+
+  // Once per tree: after the first edit the tree is dirty by our own doing.
+  const clean = new Set<string>();
+
+  const requireClean = async (repo: string): Promise<void> => {
+    if (clean.has(repo)) return;
+    const execution = await execute(context, gitStatus(repo, context.params.timeouts));
+    if (!succeeded(execution.result)) {
+      throw new ToolError(`${repo}: ${describeFailure(execution)}`);
+    }
+    if (execution.stdout.length > 0) {
+      throw new ToolError(`${repo} is not clean: a repair commit must carry only the fix`);
+    }
+    clean.add(repo);
+  };
 
   const hostOf = (name: string): PersistedHost => {
     const host = state().hosts.find((candidate) => candidate.name === name);
@@ -60,6 +76,21 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
       const read = await context.sources.read(target.value, lines);
       if (!read.ok) throw new ToolError(read.error);
       return read.value;
+    },
+
+    async writeSource(path, content) {
+      const target = writable(roots, path, context.codev);
+      if (!target.ok) throw new ToolError(target.error);
+
+      const repo = repoOf(roots, target.value);
+      await requireClean(repo);
+      const written = await context.sources.write(target.value, content);
+      if (!written.ok) throw new ToolError(written.error);
+
+      // A commit alone never says what the AI believed it was fixing.
+      const diff = await execute(context, gitDiff(repo, target.value, context.params.timeouts));
+      for (const line of diff.stdout) context.run.appendLog(AI_LOG, line);
+      return bounded(diff.stdout, context.params.ai.sourceLines).lines;
     },
 
     onHost: runOnHost,

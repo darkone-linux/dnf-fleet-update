@@ -23,6 +23,14 @@ export function gitAddAll(repo: string, timeouts: Timeouts): CommandSpec {
   return { argv: ["git", "-C", repo, "add", "--all"], ...limits(timeouts.commit, timeouts) };
 }
 
+/** `--no-ext-diff`: a difftastic config would hand the model something unreadable. */
+export function gitDiff(repo: string, path: string, timeouts: Timeouts): CommandSpec {
+  return {
+    argv: ["git", "-C", repo, "diff", "--no-ext-diff", "--", path],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
 export function gitCommit(repo: string, message: string, timeouts: Timeouts): CommandSpec {
   return {
     argv: ["git", "-C", repo, "commit", "-m", message],

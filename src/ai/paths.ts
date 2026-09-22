@@ -52,6 +52,11 @@ function holder(roots: readonly string[], target: string): string | undefined {
     );
 }
 
+/** Repo an absolute path belongs to: `dnf/` beside the workspace, or it. */
+export function repoOf(roots: readonly string[], target: string): string {
+  return holder(roots, target) ?? roots[0] ?? "";
+}
+
 /** Absolute path to read, or the reason it is refused. `..` is resolved before the check. */
 export function confine(roots: readonly string[], path: string): Result<string> {
   if (path.trim() === "") return fail("path is empty");

@@ -46,7 +46,11 @@ describe("registry", () => {
 
     expect(passive).toEqual(["deployment_state", "host_diagnosis", "host_log", "run_log"]);
     expect(active).toEqual([...passive, "read_code", "host_units", "host_journal"]);
-    expect(toolsFor("repair").map((tool) => tool.name)).toEqual([...active, "service_action"]);
+    expect(toolsFor("repair").map((tool) => tool.name)).toEqual([
+      ...active,
+      "service_action",
+      "edit_code",
+    ]);
     expect(toolByName("passive", "read_code")).toBeUndefined();
     expect(toolByName("active", "service_action")).toBeUndefined();
   });
@@ -330,6 +334,71 @@ describe("service_action", () => {
     );
     await call(applied.tool, "repair", "service_action", RESTART);
     expect(applied.context.commands.calls).not.toEqual([]);
+  });
+
+  test("edit_code writes, returns the diff, and spends an attempt", async () => {
+    const { context, tool } = tools(
+      {
+        commands: [
+          {
+            match: (argv) => argv.includes("diff"),
+            output: [{ stream: "stdout", line: "+  enable = true;" }],
+          },
+          { match: ["git"] },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+
+    const result = await call(tool, "repair", "edit_code", {
+      host: "gfx",
+      path: "usr/modules/nginx.nix",
+      content: "{ enable = true; }\n",
+    });
+
+    expect(result.lines).toEqual(["written, diff:", "+  enable = true;"]);
+    expect(context.sources.writes).toEqual([
+      { path: "/ws/usr/modules/nginx.nix", content: "{ enable = true; }\n" },
+    ]);
+    expect(spentAttempts(context.state(), "gfx")).toBe(1);
+    expect(context.run.logs.get("ai")).toContain("+  enable = true;");
+  });
+
+  test("a tree that is not clean refuses the edit before it touches anything", async () => {
+    const { context, tool } = tools(
+      {
+        commands: [
+          {
+            match: (argv) => argv.includes("status"),
+            output: [{ stream: "stdout", line: " M usr/modules/nginx.nix" }],
+          },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+
+    await expect(
+      call(tool, "repair", "edit_code", { host: "gfx", path: "usr/x.nix", content: "{}" }),
+    ).rejects.toThrow("is not clean: a repair commit must carry only the fix");
+    expect(context.sources.writes).toEqual([]);
+    expect(spentAttempts(context.state(), "gfx")).toBe(0);
+  });
+
+  test("what a human or a generator owns is refused, codev or not", async () => {
+    const { context, tool } = tools({ commands: [{ match: ["git"] }] }, UNDER_REPAIR);
+    const edit = (path: string) =>
+      call(tool, "repair", "edit_code", { host: "gfx", path, content: "{}" });
+
+    await expect(edit("etc/config.yaml")).rejects.toThrow("not writable: etc/config.yaml");
+    await expect(edit("var/generated/hosts.nix")).rejects.toThrow("not writable: var/generated");
+    await expect(edit("flake.lock")).rejects.toThrow("a lock is regenerated");
+    await expect(edit("usr/secrets/keys.yaml")).rejects.toThrow("not readable: usr/secrets");
+
+    // Not co-development here: `dnf/` is a store path, writing it changes nothing.
+    await expect(edit("dnf/modules/service/nginx.nix")).rejects.toThrow(
+      "not writable outside co-development",
+    );
+    expect(context.sources.writes).toEqual([]);
   });
 
   test("a unit still failed after the action is said, and the attempt is spent", async () => {
