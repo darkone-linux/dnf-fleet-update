@@ -50,7 +50,9 @@ const NEXT: Record<HostState, readonly HostState[]> = {
 
   // An analysis alone repairs nothing: the host goes back where it failed.
   "ai-analysing": ["ai-repairing", "error", "failed", "reverted", "excluded"],
-  "ai-repairing": ["tested", "deployed", "error", "failed", "reverted", "excluded"],
+  // `built`: a repair edited the code and rebuilt this host alone; its wave
+  // serves it once more (spec § réparation, Le redéploiement).
+  "ai-repairing": ["built", "tested", "deployed", "error", "failed", "reverted", "excluded"],
   reverted: [],
   excluded: [],
 };

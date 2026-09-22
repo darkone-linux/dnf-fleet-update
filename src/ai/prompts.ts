@@ -13,10 +13,11 @@ const READ_ONLY = ["You are read-only: you observe and explain, you never change
 
 /** Repair session only: what it may do, and where that stops (spec § réparation). */
 const MAY_ACT = [
-  "You may act on this host, but only through service_action, and only on units this run",
-  "saw fail. Act, read the result, and stop as soon as nothing is failed: you have three",
-  "attempts on a host, and the operator may decline any of them. Changing code, rebuilding",
-  "or redeploying is out of scope — say so rather than attempt it.",
+  "You may act on this host alone, through service_action on units this run saw fail, or by",
+  "editing the code with edit_code. Prefer the service action: it is local and reversible.",
+  "An edit must then be checked with validate and sealed with commit — the host is redeployed",
+  "from what validate builds, and no other host is. You have three attempts, a check and a",
+  "commit cost none, and the operator may decline any action. Stop as soon as nothing fails.",
 ];
 
 const CONDUCT = [

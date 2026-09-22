@@ -54,9 +54,18 @@ async function runWave(
   for (const name of members) hosts.get(name).waveStartedAt = context.clock.now();
   await silence(context, hosts, members, true);
   try {
-    await pool(members, context.params.maxParallel, context.flow.halt, (name) =>
-      deployHost(context, hosts, presence, name, phase),
-    );
+    // A repair that edited the code rebuilds its host alone and leaves it
+    // `built`: the wave serves it once more (spec § réparation, Le
+    // redéploiement). Bounded by the attempts the tools already count.
+    let round = members;
+    for (let pass = 0; pass <= context.params.repair.aiAttempts && round.length > 0; pass += 1) {
+      await pool(round, context.params.maxParallel, context.flow.halt, (name) =>
+        deployHost(context, hosts, presence, name, phase),
+      );
+      if (context.flow.halt.aborted) break;
+      round = members.filter((name) => hosts.get(name).state === "built");
+      if (round.length > 0) log(context, "info", `repaired, deploying again: ${round.join(", ")}`);
+    }
   } finally {
     await silence(context, hosts, members, false);
   }

@@ -33,6 +33,8 @@ export async function repairHost(
   const { state: previous, note } = hosts.get(name);
   hosts.set(name, "ai-repairing", { note });
   try {
+    // Actions of this session alone: an edit of a previous round is spent.
+    const before = context.state().actions.length;
     const analysis = context.analyses.all().findLast((entry) => entry.host === name);
     await ask(context, {
       id: `repair-${name}`,
@@ -41,6 +43,19 @@ export async function repairHost(
       acting: true,
     });
     if (quiet(context)) return;
+
+    // Code repaired and validated: the host holds a new toplevel, and its wave
+    // serves it again. Consumed here, so a later round starts from nothing.
+    const rebuilt = context.repaired.get(name);
+    context.repaired.delete(name);
+
+    // A validation without an edit of this session rebuilt the same sources:
+    // redeploying it would spend a wave to change nothing.
+    if (rebuilt !== undefined && edited(context, name, before)) {
+      hosts.set(name, "built", { path: rebuilt });
+      log(context, "info", "rebuilt by an AI repair, deploying it again", name);
+      return;
+    }
 
     // Read back rather than trust the session: the tool may have acted, or not.
     const left = await readFailedUnits(context, hosts.get(name));
@@ -56,6 +71,17 @@ export async function repairHost(
     // Aborted, or the session threw: a host never ends in repair.
     if (hosts.get(name).state === "ai-repairing") hosts.set(name, previous, { note });
   }
+}
+
+/** `true`: this session actually changed a file of the sources for that host. */
+function edited(context: RunContext, name: string, since: number): boolean {
+  return context
+    .state()
+    .actions.slice(since)
+    .some(
+      (action) =>
+        action.host === name && action.outcome === "done" && action.action.startsWith("edit "),
+    );
 }
 
 /** Recovered: the host rejoins the run, and the report says what it took. */

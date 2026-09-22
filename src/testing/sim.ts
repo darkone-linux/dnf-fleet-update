@@ -29,6 +29,9 @@ export interface HostBehaviour {
   /** Exit code of `switch-to-configuration` per phase. Default `0`. */
   activation?: Partial<Record<Phase, number>>;
 
+  /** From the second activation of a phase on: what an AI repair changed. */
+  repaired?: Partial<Record<Phase, number>>;
+
   /** Units `systemctl` reports as failed, once the host has been activated. */
   failedUnits?: string[];
 
@@ -49,6 +52,7 @@ export interface HostBehaviour {
 export type SimKind =
   | "ai"
   | "status"
+  | "diff"
   | "add"
   | "commit"
   | "rev-parse"
@@ -107,6 +111,9 @@ export interface HostSide {
   /** Result files by name: `test`, `switch`, `rollback`. */
   results: Map<string, number>;
   timers: Map<Phase, number>;
+
+  /** Activations run per phase: the second one is the one a repair earned. */
+  activations: Map<Phase, number>;
   dropped: boolean;
 
   /** What happened on the host, in order: `test <path>`, `timer fired test`… */
@@ -205,6 +212,7 @@ export class SimFleet implements CommandRunner {
         failedUnits: new Set(options.behaviours?.[hostname]?.failedUnits ?? []),
         results: new Map(),
         timers: new Map(),
+        activations: new Map(),
         dropped: false,
         history: [],
         restarts: 0,
@@ -341,6 +349,7 @@ export class SimFleet implements CommandRunner {
       const repo = argv[2] === `${WORKSPACE}/dnf` ? "dnf" : "consumer";
       const verb = argv[3];
       if (verb === "status") return { kind: "status", detail: repo, at };
+      if (verb === "diff") return { kind: "diff", detail: repo, at };
       if (verb === "add") return { kind: "add", detail: repo, at };
       if (verb === "commit") return { kind: "commit", detail: repo, at };
       if (verb === "rev-parse") return { kind: "rev-parse", detail: repo, at };
@@ -469,6 +478,12 @@ export class SimFleet implements CommandRunner {
       case "status":
         if (this.pending[command.detail as Repo]) out(" M flake.lock");
         return ok();
+      // Only issued right after a write: in this world the tree is dirty from here.
+      case "diff": {
+        this.pending[command.detail as Repo] = true;
+        out(`+++ b/${spec.argv.at(-1) ?? "file"}`);
+        return ok();
+      }
       case "add":
         return ok();
       case "commit": {
@@ -666,7 +681,13 @@ export class SimFleet implements CommandRunner {
       case "activate": {
         const phase = command.phase;
         if (phase === undefined) throw new Error(`activation without phase on ${name}`);
-        const code = behaviour.activation?.[phase] ?? 0;
+        const tries = side.activations.get(phase) ?? 0;
+        side.activations.set(phase, tries + 1);
+        const code =
+          (tries > 0 ? behaviour.repaired?.[phase] : undefined) ??
+          behaviour.activation?.[phase] ??
+          0;
+        if (code === 0) side.failedUnits.clear();
         const target = storePath(name);
         if (code === 0 || code === 4) side.system = target;
         side.history.push(`${phase} ${code}`);
