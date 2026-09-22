@@ -110,6 +110,10 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     sources: new MemorySources(runCase.sources),
     toolServer: new MemoryToolServer(),
   };
+
+  // The scripted AI calls the run's own tools: real dispatch, real guards.
+  sim.tools = (message) => ports.toolServer.handle?.(message) ?? Promise.resolve(undefined);
+
   const request = {
     workspace: "/ws",
     codev: runCase.codev ?? false,

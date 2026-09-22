@@ -35,6 +35,9 @@ export interface HostBehaviour {
   /** Those units come back up when restarted: the activation order was at fault. */
   unitsRecover?: boolean;
 
+  /** They come back only from this restart on: the AI succeeds where the group failed. */
+  unitsRecoverFrom?: number;
+
   /** Unreachable from its activation of this phase until its rollback timer fires. */
   dropsOn?: Phase;
   rollbackExit?: number;
@@ -108,7 +111,13 @@ export interface HostSide {
 
   /** What happened on the host, in order: `test <path>`, `timer fired test`… */
   history: string[];
+
+  /** Restarts asked of this host, deterministic and AI alike. */
+  restarts: number;
 }
+
+/** One step of the simulated AI: a line on stdout, or a call of its own tools. */
+export type AiStep = string | { call: string; args: Record<string, unknown> };
 
 export interface SimOptions {
   behaviours?: Record<string, HostBehaviour>;
@@ -117,8 +126,8 @@ export interface SimOptions {
   /** The deployment host, when it is part of the fleet: commands run without ssh. */
   local?: string;
 
-  /** Answer of the AI tool, one entry per streamed line. */
-  ai?: readonly string[];
+  /** Script of the AI tool: lines it streams, and tool calls it makes. */
+  ai?: readonly AiStep[];
 
   /** Uncommitted changes before the run. */
   dirty?: { consumer?: boolean; dnf?: boolean };
@@ -144,6 +153,20 @@ export const SIM_PATH_SIZE = 1_048_576;
 const PUBLIC_CACHE = "https://cache.nixos.org";
 
 type Repo = "consumer" | "dnf";
+
+/** Reads a `tools/call` response: the text of a refusal, `undefined` when it worked. */
+function toolRefusal(response: unknown): string | undefined {
+  if (typeof response !== "object" || response === null) return undefined;
+  const envelope = response as { error?: { message?: unknown }; result?: unknown };
+  if (typeof envelope.error?.message === "string") return envelope.error.message;
+
+  const result = envelope.result as
+    | { isError?: unknown; content?: { text?: unknown }[] }
+    | undefined;
+  if (result?.isError !== true) return undefined;
+  const text = result.content?.[0]?.text;
+  return typeof text === "string" ? text : "refused";
+}
 
 const ok = (durationMs = 0): CommandResult => ({
   exitCode: 0,
@@ -184,6 +207,7 @@ export class SimFleet implements CommandRunner {
         timers: new Map(),
         dropped: false,
         history: [],
+        restarts: 0,
       });
     }
     this.pending.consumer = options.dirty?.consumer ?? false;
@@ -221,6 +245,12 @@ export class SimFleet implements CommandRunner {
     }
   }
 
+  /**
+   * MCP dispatch of the run, set by `simulateRun`: a scripted tool call then
+   * travels the real JSON-RPC path, with the real guards.
+   */
+  tools?: (message: unknown) => Promise<unknown | undefined>;
+
   async run(spec: CommandSpec, options: RunOptions = {}): Promise<CommandResult> {
     const { signal, onLine } = options;
     signal?.throwIfAborted();
@@ -231,7 +261,7 @@ export class SimFleet implements CommandRunner {
     const lines: OutputLine[] = [];
     const out = (line: string) => lines.push({ stream: "stdout", line });
     const err = (line: string) => lines.push({ stream: "stderr", line });
-    const result = this.answer(command, spec, out, err);
+    const result = await this.answer(command, spec, out, err);
 
     let gate: Promise<void> | undefined;
     for (const hook of this.hooks(command)) {
@@ -403,12 +433,38 @@ export class SimFleet implements CommandRunner {
     throw new Error(`unsimulated command: ${joined}`);
   }
 
-  private answer(
+  /**
+   * Streams the scripted answer, and places every scripted tool call on the
+   * run's own MCP dispatch: guards, validation and level filter are the real
+   * ones. A refusal comes back as a line, the way a model would report it.
+   */
+  private async aiAnswer(out: (line: string) => void): Promise<CommandResult> {
+    const script = this.options.ai ?? ["The build is fetching gnome-shell."];
+    let id = 0;
+    for (const step of script) {
+      if (typeof step === "string") {
+        out(step);
+        continue;
+      }
+      id += 1;
+      const response = await this.tools?.({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: { name: step.call, arguments: step.args },
+      });
+      const refusal = toolRefusal(response);
+      if (refusal !== undefined) out(`${step.call} refused: ${refusal}`);
+    }
+    return ok();
+  }
+
+  private async answer(
     command: SimCommand,
     spec: CommandSpec,
     out: (line: string) => void,
     err: (line: string) => void,
-  ): CommandResult {
+  ): Promise<CommandResult> {
     switch (command.kind) {
       case "status":
         if (this.pending[command.detail as Repo]) out(" M flake.lock");
@@ -474,10 +530,8 @@ export class SimFleet implements CommandRunner {
         return this.build(command, out, err);
       case "ping":
         return exit(this.reachable(command.host ?? "") ? 0 : 1);
-      case "ai": {
-        for (const line of this.options.ai ?? ["The build is fetching gnome-shell."]) out(line);
-        return ok();
-      }
+      case "ai":
+        return this.aiAnswer(out);
       default:
         return this.onHost(command, err, out);
     }
@@ -587,12 +641,17 @@ export class SimFleet implements CommandRunner {
         for (const unit of side.failedUnits) out(`${unit} loaded failed failed ${unit}`);
         return ok();
 
-      // Deterministic repair: the units come back up only when told to.
-      case "restart":
-        if (behaviour.unitsRecover) side.failedUnits.clear();
+      // Deterministic repair, then the AI: the units come back only when told to.
+      case "restart": {
+        side.restarts += 1;
+        const from = behaviour.unitsRecoverFrom;
+        const recovers =
+          behaviour.unitsRecover === true || (from !== undefined && side.restarts >= from);
+        if (recovers) side.failedUnits.clear();
         else for (const unit of side.failedUnits) err(`Job for ${unit} failed`);
         side.history.push("units restarted");
-        return exit(behaviour.unitsRecover ? 0 : 1);
+        return exit(recovers ? 0 : 1);
+      }
       case "journal":
         out(`-- journal of ${command.detail ?? "?"} on ${name} --`);
         return ok();
