@@ -9,6 +9,21 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-22
+
+### Added
+
+- **model**: Count what the AI does with an ai.action event
+- **ai**: A guarded service action, three attempts per host
+- **ai**: A second session that may act on the failed units
+- **engine**: Report what the AI repaired, document the service action
+- **adapters**: A bounded write port for the trees the AI may repair
+- **ai**: Let the repair session rewrite a file, diff logged
+- **engine**: Rebuild a single host to validate an AI repair
+- **ai**: Commit a repair, dnf first then the realigned consumer
+- **engine**: Serve a repaired host once more in its own wave
+- **engine**: Say when a repair left the fleet on two revisions
+
 ## [0.6.0] - 2026-09-22
 
 ### ⚠ Breaking
@@ -181,7 +196,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.1...v0.4.0
