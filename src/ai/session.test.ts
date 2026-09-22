@@ -91,6 +91,37 @@ describe("askAi", () => {
     expect(feed(context.events.events)).toEqual(["error AI claude: Invalid model name: opus9"]);
   });
 
+  test("a spent budget is said in plain words, the run goes on", async () => {
+    const context = fakeRunContext({
+      commands: [
+        {
+          match: ["claude"],
+          exitCode: 1,
+          output: [{ stream: "stderr", line: "Error: Exceeded USD budget (2)" }],
+        },
+      ],
+    });
+
+    expect(await askAi(context, QUESTION)).toEqual([]);
+    expect(context.ai.open).toBe(true);
+    expect(feed(context.events.events)).toEqual(["error AI claude: budget exhausted"]);
+  });
+
+  test("the endpoint reaches the tool only when the question carries it", async () => {
+    const context = fakeRunContext({ commands: [{ match: ["claude"] }] });
+    await askAi(context, {
+      ...QUESTION,
+      tools: {
+        endpoint: { url: "http://127.0.0.1:1/mcp", token: "tok" },
+        names: ["mcp__fleet-update__deployment_state"],
+      },
+    });
+
+    const argv = context.commands.calls[0]?.argv ?? [];
+    expect(argv).toContain("--mcp-config");
+    expect(argv).toContain("mcp__fleet-update__deployment_state");
+  });
+
   test("an unparsable --ai-model closes the gate before any tool runs", async () => {
     const context = fakeRunContext({ params: { aiModel: "gemini:pro" } });
 

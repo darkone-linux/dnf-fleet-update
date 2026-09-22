@@ -4,12 +4,11 @@
 // socket; `adapters/mcp.ts` is only the shell that carries it.
 
 import { z } from "zod";
+import { MCP_SERVER } from "./tools/registry.ts";
 import { type RegisteredTool, type ToolContext, ToolError } from "./tools/types.ts";
 
 /** Newest first: the client's version is echoed when we know it. */
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
-
-export const SERVER_NAME = "fleet-update";
 
 /** JSON-RPC codes, as the specification names them. */
 const INVALID_REQUEST = -32600;
@@ -102,7 +101,7 @@ export async function dispatch(raw: unknown, server: RpcServer): Promise<RpcResp
       return ok(id, {
         protocolVersion: version,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: SERVER_NAME, version: server.version },
+        serverInfo: { name: MCP_SERVER, version: server.version },
       });
     }
 

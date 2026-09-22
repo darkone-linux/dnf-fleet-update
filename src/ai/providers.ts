@@ -1,13 +1,14 @@
 // Argv of the AI tools (spec § Intégration IA): executables, not an API —
 // prompt on stdin, answer on stdout, one line of stdout per `ai.line`.
 //
-// Every built-in tool is denied: the AI acts only through fleet-update's own
-// tools, and this milestone ships none. Both tools resolve from `PATH`.
+// Built-in tools are always denied: the AI acts only through the MCP server
+// this run serves, whose tool list is the level (spec § analyse).
 
 import { limits } from "../engine/commands/limits.ts";
-import type { CommandSpec } from "../engine/ports.ts";
+import type { CommandSpec, ToolEndpoint } from "../engine/ports.ts";
 import type { Ai, Timeouts } from "../model/params.ts";
 import type { AiTarget } from "./model.ts";
+import { MCP_SERVER } from "./tools/registry.ts";
 
 /** Named by the inline config below, so `--agent` has something to select. */
 const OPENCODE_AGENT = "fleet-update";
@@ -27,21 +28,75 @@ const OPENCODE_TOOLS = [
   "todoread",
 ];
 
-/** `OPENCODE_CONFIG_CONTENT`: an inline config outranks the operator's own. */
-function opencodeConfig(): string {
-  const tools: Record<string, boolean> = { "*": false };
-  for (const name of OPENCODE_TOOLS) tools[name] = false;
-  return JSON.stringify({ agent: { [OPENCODE_AGENT]: { tools } } });
+/** Endpoint of the run and the tool names its level publishes. */
+export interface AiTools {
+  endpoint: ToolEndpoint;
+
+  /** Qualified names, as `registry.qualified` builds them. */
+  names: readonly string[];
 }
 
-function claudeArgv(target: AiTarget): [string, ...string[]] {
+const headers = (endpoint: ToolEndpoint) => ({ Authorization: `Bearer ${endpoint.token}` });
+
+/** `OPENCODE_CONFIG_CONTENT`: an inline config outranks the operator's own. */
+function opencodeConfig(tools: AiTools | undefined): string {
+  const denied: Record<string, boolean> = { "*": false };
+  for (const name of OPENCODE_TOOLS) denied[name] = false;
+
+  // Shape `opencode mcp add` writes itself; the wildcard re-opens ours alone.
+  const mcp =
+    tools === undefined
+      ? {}
+      : {
+          mcp: {
+            [MCP_SERVER]: {
+              type: "remote",
+              url: tools.endpoint.url,
+              headers: headers(tools.endpoint),
+            },
+          },
+        };
+  const allowed = tools === undefined ? {} : { [`${MCP_SERVER}*`]: true };
+  return JSON.stringify({
+    ...mcp,
+    agent: { [OPENCODE_AGENT]: { tools: { ...denied, ...allowed } } },
+  });
+}
+
+function claudeArgv(target: AiTarget, ai: Ai, tools: AiTools | undefined): [string, ...string[]] {
   const argv: [string, ...string[]] = ["claude", "-p"];
   if (target.model !== undefined) argv.push("--model", target.model);
   if (target.effort !== undefined) argv.push("--effort", target.effort);
 
-  // `--tools ""` empties the built-in set; `--strict-mcp-config` without a
-  // `--mcp-config` leaves no MCP server; nothing may prompt in `-p`.
-  argv.push("--tools", "", "--strict-mcp-config", "--permission-prompts", "none");
+  // `--tools ""` empties the built-in set only: MCP tools live on (verified).
+  // `--restricted` and `--setting-sources ""` cut the `CLAUDE.md` the workspace
+  // would otherwise hand it; `--bare` would too but demands an API key.
+  argv.push(
+    "--tools",
+    "",
+    "--restricted",
+    "--setting-sources",
+    "",
+    "--permission-prompts",
+    "none",
+    "--max-budget-usd",
+    String(ai.budgetUsd),
+  );
+
+  // Without `--mcp-config`, `--strict-mcp-config` leaves no server at all.
+  argv.push("--strict-mcp-config");
+  if (tools !== undefined) {
+    const servers = {
+      mcpServers: {
+        [MCP_SERVER]: {
+          type: "http",
+          url: tools.endpoint.url,
+          headers: headers(tools.endpoint),
+        },
+      },
+    };
+    argv.push("--mcp-config", JSON.stringify(servers), "--allowedTools", ...tools.names);
+  }
   return argv;
 }
 
@@ -60,9 +115,14 @@ export function aiCommand(
   prompt: string,
   ai: Ai,
   timeouts: Timeouts,
+  tools?: AiTools,
 ): CommandSpec {
   const base = { stdin: prompt, ...limits(ai.timeoutSeconds, timeouts) };
   return target.tool === "claude"
-    ? { argv: claudeArgv(target), ...base }
-    : { argv: opencodeArgv(target), env: { OPENCODE_CONFIG_CONTENT: opencodeConfig() }, ...base };
+    ? { argv: claudeArgv(target, ai, tools), ...base }
+    : {
+        argv: opencodeArgv(target),
+        env: { OPENCODE_CONFIG_CONTENT: opencodeConfig(tools) },
+        ...base,
+      };
 }

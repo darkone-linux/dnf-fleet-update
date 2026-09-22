@@ -5,7 +5,7 @@
 import { disableAi, emit, log, type RunContext } from "../engine/context.ts";
 import { errorLines, execute, succeeded } from "../engine/exec.ts";
 import { parseAiModel } from "./model.ts";
-import { aiCommand } from "./providers.ts";
+import { type AiTools, aiCommand } from "./providers.ts";
 
 export interface AiQuestion {
   /** Names the block: `ai.line` and `ai.end` carry it back. */
@@ -14,6 +14,9 @@ export interface AiQuestion {
   /** Title of the block, rendered as `AI <summary>`. */
   summary: string;
   prompt: string;
+
+  /** MCP endpoint and published names; absent: the tool answers without tools. */
+  tools?: AiTools;
 }
 
 /**
@@ -38,7 +41,13 @@ export async function askAi(
     return [];
   }
 
-  const spec = aiCommand(target.value, prompt, context.params.ai, context.params.timeouts);
+  const spec = aiCommand(
+    target.value,
+    prompt,
+    context.params.ai,
+    context.params.timeouts,
+    question.tools,
+  );
   emit(context, { kind: "ai", id, message: summary });
   try {
     const execution = await execute(context, spec, {
@@ -66,5 +75,9 @@ export async function askAi(
 
 function reasonOf(execution: Parameters<typeof errorLines>[0]): string {
   if (execution.result.timedOut) return "timed out";
-  return errorLines(execution).at(-1) ?? `exit ${execution.result.exitCode}`;
+  const last = errorLines(execution).at(-1);
+
+  // `claude --max-budget-usd`, enforced under a subscription too: said plainly.
+  if (last?.includes("Exceeded USD budget") === true) return "budget exhausted";
+  return last ?? `exit ${execution.result.exitCode}`;
 }
