@@ -70,6 +70,13 @@ export interface ToolContext {
    */
   rebuild(host: string): Promise<Rebuilt>;
 
+  /**
+   * Commits what the repair wrote: `dnf/` first in co-development, then the
+   * consumer with its realigned lock. Returns the revisions written. Throws
+   * `ToolError` when a tree refuses — a hook is never bypassed.
+   */
+  commitRepair(host: string, subject: string): Promise<string[]>;
+
   /** Run on its way out (stop, rollback, abort): a repair is a new operation. */
   halting(): boolean;
 

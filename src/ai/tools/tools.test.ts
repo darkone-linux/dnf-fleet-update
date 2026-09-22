@@ -51,6 +51,7 @@ describe("registry", () => {
       "service_action",
       "edit_code",
       "validate",
+      "commit",
     ]);
     expect(toolByName("passive", "read_code")).toBeUndefined();
     expect(toolByName("active", "service_action")).toBeUndefined();
@@ -467,6 +468,70 @@ describe("service_action", () => {
     );
     expect(spentAttempts(context.state(), "gfx")).toBe(0);
     expect(context.repaired.size).toBe(0);
+  });
+
+  test("commit writes one commit per dirty tree, and costs no attempt", async () => {
+    const { context, tool } = tools(
+      {
+        codev: true,
+        commands: [
+          {
+            match: (argv) => argv.includes("status"),
+            output: [{ stream: "stdout", line: " M dnf/x.nix" }],
+            once: true,
+          },
+          { match: (argv) => argv.includes("add"), once: true },
+          { match: (argv) => argv.includes("commit"), once: true },
+          {
+            match: (argv) => argv.includes("rev-parse"),
+            output: [{ stream: "stdout", line: "1a2b3c4d5e6f" }],
+            once: true,
+          },
+          { match: (argv) => argv.includes("flake"), once: true },
+          {
+            match: (argv) => argv.includes("status"),
+            output: [{ stream: "stdout", line: " M flake.lock" }],
+            once: true,
+          },
+          { match: (argv) => argv.includes("add"), once: true },
+          { match: (argv) => argv.includes("commit"), once: true },
+          {
+            match: (argv) => argv.includes("rev-parse"),
+            output: [{ stream: "stdout", line: "9f8e7d6c5b4a" }],
+            once: true,
+          },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+
+    const result = await call(tool, "repair", "commit", {
+      host: "gfx",
+      subject: "bind nginx after acme",
+    });
+
+    expect(result.lines).toEqual(["committed: dnf 1a2b3c4, consumer 9f8e7d6"]);
+    expect(spentAttempts(context.state(), "gfx")).toBe(0);
+
+    // The scope is the host: an AI repair is obvious in `git log`.
+    const messages = context.events.events.flatMap((event) =>
+      event.kind === "commit" ? [event.message] : [],
+    );
+    expect(messages).toEqual([
+      "fix(gfx): bind nginx after acme",
+      "fix(gfx): bind nginx after acme",
+    ]);
+  });
+
+  test("nothing changed: the commit is refused rather than invented", async () => {
+    const { tool } = tools(
+      { commands: [{ match: (argv) => argv.includes("status") }] },
+      UNDER_REPAIR,
+    );
+
+    await expect(
+      call(tool, "repair", "commit", { host: "gfx", subject: "nothing" }),
+    ).rejects.toThrow("nothing to commit");
   });
 
   test("a unit still failed after the action is said, and the attempt is spent", async () => {

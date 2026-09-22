@@ -185,4 +185,44 @@ const validate = defineTool({
   },
 });
 
-export const repairTools: readonly RegisteredTool[] = [serviceAction, editCode, validate];
+const commit = defineTool({
+  name: "commit",
+  level: "repair",
+  description:
+    "Commit what you edited, once validate has passed. The message is built for you as fix(<host>): <subject>; give the subject alone, one short line. In co-development dnf/ is committed first and the consumer lock realigned. Costs no repair attempt.",
+  input: z.strictObject({
+    host: z.string().describe("host under repair: it becomes the scope of the message"),
+    subject: z
+      .string()
+      .min(1)
+      .describe("what the fix does, one line, imperative, no type and no scope"),
+  }),
+  summary: (args) => `commits the repair of ${args.host}`,
+  run: async (context, args) => {
+    const host = context.host(args.host);
+    const label = `commit ${host.name}`;
+    if (context.halting()) refuse(context, host.name, label, "the run is stopping");
+    if (host.state !== "ai-repairing") {
+      refuse(context, host.name, label, `${host.name} is not under repair right now`);
+    }
+
+    let written: string[];
+    try {
+      written = await context.commitRepair(host.name, args.subject);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      context.record({ host: host.name, action: label, outcome: "failed", spends: false, detail });
+      throw error;
+    }
+    context.record({
+      host: host.name,
+      action: label,
+      outcome: "done",
+      spends: false,
+      detail: written.join(", "),
+    });
+    return { lines: [`committed: ${written.join(", ")}`] };
+  },
+});
+
+export const repairTools: readonly RegisteredTool[] = [serviceAction, editCode, validate, commit];

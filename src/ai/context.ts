@@ -3,8 +3,16 @@
 // Every effect a tool may have passes through here, so a tool written later
 // cannot widen its own reach — it has no other handle on the run.
 
+import { join } from "node:path";
 import { type HostCommand, onHost as place } from "../engine/commands/host.ts";
-import { gitDiff, gitStatus } from "../engine/commands/workspace.ts";
+import {
+  gitAddAll,
+  gitCommit,
+  gitDiff,
+  gitHead,
+  gitStatus,
+  realignDnfLock,
+} from "../engine/commands/workspace.ts";
 import { ask, emit, log, type RunContext } from "../engine/context.ts";
 import { describeFailure, execute, succeeded } from "../engine/exec.ts";
 import type { Excerpt, LogName } from "../engine/ports.ts";
@@ -17,6 +25,17 @@ import { type ToolContext, ToolError } from "./tools/types.ts";
 /** Log of the run holding every AI call, questions and tool calls alike. */
 const AI_LOG: LogName = { phase: "ai" };
 
+/**
+ * Form the gate of `dnf/` demands: one line, `<type>(<scope>): <subject>`, 80
+ * characters. The host is the scope, so an AI repair is obvious in `git log`.
+ */
+export function commitMessage(host: string, subject: string): string {
+  const one = subject.replace(/\s+/g, " ").trim();
+  const head = `fix(${host}): `;
+  if (one === "") throw new ToolError("commit: an empty subject");
+  return `${head}${one}`.slice(0, 80);
+}
+
 /** Labels say what happens, not what was asked (spec mère § Interface). */
 const CONFIRM: readonly AskOption[] = [
   { value: "apply", label: "apply", description: "run it on the host" },
@@ -27,6 +46,35 @@ const CONFIRM: readonly AskOption[] = [
 function bounded(lines: readonly string[], keep: number): Excerpt {
   const kept = lines.slice(-keep);
   return { lines: [...kept], dropped: lines.length - kept.length };
+}
+
+/** `true`: the tree holds changes to commit. */
+async function dirty(context: RunContext, repo: string): Promise<boolean> {
+  const execution = await execute(context, gitStatus(repo, context.params.timeouts));
+  if (!succeeded(execution.result)) throw new ToolError(`${repo}: ${describeFailure(execution)}`);
+  return execution.stdout.length > 0;
+}
+
+/** Adds, commits, reads the revision back. Hooks run: `--no-verify` is never passed. */
+async function commitTree(
+  context: RunContext,
+  repo: "dnf" | "consumer",
+  directory: string,
+  message: string,
+): Promise<string> {
+  const { timeouts } = context.params;
+  for (const spec of [gitAddAll(directory, timeouts), gitCommit(directory, message, timeouts)]) {
+    const execution = await execute(context, spec);
+    if (!succeeded(execution.result)) {
+      throw new ToolError(`${repo}: ${describeFailure(execution)}`);
+    }
+  }
+  const head = await execute(context, gitHead(directory, timeouts));
+  const rev = head.stdout[0]?.trim();
+  if (!succeeded(head.result) || !rev) throw new ToolError(`${repo}: revision not read`);
+
+  emit(context, { kind: "commit", repo, rev, message });
+  return rev.slice(0, 7);
 }
 
 export function toolContext(context: RunContext, state: () => PersistedState): ToolContext {
@@ -95,6 +143,33 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     },
 
     onHost: runOnHost,
+
+    async commitRepair(name, subject) {
+      const host = hostOf(name);
+      const { timeouts } = context.params;
+      const message = commitMessage(host.name, subject);
+      const dnf = join(context.workspace, "dnf");
+
+      // Consumer last: nix refuses to write the lock of a flake whose input is
+      // a dirty git tree, and it does so in silence (`steps/update.ts`).
+      const written: string[] = [];
+      if (context.codev && (await dirty(context, dnf))) {
+        written.push(`dnf ${await commitTree(context, "dnf", dnf, message)}`);
+        const realigned = await execute(context, realignDnfLock(context.workspace, timeouts));
+        if (!succeeded(realigned.result)) {
+          throw new ToolError(`lock not realigned: ${describeFailure(realigned)}`);
+        }
+      }
+      if (await dirty(context, context.workspace)) {
+        const rev = await commitTree(context, "consumer", context.workspace, message);
+        written.push(`consumer ${rev}`);
+      }
+      if (written.length === 0) throw new ToolError("nothing to commit: no tree changed");
+
+      // Committed: what the trees now hold is no longer what the run started from.
+      clean.clear();
+      return written;
+    },
 
     async rebuild(name) {
       const host = hostOf(name);
