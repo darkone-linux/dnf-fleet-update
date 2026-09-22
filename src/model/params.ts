@@ -112,7 +112,10 @@ export const DEFAULTS = {
   dnfMessage: "chore(update): regular flake upgrade",
   aiModel: "claude:opus@high",
   aiAnalysis: "none",
-  aiErrorAction: "analysis",
+
+  // `none` too: an AI step must be asked for. A fleet with `claude` on its
+  // PATH would otherwise analyse every failure nobody asked about.
+  aiErrorAction: "none",
   maxParallel: 10,
   rollbackTimeout: 600,
   pingInterval: 15,

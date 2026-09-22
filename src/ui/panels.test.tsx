@@ -5,6 +5,7 @@ import { TextAttributes } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
+import { testParams } from "../testing/fakes.ts";
 import { App } from "./App.tsx";
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
@@ -182,8 +183,8 @@ const SUMMARY: Event[] = [
 ];
 
 /** Footer row of a frame: the only one carrying the key hint. */
-async function footer(width: number): Promise<string> {
-  const setup = await testRender(<App preload={SUMMARY} />, { width, height: 30 });
+async function footer(width: number, preload: Event[] = SUMMARY): Promise<string> {
+  const setup = await testRender(<App preload={preload} />, { width, height: 30 });
   current = setup;
   await setup.waitForVisualIdle();
   const row = setup
@@ -202,4 +203,19 @@ test("the run summary keeps what fits, by falling priority", async () => {
   expect(await footer(122)).toContain("resume · codev · claude:opus@high · 1 hosts · fl-*,fd-*");
   expect(await footer(110)).toContain("resume · codev · claude:opus@high · 1 hosts ");
   expect(await footer(100)).toContain("resume · codev · 1 hosts ");
+});
+
+/** The same run, with the parameters a real run carries. */
+function withAi(aiAnalysis: "none" | "passive", aiErrorAction: "none" | "analysis"): Event[] {
+  const [start, ...rest] = SUMMARY as [Extract<Event, { kind: "run.start" }>, ...Event[]];
+  const params = { ...testParams({ aiAnalysis, aiErrorAction }) };
+  return [{ ...start, run: { ...start.run, params } }, ...rest];
+}
+
+test("the AI model shows only when something may ask it", async () => {
+  expect(await footer(160, withAi("none", "none"))).toContain("resume · codev · 1 hosts");
+  expect(await footer(160, withAi("none", "none"))).not.toContain("opus");
+
+  expect(await footer(160, withAi("passive", "none"))).toContain("claude:opus@high");
+  expect(await footer(160, withAi("none", "analysis"))).toContain("claude:opus@high");
 });

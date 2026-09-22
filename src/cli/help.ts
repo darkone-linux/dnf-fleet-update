@@ -32,7 +32,7 @@ Output
 AI
   --ai-model <tool>[:<model>][@<effort>]   default "claude:opus@high"
   --ai-analysis none|passive|active        AI analysis and report (default "none")
-  --ai-error-action none|analysis|repair   AI action on error (default "analysis")
+  --ai-error-action none|analysis|repair   AI action on error (default "none")
 
 Execution
   --max-parallel <n>              hosts copied and activated at once in a wave (default 10)

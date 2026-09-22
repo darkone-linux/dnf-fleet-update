@@ -141,7 +141,7 @@ network:
 |---|---|---|
 | `--ai-model <tool>[:<model>][@<effort>]` | `claude:opus@high` | e.g. `claude:opus@max`, `opencode:ollama/qwen3:32b` |
 | `--ai-analysis none\|passive\|active` | `none` | analysis depth and AI-enriched report |
-| `--ai-error-action none\|analysis\|repair` | `analysis` | what the AI may do when something fails |
+| `--ai-error-action none\|analysis\|repair` | `none` | what the AI may do when something fails |
 
 The level sets the tools the AI can use, never more:
 

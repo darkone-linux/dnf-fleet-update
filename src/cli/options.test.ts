@@ -45,7 +45,7 @@ describe("parsing", () => {
       ui: true,
       aiModel: "claude:opus@high",
       aiAnalysis: "none",
-      aiErrorAction: "analysis",
+      aiErrorAction: "none",
       maxParallel: 10,
       rollbackTimeout: 600,
       pingInterval: 15,

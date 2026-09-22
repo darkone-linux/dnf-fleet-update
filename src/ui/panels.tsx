@@ -2,7 +2,7 @@
 
 import { TextAttributes } from "@opentui/core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { STEP_LABELS, STEPS } from "../model/events.ts";
+import { type RunInfo, STEP_LABELS, STEPS } from "../model/events.ts";
 import {
   activeHosts,
   excludedCount,
@@ -569,18 +569,34 @@ function fitFooter(segments: FooterSegment[], room: number): FooterSegment[] {
   return kept;
 }
 
+/** Both axes `none`: the tool and its model are noise, nothing will ask them. */
+function aiEnabled(run: RunInfo): boolean {
+  const params = run.params;
+
+  // Recorded streams carry no parameters: they keep what they were captured with.
+  if (params === undefined) return true;
+  return params.aiAnalysis !== "none" || params.aiErrorAction !== "none";
+}
+
+function runSegments(run: RunInfo, hosts: number): FooterSegment[] {
+  const segments: FooterSegment[] = [
+    { key: "mode", text: run.mode, strong: true },
+    { key: "codev", text: run.codev ? "codev" : "release", strong: false },
+  ];
+  if (aiEnabled(run)) segments.push({ key: "ai", text: run.aiModel, strong: true });
+  segments.push(
+    { key: "hosts", text: `${hosts} hosts`, strong: false },
+    { key: "parallel", text: `x${run.maxParallel}`, strong: true },
+    { key: "selection", text: run.selection, strong: false },
+  );
+  return segments;
+}
+
 /** One line: run summary alternating grey and white, then the only key hint. */
 export function Footer({ state, width }: { state: RunState; width: number }) {
   const run = state.run;
   const segments: FooterSegment[] = run
-    ? [
-        { key: "mode", text: run.mode, strong: true },
-        { key: "codev", text: run.codev ? "codev" : "release", strong: false },
-        { key: "ai", text: run.aiModel, strong: true },
-        { key: "hosts", text: `${state.hosts.length} hosts`, strong: false },
-        { key: "parallel", text: `x${run.maxParallel}`, strong: true },
-        { key: "selection", text: run.selection, strong: false },
-      ]
+    ? runSegments(run, state.hosts.length)
     : [{ key: "mode", text: "starting…", strong: false }];
 
   const end = state.end ? `${state.end.status} (${state.end.exitCode})  ` : "";
