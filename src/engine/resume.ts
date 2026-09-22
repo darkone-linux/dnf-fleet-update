@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   AI_ANALYSIS,
   AI_ERROR_ACTION,
+  DEFAULT_AI,
   DEFAULT_DIAGNOSTICS,
   DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
@@ -82,6 +83,7 @@ const savedParams = z.object({
     })
     .default(DEFAULT_DIAGNOSTICS),
   repair: z.object({ settleSeconds: seconds }).default(DEFAULT_REPAIR),
+  ai: z.object({ timeoutSeconds: seconds }).default(DEFAULT_AI),
 }) satisfies z.ZodType<RunParams, unknown>;
 
 const savedHost = z.object({

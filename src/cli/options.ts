@@ -4,6 +4,7 @@
 // order: option > `network.fleetUpdate` > built-in default.
 
 import { parseArgs } from "node:util";
+import { parseAiModel } from "../ai/model.ts";
 import type { FleetDefaults } from "../engine/fleet.ts";
 import { parseQuery } from "../engine/query.ts";
 import { parseProfileList } from "../engine/waves.ts";
@@ -12,6 +13,7 @@ import {
   AI_ERROR_ACTION,
   type AiAnalysis,
   type AiErrorAction,
+  DEFAULT_AI,
   DEFAULT_DIAGNOSTICS,
   DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
@@ -51,19 +53,6 @@ export type CliCommand =
   | { kind: "version" }
   | { kind: "run"; options: CliOptions }
   | { kind: "invalid"; error: string };
-
-export interface AiModel {
-  tool: "claude" | "opencode";
-  model?: string;
-  effort?: string;
-}
-
-/** Model and effort are handed over as is: the AI tool reports what it rejects. */
-export function parseAiModel(value: string): Result<AiModel> {
-  const match = /^(claude|opencode)(?::([^@\s]+))?(?:@([a-zA-Z0-9_-]+))?$/.exec(value);
-  if (!match) return fail(`--ai-model: expected <tool>[:<model>][@<effort>], got "${value}"`);
-  return ok({ tool: match[1] as AiModel["tool"], model: match[2], effort: match[3] });
-}
 
 const flag = { type: "boolean" } as const;
 const text = { type: "string" } as const;
@@ -238,6 +227,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     pingInterval: fleet.pingInterval ?? DEFAULTS.pingInterval,
     diagnostics: { ...DEFAULT_DIAGNOSTICS },
     repair: { ...DEFAULT_REPAIR },
+    ai: { ...DEFAULT_AI },
   });
 }
 

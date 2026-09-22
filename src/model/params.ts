@@ -41,6 +41,12 @@ export interface Diagnostics {
   excerptLines: number;
 }
 
+/** Bounds of an AI call (spec § Intégration IA). Internal: no option, no fleet key. */
+export interface Ai {
+  /** Seconds before the tool is killed; a free question must not stall a wave. */
+  timeoutSeconds: number;
+}
+
 /** Deterministic repair of a host in `error` (spec § Erreurs et réparations). */
 export interface Repair {
   /** Seconds waited before restarting the failed units: a slow start is not a failure. */
@@ -87,6 +93,7 @@ export interface RunParams {
   pingInterval: number;
   diagnostics: Diagnostics;
   repair: Repair;
+  ai: Ai;
 }
 
 /** Built-in defaults of the options (spec § Options), last in the resolution order. */
@@ -107,6 +114,9 @@ export const DEFAULT_DIAGNOSTICS: Diagnostics = { journalLines: 200, excerptLine
 
 /** One restart, no loop: a bounded retry belongs to the signature table. */
 export const DEFAULT_REPAIR: Repair = { settleSeconds: 10 };
+
+/** Between `activation` (300) and `eval` (1200): long enough to answer, short enough to wait. */
+export const DEFAULT_AI: Ai = { timeoutSeconds: 300 };
 
 /** Spec § Délais, seconds. */
 export const DEFAULT_TIMEOUTS: Timeouts = {

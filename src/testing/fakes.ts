@@ -27,6 +27,7 @@ import {
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
 import {
+  DEFAULT_AI,
   DEFAULT_DIAGNOSTICS,
   DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
@@ -313,6 +314,7 @@ export function testParams(overrides: Partial<RunParams> = {}): RunParams {
     pingInterval: DEFAULTS.pingInterval,
     diagnostics: DEFAULT_DIAGNOSTICS,
     repair: DEFAULT_REPAIR,
+    ai: DEFAULT_AI,
     ...overrides,
   };
 }

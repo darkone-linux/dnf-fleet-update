@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import type { FleetDefaults } from "../engine/fleet.ts";
 import { DEFAULT_TIMEOUTS, DEFAULTS, type RunParams, runMode } from "../model/params.ts";
-import { type CliOptions, parseAiModel, parseCli, resolveParams, resumeParams } from "./options.ts";
+import { type CliOptions, parseCli, resolveParams, resumeParams } from "./options.ts";
 
 const NO_FLEET: FleetDefaults = { timeouts: {} };
 
@@ -145,23 +145,6 @@ describe("validation", () => {
   test("unknown options and missing values are rejected", () => {
     expect(error(["--bogus"])).toContain("--bogus");
     expect(error(["--max-parallel"])).toContain("--max-parallel");
-  });
-});
-
-describe("AI model", () => {
-  test("tool, model and effort; ollama tags keep their colon", () => {
-    expect(parseAiModel("claude:opus@max")).toEqual({
-      ok: true,
-      value: { tool: "claude", model: "opus", effort: "max" },
-    });
-    expect(parseAiModel("opencode:ollama/qwen3:32b")).toEqual({
-      ok: true,
-      value: { tool: "opencode", model: "ollama/qwen3:32b", effort: undefined },
-    });
-    expect(parseAiModel("claude")).toEqual({
-      ok: true,
-      value: { tool: "claude", model: undefined, effort: undefined },
-    });
   });
 });
 

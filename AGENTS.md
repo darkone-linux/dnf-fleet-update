@@ -106,8 +106,8 @@ Layers. `biome.jsonc` overrides fail the lint on a forbidden import.
 | `src/engine/commands/` | argv builders (`CommandSpec`): workspace (git, flake, `just`), build (`nix-eval-jobs`, `nix build`), hosts (ssh, sudo as `nix`, activation, rollback) | model, engine |
 | `src/engine/steps/` | one module per step (`update.ts`, `select.ts`, `build.ts`, `waves.ts` for test and switch, `report.ts` for `report.md` and the Matrix messages), receives `RunContext` (`context.ts`: ports, parameters, `flow.ts` early ends, questions); `exec.ts` runs their commands | model, engine |
 | `src/adapters/` | real ports: `process.ts` (`CommandRunner`, one process group per command), `clock.ts`, `lock.ts` (flock(2) through `bun:ffi`), `store.ts` (`var/deployments/`), `localhost.ts`, `channel.ts` (`EventChannel` within the process) | model, ports |
-| `src/ai/` | *planned* — providers (Claude Agent SDK, opencode), guarded tools | model, engine |
-| `src/cli/` | `options.ts` (argv → run parameters, validation: exit `2`, `--resume` rules), `help.ts` | model, engine |
+| `src/ai/` | AI tools as executables, no SDK and no API: `model.ts` (`--ai-model` target), `providers.ts` (argv of `claude` and `opencode`, prompt on stdin, every built-in tool denied) | model, engine |
+| `src/cli/` | `options.ts` (argv → run parameters, validation: exit `2`, `--resume` rules), `help.ts` | model, engine, ai |
 | `src/ui/` | TUI: `App.tsx` (screen, keys, views), `panels.tsx` (components); presentation only | model |
 | `src/output/` | `text.ts`: `--no-ui` text output, the feed without colours | model |
 | `src/testing/` | capture harness (`capture.tsx`), scenario replay (`mock.tsx`, `replay.ts`), port fakes, simulated fleet (`sim.ts`) and whole runs (`runs.ts`) | anything |
@@ -178,7 +178,7 @@ loses every colour. Three false alarms came from exactly that.
   Justfile selects its static musl binary (`BIOME_BINARY`): NixOS cannot start
   the glibc one.
 - `zod`: validation of outside JSON (generator output, nix JSON, `state.json`).
-- Planned, added with its first importing code: `@anthropic-ai/claude-agent-sdk` (AI v1).
+- No AI SDK: `claude` and `opencode` are executables resolved from `PATH`, driven through `CommandRunner` like nix and ssh.
 - `just audit` in CI: a high-severity advisory blocks merge and release.
 
 ## Hooks and CI
