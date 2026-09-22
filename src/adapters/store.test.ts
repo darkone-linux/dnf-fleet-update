@@ -85,4 +85,18 @@ describe("DirectoryStore", () => {
     expect(() => run.appendLog({ phase: "a/b" }, "")).toThrow("unsafe log name");
     expect(() => run.outLink("../gw-ag")).toThrow("unsafe host");
   });
+
+  test("reads back the tail of a log, and nothing of a log never written", async () => {
+    const run = store().create("full");
+    for (let line = 1; line <= 5; line += 1) run.appendLog({ phase: "build" }, `line ${line}`);
+
+    expect(await run.readLog({ phase: "build" }, 2)).toEqual({
+      lines: ["line 4", "line 5"],
+      dropped: 3,
+    });
+    expect(await run.readLog({ host: "gfx", phase: "diag" }, 10)).toEqual({
+      lines: [],
+      dropped: 0,
+    });
+  });
 });

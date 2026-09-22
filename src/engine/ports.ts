@@ -6,6 +6,7 @@
 
 import type { Event, RunInfo } from "../model/events.ts";
 import type { PersistedState } from "../model/persist.ts";
+import type { Result } from "../model/result.ts";
 
 /** One external program: nix, ssh, git, just, ping. */
 export interface CommandSpec {
@@ -115,6 +116,27 @@ export interface RunStore {
 
   /** `nix build --out-link` target: GC root of the host path while the run directory lives. */
   outLink(host: string): string;
+
+  /** Tail of a log, newest kept: the error is at the bottom. Missing file: empty. */
+  readLog(name: LogName, lines: number): Promise<Excerpt>;
+}
+
+/** Bounded slice of a text file, as an AI tool receives it (spec § analyse, Limites). */
+export interface Excerpt {
+  lines: string[];
+
+  /** Lines left out; said to the reader, so it knows it holds a slice. */
+  dropped: number;
+}
+
+/**
+ * Read-only access to the trees the AI may read (spec § analyse, outils
+ * `active`). Refuses what the **resolved** path puts outside its roots: a
+ * symlink leading out is an escape, not a shortcut.
+ */
+export interface SourceFiles {
+  /** Head of the file: a module is read from its header down. */
+  read(path: string, lines: number): Promise<Result<Excerpt>>;
 }
 
 /** Last run directory, as `--resume` finds it (spec § État et reprise). */

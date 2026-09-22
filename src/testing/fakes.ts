@@ -14,6 +14,7 @@ import {
   type DeploymentStore,
   type EngineContext,
   type EventChannel,
+  type Excerpt,
   type LocalHost,
   type LockAttempt,
   type LockHolder,
@@ -24,6 +25,7 @@ import {
   type RunOptions,
   type RunStore,
   type SavedRun,
+  type SourceFiles,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
 import {
@@ -35,6 +37,7 @@ import {
   type RunParams,
 } from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
+import { fail, ok, type Result } from "../model/result.ts";
 
 /** Reply for the first command whose argv starts with `match`, or satisfies it. */
 export interface CommandScript {
@@ -187,6 +190,27 @@ export class MemoryRunStore implements RunStore {
   outLink(host: string): string {
     return `/deployments/${this.id}/gcroots/${host}`;
   }
+
+  readLog(name: LogName, lines: number): Promise<Excerpt> {
+    const held = this.logs.get(logFileName(name)) ?? [];
+    const kept = lines <= 0 ? [] : held.slice(-lines);
+    return Promise.resolve({ lines: kept, dropped: held.length - kept.length });
+  }
+}
+
+/** Files a test lets the AI read, keyed by the path the tool asks for. */
+export class MemorySources implements SourceFiles {
+  readonly reads: string[] = [];
+
+  constructor(private readonly files: Readonly<Record<string, string[]>> = {}) {}
+
+  read(path: string, lines: number): Promise<Result<Excerpt>> {
+    this.reads.push(path);
+    const held = this.files[path];
+    if (held === undefined) return Promise.resolve(fail(`no such file: ${path}`));
+    const kept = lines <= 0 ? [] : held.slice(0, lines);
+    return Promise.resolve(ok({ lines: kept, dropped: held.length - kept.length }));
+  }
 }
 
 /** Every run starts at the same date: a second run of the same mode is refused, like on disk. */
@@ -324,6 +348,7 @@ export interface FakeRunContext extends RunContext {
   clock: FakeClock;
   events: RecordingChannel;
   run: MemoryRunStore;
+  sources: MemorySources;
   local: FakeLocalHost;
 }
 
@@ -334,6 +359,9 @@ export interface FakeRunOptions {
   signatures?: Signature[];
   answers?: Record<string, string>;
   params?: Partial<RunParams>;
+
+  /** Files the AI may read, by the path the tool asks for. */
+  sources?: Record<string, string[]>;
   codev?: boolean;
   hostname?: string;
   addresses?: string[];
@@ -353,6 +381,7 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     codev: options.codev ?? false,
     local: new FakeLocalHost(options.hostname ?? "deployer", options.addresses ?? []),
     run: new MemoryRunStore("20260917T020000Z-full"),
+    sources: new MemorySources(options.sources),
     questions: new QuestionQueue(),
     known: new KnownErrors(options.signatures),
     ai: new AiGate(),

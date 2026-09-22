@@ -21,6 +21,7 @@ import type {
   EventChannel,
   LocalHost,
   RunLock,
+  SourceFiles,
 } from "./ports.ts";
 import { Presence } from "./presence.ts";
 import { Recorder, recordedChannel } from "./recorder.ts";
@@ -40,6 +41,7 @@ export interface RunPorts {
   local: LocalHost;
   lock: RunLock;
   store: DeploymentStore;
+  sources: SourceFiles;
 }
 
 export interface RunRequest {
@@ -271,6 +273,7 @@ export async function runFleetUpdate(
       codev: request.codev,
       local: ports.local,
       run,
+      sources: ports.sources,
       questions: new QuestionQueue(),
       known: new KnownErrors(),
       ai: new AiGate(),

@@ -4,7 +4,7 @@ import type { AskOption, Event, Level } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
 import type { RunFlow } from "./flow.ts";
 import type { KnownErrors } from "./known-errors.ts";
-import type { EngineContext, LocalHost, RunStore } from "./ports.ts";
+import type { EngineContext, LocalHost, RunStore, SourceFiles } from "./ports.ts";
 import type { SavedState } from "./resume.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -67,6 +67,9 @@ export interface RunContext extends EngineContext {
   codev: boolean;
   local: LocalHost;
   run: RunStore;
+
+  /** Trees the AI may read (spec § analyse, outils `active`). */
+  sources: SourceFiles;
   flow: RunFlow;
   questions: QuestionQueue;
 

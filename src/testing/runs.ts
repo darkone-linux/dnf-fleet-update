@@ -21,6 +21,7 @@ import {
   feed,
   MemoryDeploymentStore,
   type MemoryRunStore,
+  MemorySources,
   RecordingChannel,
 } from "./fakes.ts";
 import { ORIGIN_PATH, storePath } from "./fleet.ts";
@@ -43,6 +44,9 @@ export interface RunCase extends Omit<SimOptions, "hooks"> {
   /** Default: an address of zone `ag`. */
   addresses?: string[];
   codev?: boolean;
+
+  /** Files the AI may read, by the path its tool asks for. */
+  sources?: Record<string, string[]>;
 
   /** Lock busy at the start: the takeover belongs to the run (spec § Verrou). */
   lock?: { holder: LockHolder; diesOn?: readonly ("SIGTERM" | "SIGKILL")[] };
@@ -102,6 +106,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     ),
     lock,
     store,
+    sources: new MemorySources(runCase.sources),
   };
   const request = {
     workspace: "/ws",

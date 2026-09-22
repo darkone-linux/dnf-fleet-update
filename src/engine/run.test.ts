@@ -12,6 +12,7 @@ import {
   FakeLock,
   feed,
   MemoryDeploymentStore,
+  MemorySources,
   RecordingChannel,
 } from "../testing/fakes.ts";
 import {
@@ -66,6 +67,7 @@ function harness(
     local: new FakeLocalHost("deployer", ["10.1.0.50"]),
     lock: new FakeLock(options.holder, options.diesOn),
     store: new MemoryDeploymentStore(),
+    sources: new MemorySources(),
   };
   const flow = new RunFlow();
   const request = {

@@ -11,6 +11,7 @@ import {
 import { join } from "node:path";
 import {
   type DeploymentStore,
+  type Excerpt,
   type LogName,
   logFileName,
   RUN_FILE_NAME,
@@ -19,6 +20,7 @@ import {
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
 import type { PersistedState } from "../model/persist.ts";
+import { tailLines } from "./tail.ts";
 
 /** ISO 8601 basic, UTC: names sort by date across DST changes, and fit unit names. */
 export function runDate(date: Date): string {
@@ -55,6 +57,10 @@ class RunDirectory implements RunStore {
   outLink(host: string): string {
     if (!RUN_FILE_NAME.test(host)) throw new Error(`unsafe host: ${JSON.stringify(host)}`);
     return join(this.dir, "gcroots", host);
+  }
+
+  readLog(name: LogName, lines: number): Promise<Excerpt> {
+    return tailLines(join(this.dir, "logs", `${logFileName(name)}.log`), lines);
   }
 }
 
