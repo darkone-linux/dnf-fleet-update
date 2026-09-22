@@ -45,6 +45,15 @@ export interface Diagnostics {
 export interface Ai {
   /** Seconds before the tool is killed; a free question must not stall a wave. */
   timeoutSeconds: number;
+
+  /** Log lines one tool call hands back, tail first: a `nix build` is verbose. */
+  logLines: number;
+
+  /** Source lines one tool call hands back, from the header down. */
+  sourceLines: number;
+
+  /** `claude --max-budget-usd`; no equivalent on `opencode`, bounded by the delay there. */
+  budgetUsd: number;
 }
 
 /** Deterministic repair of a host in `error` (spec § Erreurs et réparations). */
@@ -115,8 +124,16 @@ export const DEFAULT_DIAGNOSTICS: Diagnostics = { journalLines: 200, excerptLine
 /** One restart, no loop: a bounded retry belongs to the signature table. */
 export const DEFAULT_REPAIR: Repair = { settleSeconds: 10 };
 
-/** Between `activation` (300) and `eval` (1200): long enough to answer, short enough to wait. */
-export const DEFAULT_AI: Ai = { timeoutSeconds: 300 };
+/**
+ * Delay between `activation` (300) and `eval` (1200): long enough to answer,
+ * short enough to wait. Line bounds follow `DEFAULT_DIAGNOSTICS`.
+ */
+export const DEFAULT_AI: Ai = {
+  timeoutSeconds: 300,
+  logLines: 200,
+  sourceLines: 400,
+  budgetUsd: 2,
+};
 
 /** Spec § Délais, seconds. */
 export const DEFAULT_TIMEOUTS: Timeouts = {

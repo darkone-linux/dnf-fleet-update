@@ -28,6 +28,7 @@ const RESUMABLE = ["remaining", "offline", "failed", "tested"] as const satisfie
 const resumable: ReadonlySet<string> = new Set<string>(RESUMABLE);
 
 const seconds = z.number().int().nonnegative();
+const count = z.number().int().positive();
 
 /** Flags of the invocation, absent from a `state.json` written by an older tool. */
 const flag = z.boolean().default(false);
@@ -83,7 +84,14 @@ const savedParams = z.object({
     })
     .default(DEFAULT_DIAGNOSTICS),
   repair: z.object({ settleSeconds: seconds }).default(DEFAULT_REPAIR),
-  ai: z.object({ timeoutSeconds: seconds }).default(DEFAULT_AI),
+  ai: z
+    .object({
+      timeoutSeconds: seconds,
+      logLines: count,
+      sourceLines: count,
+      budgetUsd: z.number().positive(),
+    })
+    .default(DEFAULT_AI),
 }) satisfies z.ZodType<RunParams, unknown>;
 
 const savedHost = z.object({

@@ -238,7 +238,8 @@ export function hasPath(path: string, timeouts: Timeouts): HostCommand {
 }
 
 /** Unit names come from `systemctl` output: never a shell metacharacter. */
-const UNIT = /^[a-zA-Z0-9@:_.\\-]+$/;
+/** Also the shape an AI tool must match before a unit name reaches argv. */
+export const UNIT = /^[a-zA-Z0-9@:_.\\-]+$/;
 
 /** System state and failed unit count (spec § Erreurs et réparations): read by a human. */
 export function systemStatus(timeouts: Timeouts): HostCommand {
