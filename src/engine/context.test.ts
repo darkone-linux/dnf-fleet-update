@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { fakeRunContext, feed } from "../testing/fakes.ts";
-import { ask, emit, log, YES_NO } from "./context.ts";
+import { ask, disableAi, emit, log, YES_NO } from "./context.ts";
 import { describeFailure } from "./exec.ts";
 
 describe("context", () => {
@@ -58,5 +58,22 @@ describe("describeFailure", () => {
   test("a signal without exit code", () => {
     const killed = { ...result, exitCode: null, signal: "SIGTERM" };
     expect(describeFailure({ result: killed, stdout: [], stderr: [] })).toBe("killed by SIGTERM");
+  });
+});
+
+describe("AI gate", () => {
+  test("closing says it once, at the feed and at the report", () => {
+    const context = fakeRunContext();
+    expect(context.ai.open).toBe(true);
+
+    disableAi(context, "claude not found");
+    disableAi(context, "claude not found");
+    disableAi(context, "another reason entirely");
+
+    expect(context.ai.open).toBe(false);
+    expect(feed(context.events.events)).toEqual(["warn AI unavailable: claude not found"]);
+    expect(context.events.events.filter((event) => event.kind === "note")).toEqual([
+      { t: 0, kind: "note", message: "AI unavailable: claude not found" },
+    ]);
   });
 });

@@ -6,7 +6,7 @@ import { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULT_TIMEOUTS, type RunParams, runMode } from "../model/params.ts";
 import { fail, ok, type Result } from "../model/result.ts";
 import { gitStatus, readGenerated } from "./commands/workspace.ts";
-import { type EventInput, emit, log, QuestionQueue, type RunContext } from "./context.ts";
+import { AiGate, type EventInput, emit, log, QuestionQueue, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
 import { type FleetDefaults, parseNetwork } from "./fleet.ts";
 import type { RunFlow } from "./flow.ts";
@@ -272,6 +272,7 @@ export async function runFleetUpdate(
       run,
       questions: new QuestionQueue(),
       known: new KnownErrors(),
+      ai: new AiGate(),
       startedAt,
     };
     emit(context, {

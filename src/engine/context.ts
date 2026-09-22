@@ -23,6 +23,29 @@ export class QuestionQueue {
   }
 }
 
+/**
+ * AI availability of a run (spec § Intégration IA). Closed by the first call
+ * that fails for good — executable absent, credentials refused; a deployment
+ * is never blocked by the AI.
+ *
+ * Nothing probes: `--ai-error-action` defaults to `analysis`, so an eager
+ * probe would run on every deployment for a tool most of them never use.
+ */
+export class AiGate {
+  private reason?: string;
+
+  get open(): boolean {
+    return this.reason === undefined;
+  }
+
+  /** `true` the first time only: a run explains itself once. */
+  close(reason: string): boolean {
+    if (this.reason !== undefined) return false;
+    this.reason = reason;
+    return true;
+  }
+}
+
 /** `--resume`: what the last run left, and the `--on` of this invocation. */
 export interface ResumeContext {
   saved: SavedState;
@@ -50,6 +73,9 @@ export interface RunContext extends EngineContext {
   /** Known errors met by the run, for the report (spec § Erreurs et réparations). */
   known: KnownErrors;
 
+  /** Once closed, no AI tool is launched again (spec § Intégration IA). */
+  ai: AiGate;
+
   /** `clock.now()` at the start of the run: `t` of every event counts from it. */
   startedAt: number;
 }
@@ -64,6 +90,13 @@ export function log(context: RunContext, level: Level, message: string, host?: s
     context,
     host === undefined ? { kind: "log", level, message } : { kind: "log", level, host, message },
   );
+}
+
+/** Closes the gate and says why: warning at the feed, note at the report. */
+export function disableAi(context: RunContext, reason: string): void {
+  if (!context.ai.close(reason)) return;
+  log(context, "warn", `AI unavailable: ${reason}`);
+  emit(context, { kind: "note", message: `AI unavailable: ${reason}` });
 }
 
 export const YES_NO: readonly AskOption[] = [

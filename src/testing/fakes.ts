@@ -3,7 +3,7 @@
 // Deterministic by construction: no process, no timer, no network. Strict too:
 // an unscripted command or an unanswered question fails the test, never passes.
 
-import { QuestionQueue, type RunContext } from "../engine/context.ts";
+import { AiGate, QuestionQueue, type RunContext } from "../engine/context.ts";
 import { RunFlow } from "../engine/flow.ts";
 import { KnownErrors, type Signature } from "../engine/known-errors.ts";
 import {
@@ -355,6 +355,7 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     run: new MemoryRunStore("20260917T020000Z-full"),
     questions: new QuestionQueue(),
     known: new KnownErrors(options.signatures),
+    ai: new AiGate(),
     startedAt: 0,
   };
 }
