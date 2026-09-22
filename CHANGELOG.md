@@ -9,6 +9,27 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-22
+
+### ⚠ Breaking
+
+- **model**: Add the repair states to the host progress
+- **cli**: Rename the commit-message and flake options
+
+### Added
+
+- **ui**: Name the publication in the build question
+- **engine**: Carry a deterministic action on each known error
+- **engine**: Collect units and journals of a failed host
+- **engine**: Restart the failed units of a host in error
+- **engine**: Obey the action of a known error signature
+- **ui**: Paint the running step yellow
+
+### Fixed
+
+- **engine**: Skip delegation to an offline auto-build host
+- **engine**: Confirm a lost ping with a second probe
+
 ## [0.4.0] - 2026-09-19
 
 ### ⚠ Breaking
@@ -136,7 +157,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.2.0...v0.3.0
