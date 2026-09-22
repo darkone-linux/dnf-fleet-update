@@ -22,6 +22,7 @@ import type {
   LocalHost,
   RunLock,
   SourceFiles,
+  ToolServer,
 } from "./ports.ts";
 import { Presence } from "./presence.ts";
 import { Recorder, recordedChannel } from "./recorder.ts";
@@ -42,6 +43,7 @@ export interface RunPorts {
   lock: RunLock;
   store: DeploymentStore;
   sources: SourceFiles;
+  toolServer: ToolServer;
 }
 
 export interface RunRequest {
@@ -274,6 +276,7 @@ export async function runFleetUpdate(
       local: ports.local,
       run,
       sources: ports.sources,
+      toolServer: ports.toolServer,
       questions: new QuestionQueue(),
       known: new KnownErrors(),
       ai: new AiGate(),

@@ -187,6 +187,27 @@ export interface RunLock {
   release(): void;
 }
 
+/** Where the AI tools reach the run (spec § analyse, Transport). */
+export interface ToolEndpoint {
+  /** Loopback only, ephemeral port. */
+  url: string;
+
+  /** Bearer token of this run; a request without it is refused. */
+  token: string;
+}
+
+/**
+ * Local JSON endpoint the AI tools call. The body is opaque here: the port
+ * carries messages, `ai/rpc.ts` gives them meaning.
+ */
+export interface ToolServer {
+  /** New URL and token at every start. `undefined` from the handler: no reply is due. */
+  start(handle: (message: unknown) => Promise<unknown | undefined>): Promise<ToolEndpoint>;
+
+  /** Idempotent: stopping a server never started is not an error. */
+  stop(): Promise<void>;
+}
+
 /** The deployment host. */
 export interface LocalHost {
   /** Short name: the fleet host of the same name is deployed without ssh. */

@@ -22,6 +22,7 @@ import {
   MemoryDeploymentStore,
   type MemoryRunStore,
   MemorySources,
+  MemoryToolServer,
   RecordingChannel,
 } from "./fakes.ts";
 import { ORIGIN_PATH, storePath } from "./fleet.ts";
@@ -107,6 +108,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     lock,
     store,
     sources: new MemorySources(runCase.sources),
+    toolServer: new MemoryToolServer(),
   };
   const request = {
     workspace: "/ws",

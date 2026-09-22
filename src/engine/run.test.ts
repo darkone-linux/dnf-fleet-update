@@ -13,6 +13,7 @@ import {
   feed,
   MemoryDeploymentStore,
   MemorySources,
+  MemoryToolServer,
   RecordingChannel,
 } from "../testing/fakes.ts";
 import {
@@ -68,6 +69,7 @@ function harness(
     lock: new FakeLock(options.holder, options.diesOn),
     store: new MemoryDeploymentStore(),
     sources: new MemorySources(),
+    toolServer: new MemoryToolServer(),
   };
   const flow = new RunFlow();
   const request = {

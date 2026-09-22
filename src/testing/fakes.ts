@@ -26,6 +26,8 @@ import {
   type RunStore,
   type SavedRun,
   type SourceFiles,
+  type ToolEndpoint,
+  type ToolServer,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
 import {
@@ -274,6 +276,25 @@ export class FakeLock implements RunLock {
   }
 }
 
+/** No socket: the test calls the handler the run registered, directly. */
+export class MemoryToolServer implements ToolServer {
+  handle?: (message: unknown) => Promise<unknown | undefined>;
+  starts = 0;
+  stops = 0;
+
+  start(handle: (message: unknown) => Promise<unknown | undefined>): Promise<ToolEndpoint> {
+    this.handle = handle;
+    this.starts += 1;
+    return Promise.resolve({ url: "http://127.0.0.1:9/mcp", token: `token-${this.starts}` });
+  }
+
+  stop(): Promise<void> {
+    this.handle = undefined;
+    this.stops += 1;
+    return Promise.resolve();
+  }
+}
+
 export class FakeLocalHost implements LocalHost {
   constructor(
     private readonly name: string,
@@ -349,6 +370,7 @@ export interface FakeRunContext extends RunContext {
   events: RecordingChannel;
   run: MemoryRunStore;
   sources: MemorySources;
+  toolServer: MemoryToolServer;
   local: FakeLocalHost;
 }
 
@@ -382,6 +404,7 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     local: new FakeLocalHost(options.hostname ?? "deployer", options.addresses ?? []),
     run: new MemoryRunStore("20260917T020000Z-full"),
     sources: new MemorySources(options.sources),
+    toolServer: new MemoryToolServer(),
     questions: new QuestionQueue(),
     known: new KnownErrors(options.signatures),
     ai: new AiGate(),

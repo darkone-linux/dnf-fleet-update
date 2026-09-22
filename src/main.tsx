@@ -10,9 +10,11 @@ import { LiveChannel } from "./adapters/channel.ts";
 import { SystemClock } from "./adapters/clock.ts";
 import { SystemHost } from "./adapters/localhost.ts";
 import { FlockLock } from "./adapters/lock.ts";
+import { LoopbackToolServer } from "./adapters/mcp.ts";
 import { ProcessRunner } from "./adapters/process.ts";
 import { DirectorySources } from "./adapters/sources.ts";
 import { DirectoryStore } from "./adapters/store.ts";
+import { readableRoots } from "./ai/paths.ts";
 import { HELP } from "./cli/help.ts";
 import { interactively, parseCli, resolveParams, resumeParams } from "./cli/options.ts";
 import { RunFlow } from "./engine/flow.ts";
@@ -69,7 +71,8 @@ const ports: RunPorts = {
   lock: new FlockLock(join(deployments, "current.lock")),
 
   // `dnf/` too: a store path outside codev, readable either way.
-  sources: new DirectorySources([workspace, join(workspace, "dnf")]),
+  sources: new DirectorySources(readableRoots(workspace)),
+  toolServer: new LoopbackToolServer(),
   store: {
     create: (mode) => {
       const run = store.create(mode);
