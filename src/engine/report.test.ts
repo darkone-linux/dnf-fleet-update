@@ -264,6 +264,33 @@ describe("renderReport", () => {
     expect(summary).toEqual(["Two hosts short of the fleet.", "Both on port conflicts."]);
   });
 
+  test("AI repair: every action, refusals included, with why", () => {
+    const acted = [
+      {
+        t: 1,
+        kind: "ai.action" as const,
+        host: "gw-ag",
+        action: "restart outline.service",
+        outcome: "refused" as const,
+        detail: "not failed on gw-ag",
+      },
+      {
+        t: 2,
+        kind: "ai.action" as const,
+        host: "gw-ag",
+        action: "restart nginx.service",
+        outcome: "done" as const,
+      },
+    ].reduce(persist, state);
+    const { markdown } = renderReport({ ...BASE, state: acted });
+
+    expect(markdown).toContain("## AI repair\n\n| Host | Action | Outcome | Why |");
+    expect(markdown).toContain(
+      "| gw-ag | restart outline.service | refused | not failed on gw-ag |",
+    );
+    expect(markdown).toContain("| gw-ag | restart nginx.service | done |  |");
+  });
+
   test("no AI analysis: no section, no room summary", () => {
     const { markdown, summary } = renderReport({ ...BASE, state });
 

@@ -5,7 +5,7 @@ import type { Analysis } from "../ai/analysis.ts";
 import type { PullSource, RunInfo } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULTS } from "../model/params.ts";
-import type { HostStatus, PersistedHost, PersistedState } from "../model/persist.ts";
+import type { AiAction, HostStatus, PersistedHost, PersistedState } from "../model/persist.ts";
 
 export interface ReportInput {
   /** `20260917T020000Z-full`: also the only wall clock of the report. */
@@ -199,6 +199,21 @@ function aiAnalysis(analyses: readonly Analysis[]): string[] {
 }
 
 /**
+ * What the AI did (spec § réparation, État et rapport): one row per action,
+ * refusals included — a repair must be readable after the fact.
+ */
+function aiRepair(actions: readonly AiAction[]): string[] {
+  if (actions.length === 0) return [];
+  const rows = actions.map((entry) => [
+    entry.host ?? "run",
+    entry.action,
+    entry.outcome,
+    entry.detail ?? "",
+  ]);
+  return ["", "## AI repair", "", ...table(["Host", "Action", "Outcome", "Why"], rows)];
+}
+
+/**
  * Message of the incidents room (spec § Rapport): critical hosts the run left
  * out, and, after a stop, hosts left in `test` — a reboot takes those back to
  * their previous generation. `undefined`: nothing to raise.
@@ -338,7 +353,7 @@ export function renderReport(input: ReportInput): Report {
     markdown.push("", "## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`));
   }
 
-  markdown.push(...diagnostics(hosts), ...aiAnalysis(analyses));
+  markdown.push(...diagnostics(hosts), ...aiAnalysis(analyses), ...aiRepair(state.actions));
 
   if (state.notes.length > 0) {
     const line = (note: PersistedState["notes"][number]) =>

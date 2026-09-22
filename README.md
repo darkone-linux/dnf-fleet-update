@@ -46,14 +46,15 @@ profiles and zones come from your configuration, nothing is hardcoded.
 
 ## Status
 
-**Alpha.** v0.5.0 updates, builds, tests and switches a real fleet end to end
+**Alpha.** v0.6.0 updates, builds, tests and switches a real fleet end to end
 from the DNF consumer project it runs in, and reports to the Matrix alert rooms.
-On `main`, the AI analyses a failure through its own guarded tools. One part of
-the contract below is specified and still being built:
+On `main`, the AI analyses a failure through its own guarded tools and may act
+on the units that fell. One part of the contract below is specified and still
+being built:
 
 | Not yet | Options | Today |
 |---|---|---|
-| AI repair | `--ai-error-action repair` | accepted, behaves like `analysis`: the AI explains, it never acts |
+| AI repair through the code | `--ai-error-action repair` | the AI acts on services; editing, validating and committing a fix comes next |
 
 ```bash
 nix develop            # or: nix-shell
@@ -151,15 +152,22 @@ it is not shown, it cannot ask for:
 |---|---|
 | `passive` | deployment state, host diagnosis, build and activation logs |
 | `active` / `analysis` | + read the code (consumer, `dnf/`), host units and journals, read-only |
-| `repair` | + act on a service, edit the code, validate, commit, retry, exclude a host — being built |
+| `repair` | + one action on the units this run saw fall, and nothing else |
 
 The built-in tools of `claude` and `opencode` are denied, and so is the project
 context they would otherwise pick up (`CLAUDE.md`, user settings). A path leaves
 the two readable trees, names `usr/secrets/`, or a host or unit is not one of
 the run's — the call is refused, and the refusal is traced like any other call.
 
-Every tool call leaves a feed line (`AI reads usr/modules/nginx.nix`) and a line
-in `logs/ai.log`. `report.md` gains an **AI analysis** section: one block per
+At `repair` the AI gets a second session on a failed host, in state `AI repair`,
+with one added tool: `systemctl start`, `stop`, `restart` or `reset-failed` on
+**the units this run saw fall**, and nothing else. Three attempts per host,
+refusals not counted, a confirmation before each one when interactive, and no
+action at all once the run is stopping.
+
+Every tool *call* leaves a feed line (`AI reads usr/modules/nginx.nix`) and a
+line in `logs/ai.log`; every tool *action* is counted into `state.json` and the
+report's **AI repair** section, refusals and their reason included. `report.md` gains an **AI analysis** section: one block per
 host analysed, then the end-of-run summary, which also rides along — trimmed —
 on the Matrix message. The analysis never replaces a host's raw reason.
 
@@ -215,6 +223,12 @@ fleet-update --resume --on "nlt"
 
 ```bash
 fleet-update --ai-analysis passive --ai-error-action analysis
+```
+
+**Let it restart what fell too**, confirming each action:
+
+```bash
+fleet-update --ai-error-action repair
 ```
 
 **Unattended nightly run** — what the `darkone.admin.fleet-update` module

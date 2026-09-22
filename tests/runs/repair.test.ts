@@ -54,6 +54,7 @@ test("the AI restarts what the group restart could not, and the host is deployed
   expect(run.recorded?.report).toContain(
     "## Notes\n\n- gw-cp: recovered by an AI repair: restart outline.service",
   );
+  expect(run.recorded?.report).toContain("| gw-cp | restart outline.service | done |  |");
 });
 
 test("a unit the run never saw fail is refused, and the host stays in error", async () => {
