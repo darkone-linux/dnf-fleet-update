@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { HostCommand } from "../../engine/commands/host.ts";
 import type { Excerpt, LogName } from "../../engine/ports.ts";
 import type { RunParams } from "../../model/params.ts";
-import type { PersistedHost, PersistedState } from "../../model/persist.ts";
+import type { AiAction, PersistedHost, PersistedState } from "../../model/persist.ts";
 
 export const TOOL_LEVELS = ["passive", "active", "repair"] as const;
 
@@ -55,6 +55,15 @@ export interface ToolContext {
 
   /** Places the command on the host, as the steps do. Throws `ToolError` on failure. */
   onHost(host: string, command: HostCommand): Promise<Excerpt>;
+
+  /** Run on its way out (stop, rollback, abort): a repair is a new operation. */
+  halting(): boolean;
+
+  /** Interactive only: `false` when the operator declined (spec § réparation). */
+  confirm(id: string, question: string): Promise<boolean>;
+
+  /** An action the run counts, not merely traces: one `ai.action`, one feed line. */
+  record(entry: AiAction): void;
 
   /** One feed line, one line of `logs/ai.log`: no call goes untraced. */
   trace(message: string): void;

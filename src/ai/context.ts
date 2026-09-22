@@ -4,15 +4,22 @@
 // cannot widen its own reach — it has no other handle on the run.
 
 import { type HostCommand, onHost as place } from "../engine/commands/host.ts";
-import { log, type RunContext } from "../engine/context.ts";
+import { ask, emit, log, type RunContext } from "../engine/context.ts";
 import { describeFailure, execute, succeeded } from "../engine/exec.ts";
 import type { Excerpt, LogName } from "../engine/ports.ts";
+import type { AskOption } from "../model/events.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import { confine, readableRoots } from "./paths.ts";
 import { type ToolContext, ToolError } from "./tools/types.ts";
 
 /** Log of the run holding every AI call, questions and tool calls alike. */
 const AI_LOG: LogName = { phase: "ai" };
+
+/** Labels say what happens, not what was asked (spec mère § Interface). */
+const CONFIRM: readonly AskOption[] = [
+  { value: "apply", label: "apply", description: "run it on the host" },
+  { value: "skip", label: "skip", description: "leave the unit as it is" },
+];
 
 /** Output of a command handed to a tool: bounded like a log, tail kept. */
 function bounded(lines: readonly string[], keep: number): Excerpt {
@@ -56,6 +63,28 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     },
 
     onHost: runOnHost,
+
+    halting: () => context.flow.halt.aborted || context.flow.ending !== undefined,
+
+    async confirm(id, question) {
+      // Unattended: an action on a service is less than `repairUnits` already
+      // does without a witness (spec § réparation, Confirmation).
+      if (!context.params.interactive) return true;
+      return (await ask(context, id, question, CONFIRM)) === "apply";
+    },
+
+    record(entry) {
+      emit(context, {
+        kind: "ai.action",
+        ...(entry.host === undefined ? {} : { host: entry.host }),
+        action: entry.action,
+        outcome: entry.outcome,
+        ...(entry.detail === undefined ? {} : { detail: entry.detail }),
+      });
+      const detail = entry.detail === undefined ? "" : `: ${entry.detail}`;
+      const level = entry.outcome === "done" ? "ok" : "warn";
+      log(context, level, `${entry.action}: ${entry.outcome}${detail}`, entry.host);
+    },
 
     trace(message) {
       log(context, "info", `AI ${message}`);

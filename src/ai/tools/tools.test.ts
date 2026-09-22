@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { EventInput } from "../../engine/context.ts";
-import { initialPersisted, type PersistedState, persist } from "../../model/persist.ts";
+import { spentAttempts } from "../../model/persist.ts";
 import { type FakeRunOptions, fakeRunContext } from "../../testing/fakes.ts";
 import { toolContext } from "../context.ts";
 import { qualified, TOOLS, toolByName, toolLevel, toolsFor } from "./registry.ts";
@@ -18,17 +18,13 @@ const EVENTS: EventInput[] = [
   { kind: "note", message: "unlock not re-tested" },
 ];
 
-function state(): PersistedState {
-  return EVENTS.reduce<PersistedState>(
-    (folded, event, index) => persist(folded, { ...event, t: index * 1000 }),
-    initialPersisted(),
-  );
-}
-
-function tools(options: FakeRunOptions = {}) {
+/** Seeded through the channel: the tools read the fold a real run would. */
+function tools(options: FakeRunOptions = {}, extra: EventInput[] = []) {
   const context = fakeRunContext(options);
-  const folded = state();
-  return { context, tool: toolContext(context, () => folded), folded };
+  for (const [index, event] of [...EVENTS, ...extra].entries()) {
+    context.events.emit({ ...event, t: index * 1000 });
+  }
+  return { context, tool: toolContext(context, context.state) };
 }
 
 /** One call of a tool published at `level`; throws when the level hides it. */
@@ -50,7 +46,9 @@ describe("registry", () => {
 
     expect(passive).toEqual(["deployment_state", "host_diagnosis", "host_log", "run_log"]);
     expect(active).toEqual([...passive, "read_code", "host_units", "host_journal"]);
+    expect(toolsFor("repair").map((tool) => tool.name)).toEqual([...active, "service_action"]);
     expect(toolByName("passive", "read_code")).toBeUndefined();
+    expect(toolByName("active", "service_action")).toBeUndefined();
   });
 
   test("the level is the higher of the two option axes", () => {
@@ -222,5 +220,114 @@ describe("active tools", () => {
     expect(
       call(tool, "active", "host_journal", { host: "gfx", unit: "nginx.service" }),
     ).rejects.toThrow(ToolError);
+  });
+});
+
+describe("service_action", () => {
+  const RESTART = { host: "gfx", units: ["nginx.service"], action: "restart" };
+
+  /** `gfx` failed with `nginx.service`: the only unit a repair may touch there. */
+  const script = (failed: string[] = []) => [
+    {
+      match: (argv: readonly string[]) => argv.join(" ").includes("systemctl restart"),
+      output: [{ stream: "stdout" as const, line: "restarted" }],
+    },
+    {
+      match: (argv: readonly string[]) => argv.join(" ").includes("list-units"),
+      output: failed.map((unit) => ({ stream: "stdout" as const, line: `${unit} loaded failed` })),
+    },
+  ];
+
+  const spent = (name: string, count: number): EventInput[] =>
+    Array.from({ length: count }, () => ({
+      kind: "ai.action" as const,
+      host: name,
+      action: "restart nginx.service",
+      outcome: "done" as const,
+    }));
+
+  test("acts, counts the attempt, then reads the failed units back", async () => {
+    const { context, tool } = tools({ commands: script() });
+
+    const result = await call(tool, "repair", "service_action", RESTART);
+
+    expect(result.lines).toEqual(["restarted", "", "failed units now:", "none"]);
+    expect(context.state().actions).toEqual([
+      { host: "gfx", action: "restart nginx.service", outcome: "done" },
+    ]);
+    expect(context.commands.calls[0]?.argv.join(" ")).toContain("systemctl restart nginx.service");
+  });
+
+  test("a unit the run never saw fail is refused, and costs nothing", async () => {
+    const { context, tool } = tools({ commands: script() });
+
+    await expect(
+      call(tool, "repair", "service_action", { ...RESTART, units: ["sshd.service"] }),
+    ).rejects.toThrow("not failed on gfx: sshd.service (failed units: nginx.service)");
+
+    expect(context.state().actions.map((action) => action.outcome)).toEqual(["refused"]);
+    expect(spentAttempts(context.state(), "gfx")).toBe(0);
+    expect(context.commands.calls).toEqual([]);
+  });
+
+  test("a host outside the run, and a unit name outside the pattern", async () => {
+    const { tool } = tools();
+
+    await expect(
+      call(tool, "repair", "service_action", { ...RESTART, host: "nope" }),
+    ).rejects.toThrow("unknown host: nope");
+    await expect(
+      call(tool, "repair", "service_action", { ...RESTART, units: ["nginx.service; rm -rf /"] }),
+    ).rejects.toThrow("service_action");
+  });
+
+  test("a run on its way out repairs nothing", async () => {
+    const { context, tool } = tools({ commands: script() });
+    context.flow.stop("stop");
+
+    await expect(call(tool, "repair", "service_action", RESTART)).rejects.toThrow(
+      "the run is stopping",
+    );
+    expect(context.commands.calls).toEqual([]);
+  });
+
+  test("the attempts of a host are spent once and for all", async () => {
+    const { context, tool } = tools({ commands: script() }, spent("gfx", 3));
+
+    await expect(call(tool, "repair", "service_action", RESTART)).rejects.toThrow(
+      "3 repair attempts already spent on gfx",
+    );
+    expect(spentAttempts(context.state(), "gfx")).toBe(3);
+  });
+
+  test("interactive: the operator is asked, and may decline", async () => {
+    const declined = tools({
+      commands: script(),
+      params: { interactive: true },
+      answers: { "repair-gfx-1": "skip" },
+    });
+
+    await expect(call(declined.tool, "repair", "service_action", RESTART)).rejects.toThrow(
+      "the operator declined",
+    );
+    expect(declined.context.events.events.some((event) => event.kind === "ask")).toBe(true);
+    expect(declined.context.commands.calls).toEqual([]);
+
+    const applied = tools({
+      commands: script(),
+      params: { interactive: true },
+      answers: { "repair-gfx-1": "apply" },
+    });
+    await call(applied.tool, "repair", "service_action", RESTART);
+    expect(applied.context.commands.calls).not.toEqual([]);
+  });
+
+  test("a unit still failed after the action is said, and the attempt is spent", async () => {
+    const { context, tool } = tools({ commands: script(["nginx.service"]) });
+
+    const result = await call(tool, "repair", "service_action", RESTART);
+
+    expect(result.lines.at(-1)).toContain("nginx.service");
+    expect(spentAttempts(context.state(), "gfx")).toBe(1);
   });
 });

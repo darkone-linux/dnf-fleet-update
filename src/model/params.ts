@@ -60,6 +60,9 @@ export interface Ai {
 export interface Repair {
   /** Seconds waited before restarting the failed units: a slow start is not a failure. */
   settleSeconds: number;
+
+  /** Actions the AI may take on one host before it hands it back (spec § réparation). */
+  aiAttempts: number;
 }
 
 export interface RunParams {
@@ -125,7 +128,7 @@ export const DEFAULTS = {
 export const DEFAULT_DIAGNOSTICS: Diagnostics = { journalLines: 200, excerptLines: 20 };
 
 /** One restart, no loop: a bounded retry belongs to the signature table. */
-export const DEFAULT_REPAIR: Repair = { settleSeconds: 10 };
+export const DEFAULT_REPAIR: Repair = { settleSeconds: 10, aiAttempts: 3 };
 
 /**
  * Delay between `activation` (300) and `eval` (1200): long enough to answer,

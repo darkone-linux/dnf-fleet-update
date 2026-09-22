@@ -7,6 +7,7 @@ import type { RunParams } from "../../model/params.ts";
 import { codeTools } from "./code.ts";
 import { hostTools } from "./host.ts";
 import { logTools } from "./logs.ts";
+import { repairTools } from "./repair.ts";
 import { stateTools } from "./state.ts";
 import { highest, type RegisteredTool, reaches, type ToolLevel } from "./types.ts";
 
@@ -15,6 +16,7 @@ export const TOOLS: readonly RegisteredTool[] = [
   ...logTools,
   ...codeTools,
   ...hostTools,
+  ...repairTools,
 ];
 
 /** Name of the MCP server, as both executables are told to call it. */

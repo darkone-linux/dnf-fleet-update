@@ -265,19 +265,33 @@ export function parseFailedUnits(stdout: string): string[] {
   return units;
 }
 
+/** What may be done to a unit, deterministically or by the AI (spec § réparation). */
+export const UNIT_ACTIONS = ["start", "stop", "restart", "reset-failed"] as const;
+
+export type UnitAction = (typeof UNIT_ACTIONS)[number];
+
+/** `systemctl <action> <units>`: every name matched against `UNIT` before argv. */
+export function unitAction(
+  action: UnitAction,
+  units: readonly string[],
+  timeouts: Timeouts,
+): HostCommand {
+  const [first, ...rest] = units;
+  if (first === undefined) throw new Error(`${action} without a unit`);
+  for (const unit of units) assertSafe("unit", unit, UNIT);
+  return {
+    argv: ["systemctl", action, first, ...rest],
+    root: true,
+    seconds: timeouts.activation,
+  };
+}
+
 /**
  * Failed units back up, together and in one go: their own dependencies order
  * them, which is exactly what a restart is meant to settle.
  */
 export function restartUnits(units: readonly string[], timeouts: Timeouts): HostCommand {
-  const [first, ...rest] = units;
-  if (first === undefined) throw new Error("restart without a unit");
-  for (const unit of units) assertSafe("unit", unit, UNIT);
-  return {
-    argv: ["systemctl", "restart", first, ...rest],
-    root: true,
-    seconds: timeouts.activation,
-  };
+  return unitAction("restart", units, timeouts);
 }
 
 /**

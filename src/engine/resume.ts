@@ -83,7 +83,7 @@ const savedParams = z.object({
       excerptLines: z.number().int().positive(),
     })
     .default(DEFAULT_DIAGNOSTICS),
-  repair: z.object({ settleSeconds: seconds }).default(DEFAULT_REPAIR),
+  repair: z.object({ settleSeconds: seconds, aiAttempts: count }).default(DEFAULT_REPAIR),
   ai: z
     .object({
       timeoutSeconds: seconds,
