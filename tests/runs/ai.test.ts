@@ -34,6 +34,18 @@ describe("free AI question", () => {
     expect(run.feed).toContain("info you: why is gfx slow?");
   });
 
+  test("--ai-analysis: the end-of-run summary reaches report.md", async () => {
+    const run = await simulateRun({
+      argv: ["--no-ui", "--ai-analysis", "passive"],
+      ai: ["Everything switched.", "Nothing needs a look."],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.recorded?.report).toContain(
+      "## AI analysis\n\n### Run summary\n\nEverything switched.\nNothing needs a look.",
+    );
+  });
+
   test("the answer never lands after the end of the run", async () => {
     const run = await simulateRun({
       hooks: (flow) => [

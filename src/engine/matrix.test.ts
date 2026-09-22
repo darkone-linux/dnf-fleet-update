@@ -1,7 +1,7 @@
 // Text each alert room receives.
 
 import { describe, expect, test } from "bun:test";
-import { summaryMessage } from "./matrix.ts";
+import { summaryMessage, trimSummary } from "./matrix.ts";
 
 describe("summaryMessage", () => {
   const base = {
@@ -46,5 +46,44 @@ describe("summaryMessage", () => {
       "Known errors:",
       "- nix-eval-jobs is not linked against the same Nix as the system",
     ]);
+  });
+
+  test("the AI synthesis closes the message, trimmed", () => {
+    const message = summaryMessage({ ...base, summary: ["Everything switched.", "", "No risk."] });
+
+    expect(message.endsWith("\n\n**AI summary**\n\nEverything switched.\nNo risk.")).toBe(true);
+    expect(summaryMessage({ ...base, summary: [] })).toBe(summaryMessage(base));
+  });
+});
+
+describe("trimSummary", () => {
+  test("blank lines dropped, whole synthesis kept when it fits", () => {
+    expect(trimSummary(["a", "", " ", "b"])).toEqual(["a", "b"]);
+    expect(trimSummary([])).toEqual([]);
+  });
+
+  test("too many lines: head, then a pointer to the report", () => {
+    const lines = ["1", "2", "3", "4", "5", "6", "7"];
+
+    expect(trimSummary(lines)).toEqual([
+      ...lines.slice(0, 6),
+      "(cut, full analysis in `report.md`)",
+    ]);
+  });
+
+  test("too many characters: the line that would overflow is left out", () => {
+    const long = "x".repeat(400);
+
+    expect(trimSummary([long, long, "tail"])).toEqual([
+      long,
+      "(cut, full analysis in `report.md`)",
+    ]);
+  });
+
+  test("one overlong paragraph is cut, never dropped", () => {
+    const [head, more] = trimSummary(["y".repeat(900)]);
+
+    expect(head).toBe(`${"y".repeat(500)}…`);
+    expect(more).toBe("(cut, full analysis in `report.md`)");
   });
 });

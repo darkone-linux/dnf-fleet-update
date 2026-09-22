@@ -25,6 +25,37 @@ export interface SummaryInput {
 
   /** Last error of the feed: what ended the run, as the incidents room needs it. */
   error?: string;
+
+  /** End-of-run AI synthesis, raw: trimmed here (spec § analyse, Rapport et Matrix). */
+  summary?: readonly string[];
+}
+
+// An alert room is not a report: the synthesis is trimmed, `report.md` has it whole.
+const SUMMARY_LINES = 6;
+const SUMMARY_CHARS = 500;
+const MORE = "(cut, full analysis in `report.md`)";
+
+/** Head of the synthesis within both budgets; empty in, empty out. */
+export function trimSummary(lines: readonly string[]): string[] {
+  const text = lines.filter((line) => line.trim().length > 0);
+  const first = text[0];
+  if (first === undefined) return [];
+
+  const kept: string[] = [];
+  let chars = 0;
+  let complete = true;
+  for (const line of text) {
+    if (kept.length === SUMMARY_LINES || chars + line.length > SUMMARY_CHARS) {
+      complete = false;
+      break;
+    }
+    kept.push(line);
+    chars += line.length;
+  }
+
+  // One overlong paragraph: cut it rather than send nothing at all.
+  if (kept.length === 0) kept.push(`${first.slice(0, SUMMARY_CHARS).trimEnd()}…`);
+  return complete ? kept : [...kept, MORE];
 }
 
 /**
@@ -39,5 +70,7 @@ export function summaryMessage(input: SummaryInput): string {
     const listed = input.knownErrors.map((message) => `- ${capitalize(message)}`);
     parts.push("", "Known errors:", ...listed);
   }
+  const summary = trimSummary(input.summary ?? []);
+  if (summary.length > 0) parts.push("", "**AI summary**", "", ...summary);
   return parts.join("\n");
 }

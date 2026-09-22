@@ -1,6 +1,7 @@
 // Run report (spec § Rapport et codes de sortie): short lines for `run.end`,
 // markdown for `report.md`. Pure: built from the `state.json` fold.
 
+import type { Analysis } from "../ai/analysis.ts";
 import type { PullSource, RunInfo } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULTS } from "../model/params.ts";
@@ -22,6 +23,9 @@ export interface ReportInput {
   /** Known errors met, in plain language (spec § Erreurs et réparations). */
   knownErrors: readonly string[];
 
+  /** What the AI concluded, per host and for the run (spec § analyse, Rapport). */
+  analyses: readonly Analysis[];
+
   /** Zones of the run no harmonia serves (spec § Rapport): actionable warning. */
   zonesWithoutCache?: readonly string[];
 }
@@ -31,6 +35,9 @@ export interface Report {
 
   /** Bullets of the Matrix summary, capitalized: when, options, hosts, ending. */
   facts: string[];
+
+  /** End-of-run synthesis, raw: the room trims it, `report.md` keeps it whole. */
+  summary: string[];
   markdown: string;
 
   /** Incidents room message (spec § Rapport); absent when nothing needs one. */
@@ -177,6 +184,21 @@ function diagnostics(hosts: readonly PersistedHost[]): string[] {
 }
 
 /**
+ * What the AI concluded (spec § analyse, Rapport et Matrix): one block per
+ * host analysed, then the end-of-run synthesis. Added to the raw reason of a
+ * host, never in its place.
+ */
+function aiAnalysis(analyses: readonly Analysis[]): string[] {
+  const blocks = analyses.flatMap((analysis) => [
+    "",
+    `### ${analysis.host ?? "Run summary"}`,
+    "",
+    ...analysis.lines,
+  ]);
+  return blocks.length > 0 ? ["", "## AI analysis", ...blocks] : [];
+}
+
+/**
  * Message of the incidents room (spec § Rapport): critical hosts the run left
  * out, and, after a stop, hosts left in `test` — a reboot takes those back to
  * their previous generation. `undefined`: nothing to raise.
@@ -208,6 +230,7 @@ function incidentMessage(state: PersistedState, status: ReportInput["status"]): 
 
 export function renderReport(input: ReportInput): Report {
   const { runId, state, status, exitCode, durationMs, warnings, knownErrors } = input;
+  const { analyses } = input;
   const hosts = state.hosts;
   const ending =
     status === "failed" ? "run stopped on error" : status === "aborted" ? "run aborted" : undefined;
@@ -315,7 +338,7 @@ export function renderReport(input: ReportInput): Report {
     markdown.push("", "## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`));
   }
 
-  markdown.push(...diagnostics(hosts));
+  markdown.push(...diagnostics(hosts), ...aiAnalysis(analyses));
 
   if (state.notes.length > 0) {
     const line = (note: PersistedState["notes"][number]) =>
@@ -333,6 +356,7 @@ export function renderReport(input: ReportInput): Report {
   return {
     lines,
     facts: ending === undefined ? facts : [...facts, capitalize(ending)],
+    summary: [...(analyses.find((analysis) => analysis.host === undefined)?.lines ?? [])],
     markdown: `${markdown.join("\n")}\n`,
     ...(incident === undefined ? {} : { incident }),
   };

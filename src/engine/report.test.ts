@@ -75,6 +75,7 @@ describe("renderReport", () => {
     durationMs: 65_040,
     warnings: [],
     knownErrors: [],
+    analyses: [],
   };
 
   test("short lines for the end of the run", () => {
@@ -86,6 +87,7 @@ describe("renderReport", () => {
       durationMs: 65_040,
       warnings: [],
       knownErrors: [],
+      analyses: [],
     });
 
     expect(report.facts).toEqual([
@@ -110,6 +112,7 @@ describe("renderReport", () => {
       durationMs: 65_040,
       warnings: ["evaluation warning: x renamed"],
       knownErrors: ["nix-eval-jobs is not linked against the same Nix as the system"],
+      analyses: [],
     });
 
     expect(markdown).toStartWith("# Fleet Update Report\n\n- Status: done (exit 0)\n");
@@ -138,6 +141,7 @@ describe("renderReport", () => {
       durationMs: 65_100,
       warnings: [],
       knownErrors: [],
+      analyses: [],
     });
 
     expect(markdown).toContain("| switch | todo |  |");
@@ -153,6 +157,7 @@ describe("renderReport", () => {
       durationMs: 65_040,
       warnings: [],
       knownErrors: [],
+      analyses: [],
     });
     const stopped = renderReport({
       runId: RUN_ID,
@@ -162,6 +167,7 @@ describe("renderReport", () => {
       durationMs: 65_040,
       warnings: [],
       knownErrors: [],
+      analyses: [],
     });
 
     // `nlt` failed too, but `laptop` is not one of the critical profiles.
@@ -195,6 +201,7 @@ describe("renderReport", () => {
       durationMs: 1000,
       warnings: [],
       knownErrors: [],
+      analyses: [],
     };
 
     expect(renderReport({ ...input, state: laptops }).incident).toBe(
@@ -234,6 +241,34 @@ describe("renderReport", () => {
     expect(incident).toBe(
       "## Critical hosts not deployed\n\n- gw-ag (gateway): error, some units failed, units failed: outline.service\n",
     );
+  });
+
+  test("AI analysis: one block per host analysed, then the run summary", () => {
+    const { markdown, summary } = renderReport({
+      ...BASE,
+      state,
+      analyses: [
+        { host: "gw-ag", lines: ["outline.service cannot bind :3000.", "Another holds it."] },
+        { lines: ["Two hosts short of the fleet.", "Both on port conflicts."] },
+      ],
+    });
+
+    // After the raw evidence: the analysis adds to it, never replaces it.
+    expect(markdown.indexOf("## AI analysis")).toBeGreaterThan(markdown.indexOf("## Steps"));
+    expect(markdown).toContain(
+      "## AI analysis\n\n### gw-ag\n\noutline.service cannot bind :3000.\nAnother holds it.",
+    );
+    expect(markdown).toContain("### Run summary\n\nTwo hosts short of the fleet.");
+
+    // Only the hostless entry travels to a room.
+    expect(summary).toEqual(["Two hosts short of the fleet.", "Both on port conflicts."]);
+  });
+
+  test("no AI analysis: no section, no room summary", () => {
+    const { markdown, summary } = renderReport({ ...BASE, state });
+
+    expect(markdown).not.toContain("## AI analysis");
+    expect(summary).toEqual([]);
   });
 
   test("copy counters, one line per host copied to", () => {

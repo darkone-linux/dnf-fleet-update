@@ -29,6 +29,7 @@ function messages(
     exitCode: input.exitCode,
     facts: report.facts,
     knownErrors: input.knownErrors,
+    summary: report.summary,
     ...(stopped && error !== undefined ? { error } : {}),
   });
   const incident =

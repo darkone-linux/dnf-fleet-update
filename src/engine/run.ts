@@ -378,6 +378,7 @@ export async function runFleetUpdate(
         durationMs: ports.clock.now() - startedAt,
         warnings: progress.warnings,
         knownErrors: context.known.all(),
+        analyses: context.analyses.all(),
         zonesWithoutCache: progress.hosts?.zonesWithoutCache() ?? [],
       },
       errors.last,

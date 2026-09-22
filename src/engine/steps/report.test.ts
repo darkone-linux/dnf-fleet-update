@@ -42,6 +42,7 @@ function input(overrides: Partial<ReportInput> = {}): ReportInput {
     durationMs: 65_040,
     warnings: [],
     knownErrors: [],
+    analyses: [],
     ...overrides,
   };
 }
@@ -69,6 +70,23 @@ describe("report", () => {
     expect(summary?.text).toStartWith("**Fleet Update Report** (0)");
     expect(incident?.text).toContain("- hcs (hcs): failed, build failed: disk full");
     expect(feed(context.events.events)).toContain("ok report sent to Matrix");
+  });
+
+  test("the AI synthesis rides along, in both rooms", async () => {
+    const context = fakeRunContext({ params: { sendReport: true }, commands: SENDING });
+    const analyses = [
+      { host: "hcs", lines: ["The disk of hcs is full."] },
+      { lines: ["One host short: hcs ran out of disk."] },
+    ];
+
+    await report(context, input({ state: FAILED_HCS, analyses }));
+
+    // Only the end-of-run synthesis: a room is not the report.
+    for (const message of sent(context)) {
+      expect(message.text).toContain("**AI summary**\n\nOne host short: hcs ran out of disk.");
+      expect(message.text).not.toContain("The disk of hcs is full.");
+    }
+    expect(context.run.report).toContain("### hcs\n\nThe disk of hcs is full.");
   });
 
   test("stop: one message to the incidents room, titled by the error that ended the run", async () => {
