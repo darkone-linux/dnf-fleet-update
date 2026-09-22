@@ -81,5 +81,18 @@ export function startReplay(name: string, speed: number, emit: (event: Event) =>
 
     // Presence is recorded: nothing to ping.
     ping: () => {},
+
+    // A recording has no tool behind it: the block shows the shape, not an answer.
+    askAi: (question) => {
+      emit({ t: previous, kind: "log", level: "info", message: `you: ${question}` });
+      emit({
+        t: previous,
+        kind: "ai",
+        id: `replay-${previous}`,
+        message: question,
+        detail: ["Replaying a recorded run: no tool is launched here.", "Try `just fleet-update`."],
+      });
+      emit({ t: previous, kind: "ai.end", id: `replay-${previous}` });
+    },
   };
 }

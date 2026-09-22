@@ -45,6 +45,18 @@ describe("RunFlow", () => {
     expect(pings).toBe(1);
   });
 
+  test("free AI questions reach subscribers until they leave", () => {
+    const flow = new RunFlow();
+    const asked: string[] = [];
+    const leave = flow.onAi((question) => asked.push(question));
+
+    flow.requestAi("why is gfx slow?");
+    leave();
+    flow.requestAi("and now?");
+
+    expect(asked).toEqual(["why is gfx slow?"]);
+  });
+
   test("abort requests reach subscribers before any signal fires", () => {
     const flow = new RunFlow();
     const heard: string[] = [];

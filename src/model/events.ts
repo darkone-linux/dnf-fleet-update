@@ -215,6 +215,9 @@ export interface RunControl {
 
   /** `p`: pings the tracked hosts now. */
   ping: () => void;
+
+  /** `a`: a free question for the AI; its answer comes back as `ai` events. */
+  askAi: (question: string) => void;
 }
 
 /** Starts a run that delivers its events, in order, to `emit`. */

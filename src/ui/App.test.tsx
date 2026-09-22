@@ -40,6 +40,7 @@ async function start(): Promise<Harness> {
     respond: (value) => calls.push(`respond ${value}`),
     abort: (mode: AbortMode) => calls.push(`abort ${mode}`),
     ping: () => calls.push("ping"),
+    askAi: (question) => calls.push(`askAi ${question}`),
   };
   const source: RunSource = (emit) => {
     deliver = emit;
@@ -240,4 +241,18 @@ test("a pending question: host logs opened from the table, then back to answer",
   await setup.renderOnce();
   act(() => setup.mockInput.pressEnter());
   expect(calls).toEqual(["respond exclude"]);
+});
+
+test("`a` sends the typed question to the engine, esc closes the input", async () => {
+  const { setup, calls, frame } = await start();
+
+  act(() => setup.mockInput.pressKey("a"));
+  expect(await frame()).toContain("ask the AI");
+
+  await act(() => setup.mockInput.typeText("why is gfx slow?"));
+  act(() => setup.mockInput.pressEnter());
+  await settle(setup);
+
+  expect(calls).toEqual(["askAi why is gfx slow?"]);
+  expect(await frame()).not.toContain("ask the AI");
 });

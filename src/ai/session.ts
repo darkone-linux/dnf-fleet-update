@@ -20,8 +20,15 @@ export interface AiQuestion {
  * Asks the tool and streams its answer. Rejects nothing: a failure is a feed
  * line, never an exception — the run goes on without an answer. Returns the
  * answer lines, empty when there is none.
+ *
+ * `signal` replaces the run's own: the end of the run cuts a pending answer,
+ * so nothing is emitted after `run.end`.
  */
-export async function askAi(context: RunContext, question: AiQuestion): Promise<string[]> {
+export async function askAi(
+  context: RunContext,
+  question: AiQuestion,
+  signal?: AbortSignal,
+): Promise<string[]> {
   const { id, summary, prompt } = question;
   if (!context.ai.open) return [];
 
@@ -35,6 +42,7 @@ export async function askAi(context: RunContext, question: AiQuestion): Promise<
   emit(context, { kind: "ai", id, message: summary });
   try {
     const execution = await execute(context, spec, {
+      ...(signal === undefined ? {} : { signal }),
       log: { phase: "ai" },
       onLine: (line) => {
         if (line.stream === "stdout") emit(context, { kind: "ai.line", id, line: line.line });

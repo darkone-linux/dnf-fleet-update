@@ -116,6 +116,7 @@ const control: RunControl = {
   respond: (value) => channel.respond(value),
   abort: (mode) => flow.abort(mode),
   ping: () => flow.requestPing(),
+  askAi: (question) => flow.requestAi(question),
 };
 
 // Module scope: a stable identity, so the interface starts the run once.

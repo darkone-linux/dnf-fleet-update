@@ -1,6 +1,7 @@
 // Run orchestration (spec § Étapes): lock, parameters, prerequisites, the
 // steps in order, early ends, report, exit code.
 
+import { askAi } from "../ai/session.ts";
 import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULT_TIMEOUTS, type RunParams, runMode } from "../model/params.ts";
@@ -310,6 +311,20 @@ export async function runFleetUpdate(
       const message = mode === "now" ? "aborting now" : "aborting after the current step or wave";
       log(context, "warn", message);
     });
+    // `a`: answered beside the steps, never blocking one, one at a time. The
+    // chain is awaited below, so no `ai.line` lands after `run.end`.
+    const aiRunning = new AbortController();
+    const aiSignal = AbortSignal.any([flow.now, aiRunning.signal]);
+    let asked = 0;
+    let answering: Promise<unknown> = Promise.resolve();
+    const leaveAi = flow.onAi((question) => {
+      asked += 1;
+      const id = `a${asked}`;
+      log(context, "info", `you: ${question}`);
+      answering = answering.then(() =>
+        askAi(context, { id, summary: question, prompt: question }, aiSignal),
+      );
+    });
     const progress: Progress = { failed: false, warnings: [] };
     try {
       await steps(context, progress);
@@ -322,6 +337,11 @@ export async function runFleetUpdate(
       }
     } finally {
       leaveAborts();
+      leaveAi();
+
+      // Bounded: the answer in flight is cut, `ai.end` still closes its block.
+      aiRunning.abort(new Error("run finished"));
+      await answering;
     }
 
     // Cut by `now`, or by an internal error: the step never ended on its own.

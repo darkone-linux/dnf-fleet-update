@@ -15,6 +15,7 @@ export class RunFlow {
   private readonly nowController = new AbortController();
   private readonly haltController = new AbortController();
   private readonly pingListeners = new Set<() => void>();
+  private readonly aiListeners = new Set<(question: string) => void>();
   private readonly abortListeners = new Set<(mode: AbortMode) => void>();
   private current: Ending | undefined;
 
@@ -63,6 +64,17 @@ export class RunFlow {
   onPing(listener: () => void): () => void {
     this.pingListeners.add(listener);
     return () => this.pingListeners.delete(listener);
+  }
+
+  /** `a`: a free question typed by the operator (spec § Mode d'emploi). */
+  requestAi(question: string): void {
+    for (const listener of this.aiListeners) listener(question);
+  }
+
+  /** Returns the unsubscribe function. */
+  onAi(listener: (question: string) => void): () => void {
+    this.aiListeners.add(listener);
+    return () => this.aiListeners.delete(listener);
   }
 
   /** Called before the signals fire. Returns the unsubscribe function. */

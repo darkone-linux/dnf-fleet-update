@@ -324,21 +324,9 @@ export function App({
                 // Prop widens to `string | SubmitEvent`; only the string branch carries text.
                 const question = typeof value === "string" ? value.trim() : "";
                 if (!question) return;
-                dispatch({
-                  t: Date.now(),
-                  kind: "log",
-                  level: "info",
-                  message: `you: ${question}`,
-                });
-                dispatch({
-                  t: Date.now(),
-                  kind: "ai",
-                  message: "mockup: no model wired yet",
-                  detail: [
-                    "The real tool answers here, with the tools of the",
-                    "current --ai-analysis level.",
-                  ],
-                });
+
+                // The engine echoes the question and streams the answer back.
+                control.current?.askAi(question);
               }}
             />
           </AccentBlock>

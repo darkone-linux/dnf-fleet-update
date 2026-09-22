@@ -53,7 +53,7 @@ specified and still being built — refused outright rather than half-done:
 | Not yet | Options | Today |
 |---|---|---|
 | Matrix report | `--send-report` | refused, exit `2` |
-| AI analysis and repair | `--ai-*` | accepted, no effect |
+| AI analysis and repair | `--ai-analysis`, `--ai-error-action` | accepted, no effect — `a` asks the tool, nothing else does |
 
 ```bash
 nix develop            # or: nix-shell

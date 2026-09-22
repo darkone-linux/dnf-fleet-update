@@ -44,6 +44,7 @@ export interface HostBehaviour {
 }
 
 export type SimKind =
+  | "ai"
   | "status"
   | "add"
   | "commit"
@@ -115,6 +116,9 @@ export interface SimOptions {
 
   /** The deployment host, when it is part of the fleet: commands run without ssh. */
   local?: string;
+
+  /** Answer of the AI tool, one entry per streamed line. */
+  ai?: readonly string[];
 
   /** Uncommitted changes before the run. */
   dirty?: { consumer?: boolean; dnf?: boolean };
@@ -335,6 +339,9 @@ export class SimFleet implements CommandRunner {
       return { kind: "build", host, at };
     }
     if (program === "ping") return { kind: "ping", host: argv.at(-1), at };
+    if (program === "claude" || program === "opencode") {
+      return { kind: "ai", detail: program, at };
+    }
 
     // Both carry `--to`; a push may also carry `--from`, the builder it pulls from.
     const copyTarget = /--to ssh-ng:\/\/nix@([a-zA-Z0-9_-]+)/.exec(joined)?.[1];
@@ -467,6 +474,10 @@ export class SimFleet implements CommandRunner {
         return this.build(command, out, err);
       case "ping":
         return exit(this.reachable(command.host ?? "") ? 0 : 1);
+      case "ai": {
+        for (const line of this.options.ai ?? ["The build is fetching gnome-shell."]) out(line);
+        return ok();
+      }
       default:
         return this.onHost(command, err, out);
     }
