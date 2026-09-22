@@ -226,6 +226,9 @@ describe("active tools", () => {
 describe("service_action", () => {
   const RESTART = { host: "gfx", units: ["nginx.service"], action: "restart" };
 
+  /** Only the repair session acts: every case below needs the host under repair. */
+  const UNDER_REPAIR: EventInput[] = [{ kind: "host.state", host: "gfx", state: "ai-repairing" }];
+
   /** `gfx` failed with `nginx.service`: the only unit a repair may touch there. */
   const script = (failed: string[] = []) => [
     {
@@ -247,7 +250,7 @@ describe("service_action", () => {
     }));
 
   test("acts, counts the attempt, then reads the failed units back", async () => {
-    const { context, tool } = tools({ commands: script() });
+    const { context, tool } = tools({ commands: script() }, UNDER_REPAIR);
 
     const result = await call(tool, "repair", "service_action", RESTART);
 
@@ -259,7 +262,7 @@ describe("service_action", () => {
   });
 
   test("a unit the run never saw fail is refused, and costs nothing", async () => {
-    const { context, tool } = tools({ commands: script() });
+    const { context, tool } = tools({ commands: script() }, UNDER_REPAIR);
 
     await expect(
       call(tool, "repair", "service_action", { ...RESTART, units: ["sshd.service"] }),
@@ -281,8 +284,17 @@ describe("service_action", () => {
     ).rejects.toThrow("service_action");
   });
 
-  test("a run on its way out repairs nothing", async () => {
+  test("a host not under repair is refused, whoever asks", async () => {
     const { context, tool } = tools({ commands: script() });
+
+    await expect(call(tool, "repair", "service_action", RESTART)).rejects.toThrow(
+      "gfx is not under repair right now (state failed)",
+    );
+    expect(context.commands.calls).toEqual([]);
+  });
+
+  test("a run on its way out repairs nothing", async () => {
+    const { context, tool } = tools({ commands: script() }, UNDER_REPAIR);
     context.flow.stop("stop");
 
     await expect(call(tool, "repair", "service_action", RESTART)).rejects.toThrow(
@@ -292,7 +304,7 @@ describe("service_action", () => {
   });
 
   test("the attempts of a host are spent once and for all", async () => {
-    const { context, tool } = tools({ commands: script() }, spent("gfx", 3));
+    const { context, tool } = tools({ commands: script() }, [...UNDER_REPAIR, ...spent("gfx", 3)]);
 
     await expect(call(tool, "repair", "service_action", RESTART)).rejects.toThrow(
       "3 repair attempts already spent on gfx",
@@ -301,11 +313,10 @@ describe("service_action", () => {
   });
 
   test("interactive: the operator is asked, and may decline", async () => {
-    const declined = tools({
-      commands: script(),
-      params: { interactive: true },
-      answers: { "repair-gfx-1": "skip" },
-    });
+    const declined = tools(
+      { commands: script(), params: { interactive: true }, answers: { "repair-gfx-1": "skip" } },
+      UNDER_REPAIR,
+    );
 
     await expect(call(declined.tool, "repair", "service_action", RESTART)).rejects.toThrow(
       "the operator declined",
@@ -313,17 +324,16 @@ describe("service_action", () => {
     expect(declined.context.events.events.some((event) => event.kind === "ask")).toBe(true);
     expect(declined.context.commands.calls).toEqual([]);
 
-    const applied = tools({
-      commands: script(),
-      params: { interactive: true },
-      answers: { "repair-gfx-1": "apply" },
-    });
+    const applied = tools(
+      { commands: script(), params: { interactive: true }, answers: { "repair-gfx-1": "apply" } },
+      UNDER_REPAIR,
+    );
     await call(applied.tool, "repair", "service_action", RESTART);
     expect(applied.context.commands.calls).not.toEqual([]);
   });
 
   test("a unit still failed after the action is said, and the attempt is spent", async () => {
-    const { context, tool } = tools({ commands: script(["nginx.service"]) });
+    const { context, tool } = tools({ commands: script(["nginx.service"]) }, UNDER_REPAIR);
 
     const result = await call(tool, "repair", "service_action", RESTART);
 

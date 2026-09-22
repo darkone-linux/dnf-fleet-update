@@ -7,9 +7,16 @@
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import type { ToolLevel } from "./tools/types.ts";
 
-const ROLE = [
-  "You are diagnosing a NixOS fleet deployment run by fleet-update.",
-  "You are read-only: you observe and explain, you never change anything.",
+const ROLE = ["You are diagnosing a NixOS fleet deployment run by fleet-update."];
+
+const READ_ONLY = ["You are read-only: you observe and explain, you never change anything."];
+
+/** Repair session only: what it may do, and where that stops (spec § réparation). */
+const MAY_ACT = [
+  "You may act on this host, but only through service_action, and only on units this run",
+  "saw fail. Act, read the result, and stop as soon as nothing is failed: you have three",
+  "attempts on a host, and the operator may decline any of them. Changing code, rebuilding",
+  "or redeploying is out of scope — say so rather than attempt it.",
 ];
 
 const CONDUCT = [
@@ -24,15 +31,28 @@ const SHAPE = [
   "then what a human should check next. Six sentences at most.",
 ];
 
+const ACT_SHAPE = [
+  "Answer in plain prose, no headings and no bullet lists.",
+  "Say what you did, what it changed, and what is left for a human. Four sentences at most.",
+];
+
 /** Without a tool the AI has only the prompt: it is told so, to stop it asking. */
 const NO_TOOLS = [
   "You have no tools in this run: answer from the context below alone,",
   "and say what you would need to be sure.",
 ];
 
-export function systemPrompt(level: ToolLevel | undefined): string {
+/** `acting`: the repair session, the only one allowed to touch a host. */
+export function systemPrompt(level: ToolLevel | undefined, acting = false): string {
   const tools = level === undefined ? NO_TOOLS : CONDUCT;
-  return [...ROLE, "", ...tools, "", ...SHAPE].join("\n");
+  return [
+    ...ROLE,
+    ...(acting ? MAY_ACT : READ_ONLY),
+    "",
+    ...tools,
+    "",
+    ...(acting ? ACT_SHAPE : SHAPE),
+  ].join("\n");
 }
 
 /** Seed of a host: where it stands, why it stopped, what it showed. Bounded. */
@@ -91,6 +111,26 @@ export function runPrompt(state: PersistedState): string {
     "",
     "Summarise this run for the operator: what happened, what needs attention.",
     "Three sentences at most.",
+  ].join("\n");
+}
+
+/**
+ * Repair of one host, seeded by the analysis its own session just wrote: the
+ * reasoning is not paid for twice.
+ */
+export function repairPrompt(
+  state: PersistedState,
+  host: PersistedHost,
+  analysis: readonly string[],
+): string {
+  return [
+    ...runSeed(state),
+    "",
+    ...hostSeed(host),
+    ...(analysis.length > 0 ? ["", "Your analysis of this host:", ...analysis] : []),
+    "",
+    `Bring the failed units of ${host.name} back up if a service action can do it.`,
+    "If nothing you may do here would help, act on nothing and say why.",
   ].join("\n");
 }
 

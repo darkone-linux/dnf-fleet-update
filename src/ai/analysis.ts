@@ -32,21 +32,34 @@ export class AiAnalyses {
 }
 
 /** Nothing is asked once the run is halting: an analysis is a new operation. */
-function quiet(context: RunContext): boolean {
+export function quiet(context: RunContext): boolean {
   return !context.ai.open || context.flow.halt.aborted || context.signal.aborted;
 }
 
-async function ask(
+export interface AiQuestion {
+  id: string;
+  summary: string;
+  prompt: string;
+
+  /** The repair session: the only one told it may act (spec § réparation). */
+  acting?: boolean;
+}
+
+/** One session with the tools of the run's level attached, when there are any. */
+export async function ask(
   context: RunContext,
-  question: { id: string; summary: string; prompt: string },
+  question: AiQuestion,
   signal?: AbortSignal,
 ): Promise<string[]> {
+  const { id, summary, prompt, acting } = question;
   const tools: AiTools | undefined = await context.tools.start(context, context.state);
   return askAi(
     context,
     {
-      ...question,
-      system: systemPrompt(toolLevel(context.params)),
+      id,
+      summary,
+      prompt,
+      system: systemPrompt(toolLevel(context.params), acting ?? false),
       ...(tools === undefined ? {} : { tools }),
     },
     signal,

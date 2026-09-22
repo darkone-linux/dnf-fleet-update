@@ -47,6 +47,11 @@ const serviceAction = defineTool({
 
     if (context.halting()) refuse("the run is stopping: no repair starts now");
 
+    // The parcours is structural, not a prompt: only the repair session acts.
+    if (host.state !== "ai-repairing") {
+      refuse(`${host.name} is not under repair right now (state ${host.state})`);
+    }
+
     // The heart of it: a repair cannot reach a service the run never saw fall.
     const failed = host.diagnosis?.units ?? [];
     const stray = args.units.filter((unit) => !failed.includes(unit));

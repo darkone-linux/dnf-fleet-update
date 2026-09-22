@@ -2,6 +2,7 @@
 // connection that reads the result and cancels the rollback timer.
 
 import { analyseHost } from "../ai/analysis.ts";
+import { repairHost } from "../ai/repair.ts";
 import { collect } from "./collect.ts";
 import {
   activate,
@@ -106,6 +107,9 @@ async function concluded(
     const { params } = context;
     if (hosts.get(name).state === "error") {
       if (params.aiErrorAction !== "none") await analyseHost(context, hosts, name);
+
+      // Then, and only at `repair`, a second session that may act on the units.
+      await repairHost(context, hosts, name, phase === "test" ? "tested" : "deployed");
     } else if (params.aiAnalysis !== "none") {
       await analyseHost(context, hosts, name, { mark: false });
     }
