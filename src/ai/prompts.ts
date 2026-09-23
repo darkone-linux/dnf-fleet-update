@@ -111,7 +111,7 @@ export function runPrompt(state: PersistedState): string {
       : ["Every host reached the new generation."]),
     "",
     "Summarise this run for the operator: what happened, what needs attention.",
-    "Three sentences at most.",
+    "Two sentences at most. Provide the essential information, concise and precise.",
   ].join("\n");
 }
 
