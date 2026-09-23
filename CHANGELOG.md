@@ -9,6 +9,19 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-23
+
+### Added
+
+- **ai**: Format responses as Markdown
+- **ui**: Render Markdown and color AI labels
+- **ai**: Add operator prompt context
+- **ui**: Color footer run segments
+
+### Fixed
+
+- **ai-context**: Updated ai prompt context
+
 ## [0.6.1] - 2026-09-22
 
 ### Added
@@ -196,7 +209,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.4.0...v0.5.0
