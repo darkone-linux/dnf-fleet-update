@@ -27,13 +27,13 @@ const CONDUCT = [
 ];
 
 const SHAPE = [
-  "Answer in plain prose, no headings and no bullet lists.",
-  "Lead with the most likely cause in one sentence, then the evidence for it,",
+  "Use concise Markdown paragraphs, short headings, bullet lists, and bold for emphasis.",
+  "Lead with the most likely cause, then the evidence for it,",
   "then what a human should check next. Six sentences at most.",
 ];
 
 const ACT_SHAPE = [
-  "Answer in plain prose, no headings and no bullet lists.",
+  "Use concise Markdown paragraphs, short headings, bullet lists, and bold for emphasis.",
   "Say what you did, what it changed, and what is left for a human. Four sentences at most.",
 ];
 
