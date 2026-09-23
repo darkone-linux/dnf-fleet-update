@@ -76,6 +76,8 @@ describe("parsing", () => {
       "--send-report",
       "--ai-model",
       "opencode:ollama/qwen3:32b",
+      "--ai-context",
+      "Answer in French and be concise.",
       "--ai-analysis",
       "active",
       "--ai-error-action",
@@ -101,6 +103,7 @@ describe("parsing", () => {
       stopLoss: true,
       sendReport: true,
       aiModel: "opencode:ollama/qwen3:32b",
+      aiContext: "Answer in French and be concise.",
       aiAnalysis: "active",
       aiErrorAction: "repair",
       maxParallel: 3,
@@ -173,6 +176,7 @@ describe("resolution order", () => {
       "gateway:hcs",
     );
     expect(params(["--ai-model", "claude:opus@max"], fleet).aiModel).toBe("claude:opus@max");
+    expect(params(["--ai-context", "custom"], fleet).aiContext).toBe("custom");
   });
 
   test("an invalid fleet default is reported with its source", () => {
@@ -186,7 +190,16 @@ describe("resolution order", () => {
 
 describe("--resume", () => {
   const saved: RunParams = {
-    ...params(["--on", "gw-*", "--max-parallel", "4", "--send-report", "--no-ui"]),
+    ...params([
+      "--on",
+      "gw-*",
+      "--max-parallel",
+      "4",
+      "--send-report",
+      "--no-ui",
+      "--ai-context",
+      "saved context",
+    ]),
     deploymentOrder: "hcs:gateway",
   };
 
@@ -217,6 +230,14 @@ describe("--resume", () => {
       maxParallel: 4,
       aiModel: DEFAULTS.aiModel,
     });
+  });
+
+  test("AI context survives resume and an explicit context replaces it", () => {
+    const restored = resumeParams(saved, options(["--resume"]));
+    const replaced = resumeParams(saved, options(["--resume", "--ai-context", "new context"]));
+
+    expect(restored.ok && restored.value.params.aiContext).toBe("saved context");
+    expect(replaced.ok && replaced.value.params.aiContext).toBe("new context");
   });
 
   test("every other option is refused, all named at once", () => {

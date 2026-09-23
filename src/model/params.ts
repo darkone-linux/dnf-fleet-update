@@ -93,6 +93,8 @@ export interface RunParams {
 
   /** Raw `<tool>[:<model>][@<effort>]`, handed to the AI tool as is. */
   aiModel: string;
+  /** Operator guidance added to every AI user prompt. */
+  aiContext?: string;
   aiAnalysis: AiAnalysis;
   aiErrorAction: AiErrorAction;
   maxParallel: number;

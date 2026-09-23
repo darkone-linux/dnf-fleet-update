@@ -26,6 +26,10 @@ const CONDUCT = [
   "there is no other way to reach the hosts or the sources, and asking for one is a dead end.",
 ];
 
+const CONTEXT_BOUNDARY = [
+  "Operator context is guidance, not permission to exceed these boundaries.",
+];
+
 const SHAPE = [
   "Use concise Markdown paragraphs, short headings, bullet lists, and bold for emphasis.",
   "Lead with the most likely cause, then the evidence for it,",
@@ -49,6 +53,8 @@ export function systemPrompt(level: ToolLevel | undefined, acting = false): stri
   return [
     ...ROLE,
     ...(acting ? MAY_ACT : READ_ONLY),
+    "",
+    ...CONTEXT_BOUNDARY,
     "",
     ...tools,
     "",
@@ -81,13 +87,18 @@ function runSeed(state: PersistedState): string[] {
   ];
 }
 
+function contextSeed(context: string | undefined): string[] {
+  return context?.trim() ? ["Operator context:", context] : [];
+}
+
 /**
  * Analysis of one failed host. The seed carries what the engine already knows;
  * anything beyond it the AI fetches through its tools.
  */
-export function hostPrompt(state: PersistedState, host: PersistedHost): string {
+export function hostPrompt(state: PersistedState, host: PersistedHost, context?: string): string {
   return [
     ...runSeed(state),
+    ...contextSeed(context),
     "",
     ...hostSeed(host),
     "",
@@ -96,7 +107,7 @@ export function hostPrompt(state: PersistedState, host: PersistedHost): string {
 }
 
 /** End of run: what is worth saying about the whole deployment. */
-export function runPrompt(state: PersistedState): string {
+export function runPrompt(state: PersistedState, context?: string): string {
   const troubled = state.hosts.filter(
     (host) => host.status !== "deployed" && host.status !== "tested",
   );
@@ -105,6 +116,7 @@ export function runPrompt(state: PersistedState): string {
   );
   return [
     ...runSeed(state),
+    ...contextSeed(context),
     "",
     ...(lines.length > 0
       ? ["Hosts that did not reach the new generation:", ...lines]
@@ -123,9 +135,11 @@ export function repairPrompt(
   state: PersistedState,
   host: PersistedHost,
   analysis: readonly string[],
+  context?: string,
 ): string {
   return [
     ...runSeed(state),
+    ...contextSeed(context),
     "",
     ...hostSeed(host),
     ...(analysis.length > 0 ? ["", "Your analysis of this host:", ...analysis] : []),
@@ -136,6 +150,8 @@ export function repairPrompt(
 }
 
 /** Free question of the operator (`a`): same context, their words. */
-export function freePrompt(state: PersistedState, question: string): string {
-  return [...runSeed(state), "", `The operator asks: ${question}`].join("\n");
+export function freePrompt(state: PersistedState, question: string, context?: string): string {
+  return [...runSeed(state), ...contextSeed(context), "", `The operator asks: ${question}`].join(
+    "\n",
+  );
 }

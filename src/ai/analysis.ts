@@ -99,7 +99,7 @@ export async function analyseHost(
     const answer = await ask(context, {
       id: `analysis-${name}`,
       summary: `analysing ${name}`,
-      prompt: hostPrompt(context.state(), persisted),
+      prompt: hostPrompt(context.state(), persisted, context.params.aiContext),
     });
     context.analyses.add(answer, name);
   } finally {
@@ -120,7 +120,11 @@ export async function analyseFree(
 ): Promise<void> {
   await ask(
     context,
-    { id, summary: question, prompt: freePrompt(context.state(), question) },
+    {
+      id,
+      summary: question,
+      prompt: freePrompt(context.state(), question, context.params.aiContext),
+    },
     signal,
   );
 }
@@ -131,7 +135,7 @@ export async function analyseRun(context: RunContext): Promise<void> {
   const answer = await ask(context, {
     id: "analysis-run",
     summary: "summarising the run",
-    prompt: runPrompt(context.state()),
+    prompt: runPrompt(context.state(), context.params.aiContext),
   });
   context.analyses.add(answer);
 }

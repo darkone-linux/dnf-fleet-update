@@ -140,10 +140,16 @@ describe("analyseFree", () => {
   });
 
   test("the question reaches the tool with the run context around it", async () => {
-    const context = fakeRunContext({ commands: [ANSWER] });
+    const context = fakeRunContext({
+      commands: [ANSWER],
+      params: { aiContext: "Answer in French, concisely." },
+    });
     await analyseFree(context, "a1", "why is hcs offline?");
 
     expect(context.commands.calls[0]?.stdin).toContain("why is hcs offline?");
     expect(context.commands.calls[0]?.stdin).toContain("Run:");
+    expect(context.commands.calls[0]?.stdin).toContain(
+      "Operator context:\nAnswer in French, concisely.",
+    );
   });
 });

@@ -54,6 +54,7 @@ const savedParams = z.object({
   ui: z.boolean(),
   sendReport: flag,
   aiModel: z.string(),
+  aiContext: z.string().optional(),
   aiAnalysis: z.enum(AI_ANALYSIS),
   aiErrorAction: z.enum(AI_ERROR_ACTION),
   maxParallel: z.number().int().positive(),

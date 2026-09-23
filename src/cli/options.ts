@@ -42,6 +42,7 @@ export interface CliOptions {
   noUi: boolean;
   sendReport: boolean;
   aiModel?: string;
+  aiContext?: string;
   aiAnalysis?: AiAnalysis;
   aiErrorAction?: AiErrorAction;
   maxParallel?: number;
@@ -76,6 +77,7 @@ const OPTIONS = {
   "no-ui": flag,
   "send-report": flag,
   "ai-model": text,
+  "ai-context": text,
   "ai-analysis": text,
   "ai-error-action": text,
   "max-parallel": text,
@@ -174,6 +176,7 @@ export function parseCli(argv: readonly string[]): CliCommand {
       noUi: values["no-ui"] ?? false,
       sendReport: values["send-report"] ?? false,
       aiModel: values["ai-model"],
+      aiContext: values["ai-context"],
       aiAnalysis: aiAnalysis.value,
       aiErrorAction: aiErrorAction.value,
       maxParallel: maxParallel.value,
@@ -219,6 +222,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     ui: !options.noUi,
     sendReport: options.sendReport,
     aiModel: options.aiModel ?? fleet.aiModel ?? DEFAULTS.aiModel,
+    aiContext: options.aiContext,
     aiAnalysis: options.aiAnalysis ?? DEFAULTS.aiAnalysis,
     aiErrorAction: options.aiErrorAction ?? DEFAULTS.aiErrorAction,
     maxParallel: options.maxParallel ?? DEFAULTS.maxParallel,
@@ -268,6 +272,7 @@ export function resumeParams(saved: RunParams, options: CliOptions): Result<Resu
       ui: !options.noUi,
       sendReport: options.sendReport,
       aiModel: options.aiModel ?? saved.aiModel,
+      aiContext: options.aiContext ?? saved.aiContext,
       aiAnalysis: options.aiAnalysis ?? saved.aiAnalysis,
       aiErrorAction: options.aiErrorAction ?? saved.aiErrorAction,
       maxParallel: options.maxParallel ?? saved.maxParallel,

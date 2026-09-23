@@ -39,7 +39,12 @@ export async function repairHost(
     await ask(context, {
       id: `repair-${name}`,
       summary: `repairing ${name}`,
-      prompt: repairPrompt(context.state(), persisted, analysis?.lines ?? []),
+      prompt: repairPrompt(
+        context.state(),
+        persisted,
+        analysis?.lines ?? [],
+        context.params.aiContext,
+      ),
       acting: true,
     });
     if (quiet(context)) return;
