@@ -569,8 +569,16 @@ type FooterKey = "mode" | "codev" | "ai" | "hosts" | "parallel" | "selection";
 interface FooterSegment {
   key: FooterKey;
   text: string;
-  strong: boolean;
 }
+
+const FOOTER_COLOR: Record<FooterKey, string> = {
+  mode: color.accentYellow,
+  codev: color.white,
+  ai: color.magenta,
+  hosts: color.ok,
+  parallel: color.error,
+  selection: color.host,
+};
 
 const SEPARATOR = " · ";
 
@@ -606,25 +614,23 @@ function aiEnabled(run: RunInfo): boolean {
 }
 
 function runSegments(run: RunInfo, hosts: number): FooterSegment[] {
-  const segments: FooterSegment[] = [
-    { key: "mode", text: run.mode, strong: true },
-    { key: "codev", text: run.codev ? "codev" : "release", strong: false },
-  ];
-  if (aiEnabled(run)) segments.push({ key: "ai", text: run.aiModel, strong: true });
+  const segments: FooterSegment[] = [{ key: "mode", text: run.mode }];
+  if (run.codev) segments.push({ key: "codev", text: "codev" });
+  if (aiEnabled(run)) segments.push({ key: "ai", text: run.aiModel });
   segments.push(
-    { key: "hosts", text: `${hosts} hosts`, strong: false },
-    { key: "parallel", text: `x${run.maxParallel}`, strong: true },
-    { key: "selection", text: run.selection, strong: false },
+    { key: "hosts", text: `${hosts} hosts` },
+    { key: "parallel", text: `x${run.maxParallel}` },
+    { key: "selection", text: run.selection },
   );
   return segments;
 }
 
-/** One line: run summary alternating grey and white, then the only key hint. */
+/** One line: run facts in color, then the only key hint. */
 export function Footer({ state, width }: { state: RunState; width: number }) {
   const run = state.run;
   const segments: FooterSegment[] = run
     ? runSegments(run, state.hosts.length)
-    : [{ key: "mode", text: "starting…", strong: false }];
+    : [{ key: "mode", text: "starting…" }];
 
   const end = state.end ? `${state.end.status} (${state.end.exitCode})  ` : "";
 
@@ -644,7 +650,7 @@ export function Footer({ state, width }: { state: RunState; width: number }) {
         <box key={segment.key} flexDirection="row">
           {/* Separators stay grey whatever the segment they precede. */}
           {index > 0 ? <text fg={color.dim}>{SEPARATOR}</text> : null}
-          <text fg={segment.strong ? color.white : color.dim}>{segment.text}</text>
+          <text fg={FOOTER_COLOR[segment.key]}>{segment.text}</text>
         </box>
       ))}
       <box flexGrow={1} />
