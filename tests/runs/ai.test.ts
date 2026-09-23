@@ -31,7 +31,7 @@ describe("free AI question", () => {
       "line: gfx is fetching gnome-shell.",
       "end",
     ]);
-    expect(run.feed).toContain("info you: why is gfx slow?");
+    expect(run.feed).toContain("info YOU: why is gfx slow?");
   });
 
   test("--ai-analysis: the end-of-run summary reaches report.md", async () => {

@@ -1,7 +1,7 @@
 // Active region: the columns must hold whatever the output line measures.
 
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { TextAttributes } from "@opentui/core";
+import { destroyTreeSitterClient, getTreeSitterClient, TextAttributes } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
@@ -218,4 +218,57 @@ test("the AI model shows only when something may ask it", async () => {
 
   expect(await footer(160, withAi("passive", "none"))).toContain("claude:opus@high");
   expect(await footer(160, withAi("none", "analysis"))).toContain("claude:opus@high");
+});
+
+test("AI answers render Markdown", async () => {
+  const treeSitterClient = getTreeSitterClient();
+  await treeSitterClient.initialize();
+  await treeSitterClient.highlightOnce("**Likely cause**\n\n- Check nginx.service", "markdown");
+  const setup = await testRender(
+    <App
+      preload={[
+        { t: 0, kind: "ai", message: "analysis", id: "a" },
+        { t: 1, kind: "ai.line", id: "a", line: "**Likely cause**" },
+        { t: 2, kind: "ai.line", id: "a", line: "- Check nginx.service" },
+        { t: 3, kind: "ai.end", id: "a" },
+      ]}
+    />,
+    { width: 110, height: 30 },
+  );
+  current = setup;
+  await setup.waitForVisualIdle();
+
+  try {
+    expect(setup.captureCharFrame()).toContain("Likely cause");
+    expect(setup.captureCharFrame()).toContain("Check nginx.service");
+    expect(attributesOf(setup, "Likely cause")).toBe(TextAttributes.BOLD);
+  } finally {
+    setup.renderer.destroy();
+    current = undefined;
+    await destroyTreeSitterClient();
+  }
+});
+
+test("AI and YOU mentions are magenta in logs, including error text", async () => {
+  const setup = await testRender(
+    <App
+      preload={[
+        { t: 0, kind: "log", level: "error", message: "AI claude: refused" },
+        { t: 1, kind: "log", level: "info", message: "YOU: why did it fail?" },
+      ]}
+    />,
+    { width: 110, height: 30 },
+  );
+  current = setup;
+  await setup.waitForVisualIdle();
+
+  const spans = setup.captureSpans().lines.flatMap((line) => line.spans);
+  expect(fgHex(setup, "AI")).toBe("d75fd7");
+  expect(fgHex(setup, "YOU")).toBe("d75fd7");
+  expect(
+    spans
+      .find((span) => span.text.includes("claude: refused"))
+      ?.fg?.toInts()
+      .slice(0, 3),
+  ).toEqual([249, 112, 102]);
 });

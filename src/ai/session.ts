@@ -4,6 +4,7 @@
 
 import { disableAi, emit, log, type RunContext } from "../engine/context.ts";
 import { errorLines, execute, succeeded } from "../engine/exec.ts";
+import { aiLabel } from "../model/ai-labels.ts";
 import { parseAiModel } from "./model.ts";
 import { type AiTools, aiCommand } from "./providers.ts";
 
@@ -67,7 +68,7 @@ export async function askAi(
 
     // A bad question or a transient refusal is not a reason to drop the AI for
     // the whole run: said here, the gate stays open (spec § analyse, à revoir).
-    log(context, "error", `AI ${target.value.tool}: ${reasonOf(execution)}`);
+    log(context, "error", aiLabel(`${target.value.tool}: ${reasonOf(execution)}`));
     return [];
   } catch {
     // `CommandRunner` rejects only when the program cannot start: no PATH

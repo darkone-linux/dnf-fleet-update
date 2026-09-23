@@ -3,6 +3,7 @@
 
 import { AiAnalyses, analyseFree, analyseRun } from "../ai/analysis.ts";
 import { AiToolSession } from "../ai/server.ts";
+import { youLabel } from "../model/ai-labels.ts";
 import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULT_TIMEOUTS, type RunParams, runMode } from "../model/params.ts";
@@ -331,7 +332,7 @@ export async function runFleetUpdate(
     const leaveAi = flow.onAi((question) => {
       asked += 1;
       const id = `a${asked}`;
-      log(context, "info", `you: ${question}`);
+      log(context, "info", youLabel(question));
       answering = answering.then(() => analyseFree(context, id, question, aiSignal));
     });
     const progress: Progress = { failed: false, warnings: [] };

@@ -1,7 +1,8 @@
 // Panels of the main screen. Presentation only: everything comes from RunState.
 
-import { TextAttributes } from "@opentui/core";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { SyntaxStyle, TextAttributes } from "@opentui/core";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { AI_LABEL } from "../model/ai-labels.ts";
 import { type RunInfo, STEP_LABELS, STEPS } from "../model/events.ts";
 import {
   activeHosts,
@@ -99,8 +100,8 @@ const ACTIVE_LABEL: Partial<Record<ShownState, string>> = {
   testing: "testing",
   switching: "switching",
   repairing: "under repair",
-  "ai-analysing": "AI analysis",
-  "ai-repairing": "AI repair",
+  "ai-analysing": `${AI_LABEL} analysis`,
+  "ai-repairing": `${AI_LABEL} repair`,
 };
 
 /** Someone is working on that host right now: the label blinks (§ États affichés). */
@@ -187,9 +188,32 @@ const AI_COLLAPSED_ROWS = 4;
 /** Body indent, matching the width of the `AI` label so the title aligns with it. */
 const AI_INDENT = "   ";
 
+function highlightedLabels(message: string, foreground: string): ReactNode[] {
+  return message.split(/(\b(?:AI|YOU)\b)/gi).map((part, index) => {
+    const tint = /^(?:AI|YOU)$/i.test(part) ? color.magenta : foreground;
+    return (
+      // biome-ignore lint/suspicious/noArrayIndexKey: stateless message fragments, position is identity.
+      <span key={index} fg={tint}>
+        {part}
+      </span>
+    );
+  });
+}
+
 function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
   const detail = item.detail ?? [];
   const streaming = item.streaming === true;
+  const syntaxStyle = useMemo(
+    () =>
+      SyntaxStyle.fromStyles({
+        "markup.heading": { fg: color.white, bold: true },
+        "markup.list": { fg: color.dim },
+        "markup.strong": { bold: true },
+      }),
+    [],
+  );
+
+  useEffect(() => () => syntaxStyle.destroy(), [syntaxStyle]);
 
   const shown = streaming
     ? detail.slice(-AI_STREAM_ROWS)
@@ -200,18 +224,21 @@ function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
   const hidden = streaming || expanded ? 0 : detail.length - shown.length;
 
   return (
-    <AccentBlock accent={color.step}>
+    <AccentBlock accent={color.magenta}>
       <box marginBottom={1} backgroundColor={color.block}>
         <text fg={color.white} bg={color.block} attributes={TextAttributes.BOLD}>
-          {`AI ${item.message}`}
+          <span fg={color.magenta}>{AI_LABEL}</span> {highlightedLabels(item.message, color.white)}
         </text>
       </box>
-      {shown.map((line, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: stateless text rows, position is their identity.
-        <text key={index} fg={color.text} bg={color.block}>
-          {`${AI_INDENT}${line}`}
-        </text>
-      ))}
+      <box paddingLeft={GUTTER}>
+        <markdown
+          content={shown.join("\n")}
+          syntaxStyle={syntaxStyle}
+          fg={color.text}
+          bg={color.block}
+          streaming={streaming}
+        />
+      </box>
       {hidden > 0 ? (
         <text fg={color.dim} bg={color.block}>
           {`${AI_INDENT}⏵ ${hidden} more lines (alt+↓)`}
@@ -239,7 +266,7 @@ function FeedLine({ item, expanded }: { item: FeedItem; expanded: boolean }) {
         <span fg={color.dim}>{`${clock(item.t)}  `}</span>
         {item.host ? <span fg={color.host}>{item.host}</span> : null}
         {item.host ? <span fg={color.white}>{" · "}</span> : null}
-        <span fg={levelColor[item.level]}>{item.message}</span>
+        {highlightedLabels(item.message, levelColor[item.level])}
       </text>
     </box>
   );

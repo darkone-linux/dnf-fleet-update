@@ -1,6 +1,7 @@
 // `--no-ui` text output (spec § Mode sans interface): the feed of the
 // interface, without colours. Command output stays in `logs/`.
 
+import { aiLabel } from "../model/ai-labels.ts";
 import { type Event, STEP_LABELS } from "../model/events.ts";
 import { clock } from "../model/theme.ts";
 
@@ -19,7 +20,7 @@ export function textLines(event: Event): string[] {
       return [`${time}  ${event.host === undefined ? "" : `${event.host} · `}${event.message}`];
     case "ai":
       return [
-        `${time}  AI ${event.message}`,
+        `${time}  ${aiLabel(event.message)}`,
         ...(event.detail ?? []).map((line) => AI_INDENT + line),
       ];
     case "ai.line":

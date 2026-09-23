@@ -7,6 +7,7 @@
 // Set before the UI imports: it freezes the spinners so a frame can settle.
 process.env.FLEET_CAPTURE = "1";
 
+import { destroyTreeSitterClient, getTreeSitterClient } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { ExitCode } from "../model/exit-codes.ts";
 import { App } from "../ui/App.tsx";
@@ -48,6 +49,26 @@ if (!listScenarios().includes(options.scenario)) {
 // Everything up to `at` is folded synchronously: no timers, no flake.
 const events = loadScenario(options.scenario).filter((event) => event.t <= options.at);
 
+const hasAiAnswer = events.some((event) => event.kind === "ai" || event.kind === "ai.line");
+if (hasAiAnswer) {
+  const client = getTreeSitterClient();
+  await client.initialize();
+  let current: string[] = [];
+  const answers: string[] = [];
+  for (const event of events) {
+    if (event.kind === "ai") {
+      current = event.detail === undefined ? [] : [...event.detail];
+      if (event.detail !== undefined) answers.push(event.detail.join("\n"));
+    } else if (event.kind === "ai.line") {
+      current.push(event.line);
+    } else if (event.kind === "ai.end") {
+      answers.push(current.join("\n"));
+      current = [];
+    }
+  }
+  for (const answer of answers) await client.highlightOnce(answer, "markdown");
+}
+
 // `testRender` turns React's act() environment on itself, so clearing the flag
 // loses the race. Our updates come from the synchronous preload above, never
 // from act(), and the warning would head every capture: filter that one line.
@@ -80,6 +101,7 @@ if (options.spans) {
 }
 
 setup.renderer.destroy();
+if (hasAiAnswer) await destroyTreeSitterClient();
 process.exit(ExitCode.Ok);
 
 /** `toInts` is the documented 0..255 accessor; the getters are normalised floats. */

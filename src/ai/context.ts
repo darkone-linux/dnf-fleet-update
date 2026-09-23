@@ -17,6 +17,7 @@ import { ask, emit, log, type RunContext } from "../engine/context.ts";
 import { describeFailure, execute, succeeded } from "../engine/exec.ts";
 import type { Excerpt, LogName } from "../engine/ports.ts";
 import { rebuildHost } from "../engine/steps/build.ts";
+import { aiLabel } from "../model/ai-labels.ts";
 import type { AskOption } from "../model/events.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import { confine, readableRoots, repoOf, writable } from "./paths.ts";
@@ -206,7 +207,7 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     },
 
     trace(message) {
-      log(context, "info", `AI ${message}`);
+      log(context, "info", aiLabel(message));
       context.run.appendLog(AI_LOG, message);
     },
   };

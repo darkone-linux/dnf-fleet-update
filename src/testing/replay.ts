@@ -5,6 +5,7 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { youLabel } from "../model/ai-labels.ts";
 import { type Event, parseEvent, type RunControl, type StepId } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
 
@@ -84,7 +85,7 @@ export function startReplay(name: string, speed: number, emit: (event: Event) =>
 
     // A recording has no tool behind it: the block shows the shape, not an answer.
     askAi: (question) => {
-      emit({ t: previous, kind: "log", level: "info", message: `you: ${question}` });
+      emit({ t: previous, kind: "log", level: "info", message: youLabel(question) });
       emit({
         t: previous,
         kind: "ai",
