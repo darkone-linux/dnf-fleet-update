@@ -41,7 +41,8 @@ behaviour; this file owns code policy and routing.
     Ex: `feat(model)!: rename host.output phase to step`.
   - Changelog sections: `feat`→Added, `fix`→Fixed, `security`→Security,
     `perf`/`refactor`/`revert`→Changed, `docs`→Documentation, a `drop`/`remove`
-    subject→Removed. `chore ci test build` are not published.
+    subject→Removed, `chore(deps)`→Dependencies. Other `chore`, `ci`, `test`,
+    `build` are not published.
 
 ### Comments
 
