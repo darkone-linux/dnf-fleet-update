@@ -317,6 +317,11 @@ export function restartUnits(units: readonly string[], timeouts: Timeouts): Host
   return unitAction("restart", units, timeouts);
 }
 
+/** Manager a unit belongs to: the system's, or one of the users' ones. */
+export const JOURNAL_SCOPES = ["system", "user"] as const;
+
+export type JournalScope = (typeof JOURNAL_SCOPES)[number];
+
 /**
  * Journal of one failed unit since its wave started. Root: the deploy user
  * reads no system journal. `--since=-<n>s`: a relative span, the engine holds
@@ -327,13 +332,18 @@ export function unitJournal(
   since: number,
   lines: number,
   timeouts: Timeouts,
+  scope: JournalScope = "system",
 ): HostCommand {
   assertSafe("unit", unit, UNIT);
+
+  // Every user's manager at once: `--user-unit` run as root matches `_UID=0`
+  // only, so the two fields are named (spec § analyse, Unités utilisateur).
+  const match =
+    scope === "system" ? ["-u", unit] : [`USER_UNIT=${unit}`, "+", `_SYSTEMD_USER_UNIT=${unit}`];
   return {
     argv: [
       "journalctl",
-      "-u",
-      unit,
+      ...match,
       "--no-pager",
       "-n",
       String(lines),

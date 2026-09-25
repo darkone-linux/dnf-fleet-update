@@ -5,7 +5,13 @@
 // reaches argv.
 
 import { z } from "zod";
-import { failedUnits, systemStatus, UNIT, unitJournal } from "../../engine/commands/host.ts";
+import {
+  failedUnits,
+  JOURNAL_SCOPES,
+  systemStatus,
+  UNIT,
+  unitJournal,
+} from "../../engine/commands/host.ts";
 import type { PersistedState } from "../../model/persist.ts";
 import { defineTool, fromExcerpt, type RegisteredTool } from "./types.ts";
 
@@ -35,10 +41,15 @@ const hostUnits = defineTool({
 const hostJournal = defineTool({
   name: "host_journal",
   level: "active",
-  description: "Journal of one unit on a host, since its deployment wave started. Read-only.",
+  description:
+    "Journal of one unit on a host, since its deployment wave started. Read-only. A user unit (one a home-manager-<login>.service starts, for instance) logs to its user's manager: ask with scope user.",
   input: z.strictObject({
     host: z.string().describe("host name, as deployment_state lists it"),
     unit: z.string().regex(UNIT).describe("unit name, e.g. nginx.service"),
+    scope: z
+      .enum(JOURNAL_SCOPES)
+      .optional()
+      .describe("system (default) or user: a user unit, whatever user runs it"),
     lines: z
       .number()
       .int()
@@ -47,12 +58,14 @@ const hostJournal = defineTool({
       .optional()
       .describe("journal lines kept; defaults to the run's own bound"),
   }),
-  summary: (args) => `reads the journal of ${args.unit} on ${args.host}`,
+  summary: (args) =>
+    `reads the journal of ${args.scope === "user" ? "user unit " : ""}${args.unit} on ${args.host}`,
   run: async (context, args) => {
     const host = context.host(args.host);
     const { timeouts, ai } = context.params;
     const window = waveWindow(context.state(), host.name);
-    const command = unitJournal(args.unit, window, args.lines ?? ai.logLines, timeouts);
+    const lines = args.lines ?? ai.logLines;
+    const command = unitJournal(args.unit, window, lines, timeouts, args.scope);
     return fromExcerpt(await context.onHost(host.name, command));
   },
 });

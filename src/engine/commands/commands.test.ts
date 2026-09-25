@@ -356,6 +356,21 @@ describe("collection", () => {
     expect(unitJournal("a.service", 0, 10, T).argv).toContain("--since=-1s");
     expect(() => unitJournal("a.service; rm -rf /", 1, 10, T)).toThrow("unsafe unit");
   });
+
+  // Checked on a real host: `--user-unit` as root matches `_UID=0` and finds nothing.
+  test("a user unit is matched by its two fields, across every user's manager", () => {
+    expect(unitJournal("mpd-mpris.service", 60, 200, T, "user").argv).toEqual([
+      "journalctl",
+      "USER_UNIT=mpd-mpris.service",
+      "+",
+      "_SYSTEMD_USER_UNIT=mpd-mpris.service",
+      "--no-pager",
+      "-n",
+      "200",
+      "--since=-60s",
+    ]);
+    expect(() => unitJournal("x.service +", 1, 10, T, "user")).toThrow("unsafe unit");
+  });
 });
 
 describe("build", () => {

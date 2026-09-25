@@ -266,6 +266,27 @@ describe("active tools", () => {
     expect(context.commands.calls[0]?.argv[0]).toBe("sudo");
   });
 
+  test("host_journal reads a user unit from its users' managers", async () => {
+    const { context, tool } = tools({
+      commands: [
+        {
+          match: (argv) => argv.join(" ").includes("USER_UNIT=mpd-mpris.service"),
+          output: [{ stream: "stdout", line: "Two services allocated for the same bus name" }],
+        },
+      ],
+    });
+    const result = await call(tool, "active", "host_journal", {
+      host: "gfx",
+      unit: "mpd-mpris.service",
+      scope: "user",
+    });
+
+    expect(result.lines).toEqual(["Two services allocated for the same bus name"]);
+    expect(context.run.logs.get("ai")).toEqual([
+      "reads the journal of user unit mpd-mpris.service on gfx",
+    ]);
+  });
+
   test("host_journal windows on the wave and reports a failed command", async () => {
     const { tool } = tools({
       commands: [{ match: (argv) => argv.join(" ").includes("journalctl"), exitCode: 255 }],
