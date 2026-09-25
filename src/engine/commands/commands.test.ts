@@ -11,6 +11,7 @@ import {
   asNix,
   copyClosure,
   failedUnits,
+  fetchSources,
   maintenance,
   onHost,
   parseFailedUnits,
@@ -25,9 +26,22 @@ import {
   settleResult,
   unitJournal,
 } from "./host.ts";
-import { buildHost, evalHosts, selectExpression } from "./nix.ts";
+import {
+  buildHost,
+  derivationClosure,
+  evalHosts,
+  fixedSourcePath,
+  selectExpression,
+} from "./nix.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
-import { flakeUpdate, justClean, readGenerated, realignDnfLock, sendMessage } from "./workspace.ts";
+import {
+  flakeMetadata,
+  flakeUpdate,
+  justClean,
+  readGenerated,
+  realignDnfLock,
+  sendMessage,
+} from "./workspace.ts";
 
 const NEW = "/nix/store/jq1s2fmaq2pnv5f233sfkhmjm0lzqgcm-nixos-system-gw-ag-26.11";
 const OLD = "/nix/store/0h15zmc3vn75j3w5b2yc4m0j2rxwdzlg-nixos-system-gw-ag-26.05";
@@ -417,5 +431,52 @@ describe("workspace", () => {
       "--json",
       "/etc/nixos/var/generated/hosts.nix",
     ]);
+  });
+});
+
+describe("flake sources", () => {
+  const NAR_HASH = "sha256-xJ+X4hBtOcAFGBOe5nAMyMUeF9foJBmIOu3NjBqBycU=";
+  const SOURCE = {
+    ref: "github:NixOS/nixpkgs/4975466d324710c576dc11ad614684e6bd8cad8e?narHash=sha256-xJ%2BX4hBtOcAFGBOe5nAMyMUeF9foJBmIOu3NjBqBycU%3D",
+    path: "/nix/store/398fqjqkp383m7pyla9nxpi1is5vzywh-source",
+  };
+
+  test("the lock, read without writing it", () => {
+    expect(flakeMetadata("/etc/nixos", T)).toEqual({
+      argv: ["nix", "flake", "metadata", "--json", "--no-write-lock-file", "/etc/nixos"],
+      timeoutMs: 60_000,
+      killGraceMs: 10_000,
+    });
+  });
+
+  test("store path of a source computed, the closure of a derivation listed", () => {
+    expect(fixedSourcePath(NAR_HASH, T).argv).toEqual([
+      "nix-store",
+      "--print-fixed-path",
+      "--recursive",
+      "sha256",
+      NAR_HASH,
+      "source",
+    ]);
+    expect(derivationClosure(DRV, T).argv).toEqual(["nix-store", "--query", "--requisites", DRV]);
+  });
+
+  // Placed through ssh: the script is one word the remote shell splits again.
+  test("fetched by the builder unless it holds the path, bounded like a copy", () => {
+    const command = fetchSources([SOURCE], T);
+    expect(command).toMatchObject({ root: false, seconds: 3600 });
+    expect(command.argv.slice(0, 2)).toEqual(["sh", "-c"]);
+    expect(shellWords(shellJoin(command.argv))).toEqual([
+      "sh",
+      "-c",
+      `{ nix path-info ${SOURCE.path} >/dev/null 2>&1 || nix flake prefetch '${SOURCE.ref}'; }`,
+    ]);
+  });
+
+  test("unvalidated hashes, paths or references are programmer errors", () => {
+    expect(() => fixedSourcePath("sha256-x; reboot", T)).toThrow();
+    expect(() => derivationClosure("/tmp/x.drv", T)).toThrow();
+    expect(() => fetchSources([{ ...SOURCE, ref: "github:a/b/main" }], T)).toThrow();
+    expect(() => fetchSources([{ ...SOURCE, path: "/tmp/source" }], T)).toThrow();
   });
 });

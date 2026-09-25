@@ -140,9 +140,49 @@ export const pingOf = (host: string, exitCode: number, once = false): CommandScr
   once,
 });
 
+/** nixpkgs of the synthetic lock, and the store path its `narHash` fixes. */
+export const NIXPKGS_SOURCE = {
+  ref: "github:NixOS/nixpkgs/4975466d324710c576dc11ad614684e6bd8cad8e?narHash=sha256-xJ%2BX4hBtOcAFGBOe5nAMyMUeF9foJBmIOu3NjBqBycU%3D",
+  narHash: "sha256-xJ+X4hBtOcAFGBOe5nAMyMUeF9foJBmIOu3NjBqBycU=",
+  path: "/nix/store/398fqjqkp383m7pyla9nxpi1is5vzywh-source",
+};
+
+/** `nix flake metadata --json` of the consumer: `dnf/` from git, nixpkgs from GitHub. */
+export const FLAKE_METADATA = {
+  locks: {
+    nodes: {
+      root: { inputs: { dnf: "dnf", nixpkgs: "nixpkgs" } },
+      dnf: {
+        locked: { type: "git", url: "file:///ws/dnf", rev: "d".repeat(40) },
+      },
+      nixpkgs: {
+        locked: {
+          type: "github",
+          owner: "NixOS",
+          repo: "nixpkgs",
+          rev: "4975466d324710c576dc11ad614684e6bd8cad8e",
+          narHash: NIXPKGS_SOURCE.narHash,
+          lastModified: 1790000000,
+        },
+      },
+    },
+  },
+};
+
+const stdout = (line: string) => ({ stream: "stdout" as const, line });
+
+/** Sources fetched by builders: the lock, where nixpkgs lands, every closure holding it. */
+export const SOURCE_SCRIPTS: CommandScript[] = [
+  { match: ["nix", "flake", "metadata"], output: [stdout(JSON.stringify(FLAKE_METADATA))] },
+  { match: ["nix-store", "--print-fixed-path"], output: [stdout(NIXPKGS_SOURCE.path)] },
+  { match: ["nix-store", "--query", "--requisites"], output: [stdout(NIXPKGS_SOURCE.path)] },
+  { match: anywhere("nix flake prefetch") },
+];
+
 /** Hosts that answer and deploy: placed last, after the scripts of a test case. */
 export const HAPPY_HOSTS: CommandScript[] = [
   { match: ["ping"] },
+  ...SOURCE_SCRIPTS,
 
   // A freshly built path sits in no cache: the pull fails and the push follows.
   { match: anywhere("--max-jobs 0"), exitCode: 1 },

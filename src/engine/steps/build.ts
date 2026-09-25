@@ -15,6 +15,7 @@ import { justClean } from "../commands/workspace.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { decideFailure, type Hosts } from "../decisions.ts";
 import { describeFailure, errorLines, execute, succeeded } from "../exec.ts";
+import { type SourceSeeder, sourceSeeder } from "../flake-sources.ts";
 import type { HostEntry, HostTable } from "../hosts.ts";
 import type { KnownError } from "../known-errors.ts";
 import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
@@ -117,12 +118,17 @@ async function delegate(
   name: string,
   builder: string,
   job: Job,
+  seeder: SourceSeeder,
 ): Promise<Built | undefined> {
   const { timeouts } = context.params;
   const give = (note: string): undefined => {
     log(context, "warn", `builder ${builder}: ${note}, building here`, name);
     return undefined;
   };
+
+  // Before the copy: a source the builder holds is one the copy skips.
+  await seeder.seed(builder, job.drvPath, name);
+  if (context.flow.halt.aborted) return undefined;
 
   const copied = await execute(context, copyDerivation(builder, job.drvPath, timeouts), {
     signal: context.flow.halt,
@@ -156,7 +162,12 @@ interface Where {
  * decides what the outcome means, and `where.builder` is the builder that
  * actually ran once it returns.
  */
-async function buildJob(context: RunContext, where: Where, job: Job): Promise<Built | undefined> {
+async function buildJob(
+  context: RunContext,
+  where: Where,
+  job: Job,
+  seeder: SourceSeeder,
+): Promise<Built | undefined> {
   const { name } = where;
   const here = context.local.hostname();
   let built: Built | undefined;
@@ -169,7 +180,7 @@ async function buildJob(context: RunContext, where: Where, job: Job): Promise<Bu
   }
 
   if (where.builder !== here) {
-    built = await delegate(context, name, where.builder, job);
+    built = await delegate(context, name, where.builder, job, seeder);
     if (context.flow.halt.aborted) return undefined;
 
     // Whatever the builder failed on, the deployment machine takes over: no
@@ -189,6 +200,7 @@ async function buildOne(
   hosts: HostTable,
   name: string,
   job: Job,
+  seeder: SourceSeeder,
 ): Promise<void> {
   const entry = hosts.get(name);
   const where: Where = {
@@ -196,7 +208,7 @@ async function buildOne(
     builder: entry.builder,
     ...(entry.online === undefined ? {} : { online: entry.online }),
   };
-  const built = await buildJob(context, where, job);
+  const built = await buildJob(context, where, job, seeder);
   entry.builder = where.builder;
 
   // Halted: the build was cancelled, the host is left as it is.
@@ -220,6 +232,7 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
   const total = names.length;
   const warnings = new Set<string>();
   const builds: Promise<void>[] = [];
+  const seeder = sourceSeeder(context);
   let done = 0;
   const settled = () => {
     done += 1;
@@ -259,7 +272,7 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
         settled();
         return;
       }
-      builds.push(buildOne(context, hosts, job.host, job).then(settled));
+      builds.push(buildOne(context, hosts, job.host, job, seeder).then(settled));
     },
   });
 
@@ -332,7 +345,7 @@ export async function rebuildHost(
   if (typeof job === "string") return { note: `evaluation failed: ${job}` };
 
   const where: Where = { ...target };
-  const built = await buildJob(context, where, job);
+  const built = await buildJob(context, where, job, sourceSeeder(context));
   if (built === undefined) return { note: "run stopping" };
   if (built.note !== undefined) {
     return {

@@ -9,7 +9,9 @@ import {
   centralSelection,
   evalLine,
   fleetSelection,
+  NIXPKGS_SOURCE,
   pingOf,
+  SOURCE_SCRIPTS,
   storePath,
 } from "../../testing/fleet.ts";
 import { HostTable } from "../hosts.ts";
@@ -57,6 +59,7 @@ function setup(
       ...(offline === undefined ? [] : [pingOf(offline, 1)]),
       { match: ["ping"], exitCode: 0 },
       ...commands,
+      ...(delegated ? SOURCE_SCRIPTS : []),
       { match: ["nix", "build"] },
     ],
   });
@@ -319,6 +322,88 @@ describe("build", () => {
     );
     expect(hosts.get("pc-ag").state).toBe("built");
     expect(hosts.get("pc-ag").builder).toBe("deployer");
+  });
+
+  describe("flake sources fetched by the builders", () => {
+    const delegatedRun = async (commands: CommandScript[]) => {
+      const { context, hosts, presence } = setup(
+        [
+          evaluation(NAMES.map(evalLine)),
+          ...commands,
+          { match: anywhere("ssh-ng://") },
+          { match: anywhere(".drv^*") },
+        ],
+        { delegated: true },
+      );
+      await build(context, hosts, presence);
+      await presence.stop();
+      const sent = context.commands.calls.map(({ argv }) => argv.join(" "));
+      const fetches = sent.filter((line) => line.includes("nix flake prefetch"));
+      return { context, hosts, sent, fetches };
+    };
+
+    test("each builder fetches the locked nixpkgs once, before its first copy", async () => {
+      const { sent, fetches } = await delegatedRun([]);
+
+      // `gw-cp` builds `hcs`, `gw-cp` and `lt-cp`; `srv-ag` the three of zone `ag`.
+      expect(fetches).toHaveLength(2);
+      for (const builder of ["gw-cp", "srv-ag"]) {
+        const fetch = sent.findIndex(
+          (line) => line.includes(`nix@${builder}`) && line.includes("nix flake prefetch"),
+        );
+        const copy = sent.findIndex((line) => line.includes(`--to ssh-ng://nix@${builder}`));
+        expect(fetch).toBeGreaterThanOrEqual(0);
+        expect(fetch).toBeLessThan(copy);
+      }
+      expect(fetches[0]).toContain(NIXPKGS_SOURCE.path);
+      expect(sent.filter((line) => line.startsWith("nix flake metadata"))).toHaveLength(1);
+    });
+
+    test("a source outside the closure is not fetched", async () => {
+      const { hosts, fetches } = await delegatedRun([
+        {
+          match: ["nix-store", "--query", "--requisites"],
+          output: [{ stream: "stdout", line: storePath("hcs", ".drv") }],
+        },
+      ]);
+
+      expect(fetches).toEqual([]);
+      expect(hosts.get("hcs").state).toBe("built");
+    });
+
+    test("a failed fetch is said, the copy pushes the source, the build stays there", async () => {
+      const unreachable = "error: unable to download 'https://github.com/…': HTTP error 503";
+      const { context, hosts } = await delegatedRun([
+        {
+          match: anywhere("nix flake prefetch"),
+          exitCode: 1,
+          output: [{ stream: "stderr", line: unreachable }],
+        },
+      ]);
+
+      expect(feed(context.events.events)).toContain(
+        `info hcs: builder gw-cp: flake sources not fetched, copied: exit 1: ${unreachable}`,
+      );
+      expect(hosts.get("hcs").state).toBe("built");
+      expect(hosts.get("hcs").builder).toBe("gw-cp");
+    });
+
+    test("no readable lock: said once, nothing fetched, builds delegated as before", async () => {
+      const { context, hosts, fetches } = await delegatedRun([
+        {
+          match: ["nix", "flake", "metadata"],
+          exitCode: 1,
+          output: [{ stream: "stderr", line: "error: path '/ws' is not a flake" }],
+        },
+      ]);
+
+      const said = feed(context.events.events).filter((line) => line.includes("flake sources"));
+      expect(said).toEqual([
+        "info flake sources left to the derivation copy: exit 1: error: path '/ws' is not a flake",
+      ]);
+      expect(fetches).toEqual([]);
+      expect(hosts.get("lt-cp").builder).toBe("gw-cp");
+    });
   });
 
   test("nothing built: one error, no question per host, the run stops", async () => {

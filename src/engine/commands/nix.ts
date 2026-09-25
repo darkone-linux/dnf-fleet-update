@@ -2,7 +2,7 @@
 
 import type { Timeouts } from "../../model/params.ts";
 import { HOSTNAME } from "../fleet.ts";
-import { STORE_PATH } from "../nix-output.ts";
+import { NAR_HASH, STORE_PATH } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
 import { limits } from "./limits.ts";
 
@@ -72,6 +72,27 @@ export function pathSizes(paths: readonly [string, ...string[]], timeouts: Timeo
   }
   return {
     argv: ["nix", "path-info", "--size", ...paths],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
+/**
+ * Store path a locked flake source lands at, computed without fetching: name
+ * `source`, content fixed by its `narHash`.
+ */
+export function fixedSourcePath(narHash: string, timeouts: Timeouts): CommandSpec {
+  if (!NAR_HASH.test(narHash)) throw new Error(`unsafe NAR hash: ${JSON.stringify(narHash)}`);
+  return {
+    argv: ["nix-store", "--print-fixed-path", "--recursive", "sha256", narHash, "source"],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
+/** What `nix copy --derivation` sends for `drvPath`, one path per line. */
+export function derivationClosure(drvPath: string, timeouts: Timeouts): CommandSpec {
+  if (!STORE_PATH.test(drvPath)) throw new Error(`unsafe derivation: ${JSON.stringify(drvPath)}`);
+  return {
+    argv: ["nix-store", "--query", "--requisites", drvPath],
     ...limits(timeouts.commit, timeouts),
   };
 }

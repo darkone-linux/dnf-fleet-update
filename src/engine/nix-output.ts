@@ -1,9 +1,11 @@
-// Parsers of nix output: `nix-eval-jobs` lines and `--log-format internal-json`.
+// Parsers of nix output: `nix-eval-jobs` lines, `--log-format internal-json`,
+// and the lock of `nix flake metadata --json`.
 //
 // Outside data, one line at a time; a line that does not fit is data too
 // (`invalid`, `raw`), never an exception.
 
 import { z } from "zod";
+import { fail, ok, type Result } from "../model/result.ts";
 
 /** A store path of the local store: safe as an argv item and in a remote shell word. */
 export const STORE_PATH = /^\/nix\/store\/[0-9a-z]{32}-[a-zA-Z0-9+._?=-]+$/;
@@ -82,6 +84,51 @@ export function parseCopyPath(line: string): CopiedPath | undefined {
   const store = match?.[3];
   if (path === undefined || store === undefined || !STORE_PATH.test(path)) return undefined;
   return { path, direction: match?.[2] === "to" ? "pushed" : "pulled", store };
+}
+
+/** SRI sha256 of a NAR, as a flake lock records it. */
+export const NAR_HASH = /^sha256-[A-Za-z0-9+/]{43}=$/;
+
+/** Locked GitHub reference, `narHash` percent-encoded: safe as an argv item. */
+export const GITHUB_REF =
+  /^github:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/[0-9a-f]{40}\?narHash=sha256-[A-Za-z0-9%]+$/;
+
+/** One source of the flake lock a host can fetch from its origin. */
+export interface LockedSource {
+  ref: string;
+  narHash: string;
+}
+
+/** `host` absent: GitHub itself, not an Enterprise instance. */
+const lockedGithub = z.object({
+  type: z.literal("github"),
+  owner: z.string().regex(/^[A-Za-z0-9_.-]+$/),
+  repo: z.string().regex(/^[A-Za-z0-9_.-]+$/),
+  rev: z.string().regex(/^[0-9a-f]{40}$/),
+  narHash: z.string().regex(NAR_HASH),
+  host: z.undefined().optional(),
+});
+
+const flakeMetadata = z.object({
+  locks: z.object({ nodes: z.record(z.string(), z.object({ locked: z.unknown().optional() })) }),
+});
+
+/**
+ * GitHub sources of the lock, one per `narHash`: a node locked otherwise is
+ * skipped, left to the copy. Fails only when the output is no lock at all.
+ */
+export function parseLockedSources(json: unknown): Result<LockedSource[]> {
+  const parsed = flakeMetadata.safeParse(json);
+  if (!parsed.success) return fail(`flake metadata: ${z.prettifyError(parsed.error)}`);
+  const sources = new Map<string, LockedSource>();
+  for (const node of Object.values(parsed.data.locks.nodes)) {
+    const github = lockedGithub.safeParse(node.locked);
+    if (!github.success) continue;
+    const { owner, repo, rev, narHash } = github.data;
+    const ref = `github:${owner}/${repo}/${rev}?narHash=${encodeURIComponent(narHash)}`;
+    sources.set(narHash, { ref, narHash });
+  }
+  return ok([...sources.values()]);
 }
 
 const PATH_SIZE = /^\/nix\/store\/\S+\s+(\d+)$/;

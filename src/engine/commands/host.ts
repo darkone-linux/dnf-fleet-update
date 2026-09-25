@@ -7,7 +7,7 @@ import type { HostOrigin } from "../../model/events.ts";
 import type { Timeouts } from "../../model/params.ts";
 import { fail, ok, type Result } from "../../model/result.ts";
 import { HOSTNAME } from "../fleet.ts";
-import { STORE_PATH } from "../nix-output.ts";
+import { GITHUB_REF, STORE_PATH } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
 import { limits, sudoLimits } from "./limits.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
@@ -194,6 +194,29 @@ export function pullClosure(path: string, timeouts: Timeouts): HostCommand {
     `${shellJoin(["nix", "build", path, "--max-jobs", "0", "--out-link"])} "${PUBLISHED_LINK}"`,
   ].join(" && ");
   return { argv: ["sh", "-c", script], root: false, seconds: timeouts.publish };
+}
+
+/** A locked flake source, and the store path its `narHash` fixes. */
+export interface FlakeSource {
+  ref: string;
+  path: string;
+}
+
+/**
+ * Flake sources fetched by a builder from their origin (spec § Substituteurs
+ * et plomberie de build). A path it holds already costs no download: `nix
+ * flake prefetch` alone would fetch it again on a cold fetcher cache.
+ */
+export function fetchSources(sources: readonly FlakeSource[], timeouts: Timeouts): HostCommand {
+  const script = sources
+    .map(({ ref, path }) => {
+      assertSafe("store path", path, STORE_PATH);
+      assertSafe("flake reference", ref, GITHUB_REF);
+      const held = `${shellJoin(["nix", "path-info", path])} >/dev/null 2>&1`;
+      return `{ ${held} || ${shellJoin(["nix", "flake", "prefetch", ref])}; }`;
+    })
+    .join(" && ");
+  return { argv: ["sh", "-c", script], root: false, seconds: timeouts.copy };
 }
 
 /**

@@ -3,8 +3,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   errorSummary,
+  GITHUB_REF,
   parseCopyPath,
   parseEvalJob,
+  parseLockedSources,
   parseNixLog,
   parsePathSize,
   STORE_PATH,
@@ -205,4 +207,48 @@ describe("copy counters", () => {
 
 test("stripAnsi leaves plain text alone", () => {
   expect(stripAnsi("plain [text] 1;2m")).toBe("plain [text] 1;2m");
+});
+
+describe("flake lock", () => {
+  const NIXPKGS = {
+    type: "github",
+    owner: "NixOS",
+    repo: "nixpkgs",
+    rev: "4975466d324710c576dc11ad614684e6bd8cad8e",
+    narHash: "sha256-xJ+X4hBtOcAFGBOe5nAMyMUeF9foJBmIOu3NjBqBycU=",
+    lastModified: 1790000000,
+  };
+  const REF =
+    "github:NixOS/nixpkgs/4975466d324710c576dc11ad614684e6bd8cad8e?narHash=sha256-xJ%2BX4hBtOcAFGBOe5nAMyMUeF9foJBmIOu3NjBqBycU%3D";
+  const metadata = (nodes: Record<string, unknown>) => ({
+    locks: { version: 7, root: "root", nodes },
+  });
+
+  // `+`, `/` and `=` of the hash percent-encoded: a raw `+` would read as a space.
+  test("a GitHub input becomes a locked reference with its hash", () => {
+    const parsed = parseLockedSources(
+      metadata({ root: { inputs: {} }, nixpkgs: { locked: NIXPKGS } }),
+    );
+    expect(parsed).toEqual({ ok: true, value: [{ ref: REF, narHash: NIXPKGS.narHash }] });
+    expect(GITHUB_REF.test(REF)).toBe(true);
+  });
+
+  test("one source per hash, other fetchers and Enterprise hosts left to the copy", () => {
+    const parsed = parseLockedSources(
+      metadata({
+        root: { inputs: {} },
+        nixpkgs: { locked: NIXPKGS },
+        nixpkgs_2: { locked: NIXPKGS },
+        dnf: { locked: { type: "git", url: "file:///etc/nixos/dnf", rev: "d".repeat(40) } },
+        corp: {
+          locked: { ...NIXPKGS, host: "git.example.org", narHash: `sha256-${"A".repeat(43)}=` },
+        },
+      }),
+    );
+    expect(parsed.ok && parsed.value.map((source) => source.ref)).toEqual([REF]);
+  });
+
+  test("an output that is no lock fails", () => {
+    expect(parseLockedSources({ description: "no locks" }).ok).toBe(false);
+  });
 });

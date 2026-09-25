@@ -14,7 +14,14 @@ import type {
   RunOptions,
 } from "../engine/ports.ts";
 import type { FakeClock } from "./fakes.ts";
-import { HOSTS_JSON, NETWORK_JSON, ORIGIN_PATH, storePath } from "./fleet.ts";
+import {
+  FLAKE_METADATA,
+  HOSTS_JSON,
+  NETWORK_JSON,
+  NIXPKGS_SOURCE,
+  ORIGIN_PATH,
+  storePath,
+} from "./fleet.ts";
 
 export interface HostBehaviour {
   /** Answers ping and ssh; a function reads the fake clock (ms). Default: always. */
@@ -58,6 +65,9 @@ export type SimKind =
   | "rev-parse"
   | "flake-update"
   | "realign"
+  | "flake-metadata"
+  | "fixed-path"
+  | "requisites"
   | "clean"
   | "generate"
   | "path-info"
@@ -69,6 +79,7 @@ export type SimKind =
   | "ping"
   | "copy"
   | "derivation"
+  | "fetch-sources"
   | "drop-links"
   | "pull"
   | "maintenance"
@@ -354,6 +365,9 @@ export class SimFleet implements CommandRunner {
       if (verb === "commit") return { kind: "commit", detail: repo, at };
       if (verb === "rev-parse") return { kind: "rev-parse", detail: repo, at };
     }
+    if (program === "nix" && argv[1] === "flake" && argv[2] === "metadata") {
+      return { kind: "flake-metadata", at };
+    }
     if (program === "nix" && argv[1] === "flake") {
       if (argv[3] === "dnf") return { kind: "realign", at };
       return {
@@ -370,6 +384,12 @@ export class SimFleet implements CommandRunner {
     if (program === "nix" && argv[1] === "path-info") {
       if (argv[2] === "--size") return { kind: "path-size", at };
       return { kind: "path-info", detail: argv[2], at };
+    }
+    if (program === "nix-store" && argv[1] === "--print-fixed-path") {
+      return { kind: "fixed-path", at };
+    }
+    if (program === "nix-store" && argv[1] === "--query") {
+      return { kind: "requisites", detail: argv.at(-1), at };
     }
     if (program === "nix-instantiate") return { kind: "generated", detail: argv.at(-1), at };
     if (program === "nix-eval-jobs") return { kind: "eval", at };
@@ -394,6 +414,9 @@ export class SimFleet implements CommandRunner {
     const host = sshTarget?.slice(4) ?? this.options.local;
     const inner = sshTarget === undefined ? joined : (argv.at(-1) ?? "");
     if (host === undefined) throw new Error(`unsimulated command: ${joined}`);
+
+    // Before `nix path-info`: the fetch script checks the paths it already holds.
+    if (inner.includes("nix flake prefetch")) return { kind: "fetch-sources", host, at };
 
     // `--resume`: the path asked of the store that holds it, the builder.
     if (inner.includes("nix path-info")) {
@@ -508,6 +531,18 @@ export class SimFleet implements CommandRunner {
         return ok();
       case "clean":
       case "generate":
+        return ok();
+
+      // Every closure holds the locked nixpkgs: each builder fetches it.
+      case "flake-metadata":
+        out(JSON.stringify(FLAKE_METADATA));
+        return ok();
+      case "fixed-path":
+        out(NIXPKGS_SOURCE.path);
+        return ok();
+      case "requisites":
+        out(command.detail ?? "");
+        out(NIXPKGS_SOURCE.path);
         return ok();
 
       // `--resume`: a path the fleet built is in the store unless collected.
@@ -640,6 +675,7 @@ export class SimFleet implements CommandRunner {
         return ok();
       }
       case "derivation":
+      case "fetch-sources":
       case "drop-links":
       case "maintenance":
         return ok();

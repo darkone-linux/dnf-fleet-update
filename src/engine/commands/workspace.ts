@@ -56,6 +56,17 @@ export function realignDnfLock(workspace: string, timeouts: Timeouts): CommandSp
   };
 }
 
+/**
+ * Consumer lock on stdout, read by `parseLockedSources`. `--no-write-lock-file`:
+ * a run never dirties the tree it checked clean.
+ */
+export function flakeMetadata(workspace: string, timeouts: Timeouts): CommandSpec {
+  return {
+    argv: ["nix", "flake", "metadata", "--json", "--no-write-lock-file", workspace],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
 export function justClean(workspace: string, timeouts: Timeouts): CommandSpec {
   return {
     argv: ["just", "clean"],
