@@ -24,6 +24,7 @@ import {
   type LogName,
   logFileName,
   type OutputLine,
+  parseLogFileName,
   type RunLock,
   type RunOptions,
   type RunStore,
@@ -198,6 +199,10 @@ export class MemoryRunStore implements RunStore {
 
   outLink(host: string): string {
     return `/deployments/${this.id}/gcroots/${host}`;
+  }
+
+  logNames(): LogName[] {
+    return [...this.logs.keys()].sort().flatMap((key) => parseLogFileName(key) ?? []);
   }
 
   readLog(name: LogName, lines: number): Promise<Excerpt> {

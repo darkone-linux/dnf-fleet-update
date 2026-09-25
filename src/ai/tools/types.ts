@@ -54,6 +54,9 @@ export interface ToolContext {
   host(name: string): PersistedHost;
   readLog(name: LogName, lines: number): Promise<Excerpt>;
 
+  /** Every log the run has written so far. */
+  logNames(): LogName[];
+
   /** Throws `ToolError` when the path leaves the readable trees. */
   readSource(path: string, lines: number): Promise<Excerpt>;
 

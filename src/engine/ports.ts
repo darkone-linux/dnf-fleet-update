@@ -99,6 +99,15 @@ export function logFileName(name: LogName): string {
   return parts.join(".");
 }
 
+/** Name of a log from its file name without extension; `undefined` when not one of ours. */
+export function parseLogFileName(file: string): LogName | undefined {
+  const parts = file.split(".");
+  if (!parts.every((part) => RUN_FILE_NAME.test(part))) return undefined;
+  const [first, second, ...rest] = parts;
+  if (first === undefined || rest.length > 0) return undefined;
+  return second === undefined ? { phase: first } : { host: first, phase: second };
+}
+
 /** One run directory: `var/deployments/<id>/` (spec § État et reprise). */
 export interface RunStore {
   /** `<date>-<mode>`; also names the rollback units of the run. */
@@ -119,6 +128,9 @@ export interface RunStore {
 
   /** Tail of a log, newest kept: the error is at the bottom. Missing file: empty. */
   readLog(name: LogName, lines: number): Promise<Excerpt>;
+
+  /** Every log written so far, sorted by file name. */
+  logNames(): LogName[];
 }
 
 /** Bounded slice of a text file, as an AI tool receives it (spec § analyse, Limites). */

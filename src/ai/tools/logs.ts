@@ -4,6 +4,7 @@
 // Tail, never head: the error of a build sits at the bottom.
 
 import { z } from "zod";
+import { renderWarnings, runWarnings } from "../warnings.ts";
 import { defineTool, fromExcerpt, type RegisteredTool } from "./types.ts";
 
 /** Phases written per host, as `recorder.ts` and the collection name them. */
@@ -61,4 +62,20 @@ const runLog = defineTool({
   },
 });
 
-export const logTools: readonly RegisteredTool[] = [hostLog, runLog];
+const warnings = defineTool({
+  name: "run_warnings",
+  level: "passive",
+  description:
+    "Every warning of this run's logs, grouped by shape across hosts and phases, most frequent first: count, hosts, phases, one example as written. Read a log for the context of one.",
+  input: z.strictObject({}),
+  summary: () => "reads the warnings of the run",
+  run: async (context) => {
+    const groups = await runWarnings(context.logNames(), (name, lines) =>
+      context.readLog(name, lines),
+    );
+    if (groups.length === 0) return { lines: ["no warning in this run's logs"] };
+    return fromExcerpt(renderWarnings(groups));
+  },
+});
+
+export const logTools: readonly RegisteredTool[] = [hostLog, runLog, warnings];

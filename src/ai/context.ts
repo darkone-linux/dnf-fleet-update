@@ -131,6 +131,7 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     state,
     host: hostOf,
     readLog: (name, lines) => context.run.readLog(name, lines),
+    logNames: () => context.run.logNames(),
 
     async readSourceText(path) {
       const read = await context.sources.text(confined(path));

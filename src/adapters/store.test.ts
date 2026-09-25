@@ -100,3 +100,20 @@ describe("DirectoryStore", () => {
     });
   });
 });
+
+describe("RunDirectory.logNames", () => {
+  test("every log written, host logs and run logs, parsed back from the file names", () => {
+    const run = store().create("full");
+    expect(run.logNames()).toEqual([]);
+
+    run.appendLog({ host: "gfx", phase: "test" }, "x");
+    run.appendLog({ phase: "build" }, "x");
+    run.appendLog({ host: "gw-ag", phase: "switch" }, "x");
+
+    expect(run.logNames()).toEqual([
+      { phase: "build" },
+      { host: "gfx", phase: "test" },
+      { host: "gw-ag", phase: "switch" },
+    ]);
+  });
+});

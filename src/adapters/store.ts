@@ -14,6 +14,7 @@ import {
   type Excerpt,
   type LogName,
   logFileName,
+  parseLogFileName,
   RUN_FILE_NAME,
   type RunStore,
   type SavedRun,
@@ -61,6 +62,19 @@ class RunDirectory implements RunStore {
 
   readLog(name: LogName, lines: number): Promise<Excerpt> {
     return tailLines(join(this.dir, "logs", `${logFileName(name)}.log`), lines);
+  }
+
+  logNames(): LogName[] {
+    let files: string[];
+    try {
+      files = readdirSync(join(this.dir, "logs"));
+    } catch {
+      return [];
+    }
+    return files
+      .filter((file) => file.endsWith(".log"))
+      .sort()
+      .flatMap((file) => parseLogFileName(file.slice(0, -".log".length)) ?? []);
   }
 }
 

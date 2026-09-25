@@ -44,7 +44,13 @@ describe("registry", () => {
     const passive = toolsFor("passive").map((tool) => tool.name);
     const active = toolsFor("active").map((tool) => tool.name);
 
-    expect(passive).toEqual(["deployment_state", "host_diagnosis", "host_log", "run_log"]);
+    expect(passive).toEqual([
+      "deployment_state",
+      "host_diagnosis",
+      "host_log",
+      "run_log",
+      "run_warnings",
+    ]);
     expect(active).toEqual([
       ...passive,
       "read_code",
@@ -189,6 +195,26 @@ describe("guards", () => {
     );
     expect(feed).toEqual(["AI reads the deployment state", "AI reads boom"]);
     expect(context.run.logs.get("ai")).toEqual(["reads the deployment state", "reads boom"]);
+  });
+});
+
+describe("run_warnings", () => {
+  test("groups the warnings of every log, the AI's left out", async () => {
+    const { context, tool } = tools();
+    context.run.appendLog({ host: "gfx", phase: "test" }, "warning: not applying UID change (1)");
+    context.run.appendLog({ host: "nlt", phase: "test" }, "warning: not applying UID change (2)");
+    context.run.appendLog({ phase: "ai" }, "warning: quoted by the model");
+
+    expect(await call(tool, "passive", "run_warnings")).toEqual({
+      lines: ["2× gfx, nlt (test): warning: not applying UID change (1)"],
+    });
+  });
+
+  test("a run without warning says so", async () => {
+    const { tool } = tools();
+    expect(await call(tool, "passive", "run_warnings")).toEqual({
+      lines: ["no warning in this run's logs"],
+    });
   });
 });
 

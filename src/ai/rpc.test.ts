@@ -73,6 +73,7 @@ describe("tools/list", () => {
       "host_diagnosis",
       "host_log",
       "run_log",
+      "run_warnings",
       "read_code",
       "search_code",
       "list_code",

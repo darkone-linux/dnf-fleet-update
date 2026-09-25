@@ -146,7 +146,7 @@ it is not shown, it cannot ask for:
 
 | Level | Tools |
 |---|---|
-| `passive` | deployment state, host diagnosis, build and activation logs |
+| `passive` | deployment state, host diagnosis, build and activation logs, the run's warnings grouped |
 | `active` / `analysis` | + read, search and list the code (consumer, `dnf/`), host units and journals (user units included), read-only |
 | `repair` | + one action on the units this run saw fall, and the code that describes them |
 
