@@ -138,6 +138,9 @@ export interface SourceFiles {
   /** Head of the file: a module is read from its header down. */
   read(path: string, lines: number): Promise<Result<Excerpt>>;
 
+  /** Whole text of a source file, for an exact replacement; binary or over 1 MiB refused. */
+  text(path: string): Promise<Result<string>>;
+
   /**
    * One level of a directory, sorted, `name/` for a sub-directory. `limit`
    * entries at most, the rest counted in `dropped`.

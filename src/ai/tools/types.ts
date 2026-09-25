@@ -33,6 +33,9 @@ export function highest(levels: readonly ToolLevel[]): ToolLevel | undefined {
 /** Refusal handed back to the model: expected data, never a run failure. */
 export class ToolError extends Error {}
 
+/** A guard said no, rather than a command failing: recorded as `refused`. */
+export class Refused extends ToolError {}
+
 /**
  * What a tool may touch, and nothing else. Narrow on purpose: a tool written
  * later cannot emit an event nor start a command of its own — the guard is
@@ -53,6 +56,9 @@ export interface ToolContext {
 
   /** Throws `ToolError` when the path leaves the readable trees. */
   readSource(path: string, lines: number): Promise<Excerpt>;
+
+  /** Whole text of a file, for an exact replacement; same refusals as `readSource`. */
+  readSourceText(path: string): Promise<string>;
 
   /** One level of a directory of the readable trees; same refusals as `readSource`. */
   listSource(path: string, limit: number): Promise<Excerpt>;
@@ -77,11 +83,12 @@ export interface ToolContext {
   rebuild(host: string): Promise<Rebuilt>;
 
   /**
-   * Commits what the repair wrote: `dnf/` first in co-development, then the
-   * consumer with its realigned lock. Returns the revisions written. Throws
-   * `ToolError` when a tree refuses — a hook is never bypassed.
+   * Commits what the repair wrote as `fix(<scope>): <subject>`: `dnf/` first in
+   * co-development, then the consumer with its realigned lock. Returns the
+   * revisions written. Throws `ToolError` when a tree refuses — a hook is never
+   * bypassed — and `Refused` when a published `dnf/` commit would name a host.
    */
-  commitRepair(host: string, subject: string): Promise<string[]>;
+  commitRepair(host: string, scope: string, subject: string): Promise<string[]>;
 
   /** Run on its way out (stop, rollback, abort): a repair is a new operation. */
   halting(): boolean;

@@ -21,20 +21,26 @@ import { aiLabel } from "../model/ai-labels.ts";
 import type { AskOption } from "../model/events.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import { confine, readableRoots, repoOf, writable } from "./paths.ts";
-import { type ToolContext, ToolError } from "./tools/types.ts";
+import { Refused, type ToolContext, ToolError } from "./tools/types.ts";
 
 /** Log of the run holding every AI call, questions and tool calls alike. */
 const AI_LOG: LogName = { phase: "ai" };
 
 /**
  * Form the gate of `dnf/` demands: one line, `<type>(<scope>): <subject>`, 80
- * characters. The host is the scope, so an AI repair is obvious in `git log`.
+ * characters. The scope names what the fix touches, as a human writes it.
  */
-export function commitMessage(host: string, subject: string): string {
+export function commitMessage(scope: string, subject: string): string {
   const one = subject.replace(/\s+/g, " ").trim();
-  const head = `fix(${host}): `;
+  const head = `fix(${scope}): `;
   if (one === "") throw new ToolError("commit: an empty subject");
   return `${head}${one}`.slice(0, 80);
+}
+
+/** First fleet host a message names as a whole word; host names are `[a-z0-9-]`. */
+export function namedHost(message: string, hosts: readonly string[]): string | undefined {
+  const words = message.toLowerCase().split(/[^a-z0-9-]+/);
+  return hosts.find((host) => words.includes(host.toLowerCase()));
 }
 
 /** Labels say what happens, not what was asked (spec mère § Interface). */
@@ -126,6 +132,12 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     host: hostOf,
     readLog: (name, lines) => context.run.readLog(name, lines),
 
+    async readSourceText(path) {
+      const read = await context.sources.text(confined(path));
+      if (!read.ok) throw new ToolError(read.error);
+      return read.value;
+    },
+
     async readSource(path, lines) {
       const read = await context.sources.read(confined(path), lines);
       if (!read.ok) throw new ToolError(read.error);
@@ -161,16 +173,28 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
 
     onHost: runOnHost,
 
-    async commitRepair(name, subject) {
-      const host = hostOf(name);
+    async commitRepair(name, scope, subject) {
+      hostOf(name);
       const { timeouts } = context.params;
-      const message = commitMessage(host.name, subject);
+      const message = commitMessage(scope, subject);
       const dnf = join(context.workspace, "dnf");
+      const framework = context.codev && (await dirty(context, dnf));
+
+      // `dnf/` is published: nothing of this consumer belongs in its history.
+      const named = framework
+        ? namedHost(
+            message,
+            state().hosts.map((h) => h.name),
+          )
+        : undefined;
+      if (named !== undefined) {
+        throw new Refused(`dnf/ is published: its commit may not name the host ${named}`);
+      }
 
       // Consumer last: nix refuses to write the lock of a flake whose input is
       // a dirty git tree, and it does so in silence (`steps/update.ts`).
       const written: string[] = [];
-      if (context.codev && (await dirty(context, dnf))) {
+      if (framework) {
         written.push(`dnf ${await commitTree(context, "dnf", dnf, message)}`);
         const realigned = await execute(context, realignDnfLock(context.workspace, timeouts));
         if (!succeeded(realigned.result)) {

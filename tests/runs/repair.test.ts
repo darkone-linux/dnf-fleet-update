@@ -111,7 +111,10 @@ const FIX = [
     },
   },
   { call: "validate", args: { host: "gw-cp" } },
-  { call: "commit", args: { host: "gw-cp", subject: "start outline after postgresql" } },
+  {
+    call: "commit",
+    args: { host: "gw-cp", scope: "outline", subject: "start outline after postgresql" },
+  },
 ];
 
 test("a fix in the code: the host is rebuilt, redeployed, and ends deployed", async () => {
@@ -132,9 +135,9 @@ test("a fix in the code: the host is rebuilt, redeployed, and ends deployed", as
     "test 0",
   ]);
 
-  // One commit, scoped by the host, and the lock realigned is not needed here.
+  // One commit, scoped by what it touches; no lock to realign outside codev.
   expect(run.sim.commits.map((commit) => commit.message)).toContain(
-    "fix(gw-cp): start outline after postgresql",
+    "fix(outline): start outline after postgresql",
   );
 
   // A check and a commit cost nothing: the edit alone spent an attempt.

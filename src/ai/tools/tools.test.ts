@@ -435,6 +435,50 @@ describe("service_action", () => {
     expect(context.run.logs.get("ai")).toContain("+  enable = true;");
   });
 
+  test("edit_code replaces one exact passage, the rest of the file untouched", async () => {
+    const { context, tool } = tools(
+      {
+        sources: { "/ws/usr/music.nix": ["{", "  mpdris2.enable = true;", "  $x = 1;", "}", ""] },
+        commands: [{ match: ["git"] }],
+      },
+      UNDER_REPAIR,
+    );
+
+    await call(tool, "repair", "edit_code", {
+      host: "gfx",
+      path: "usr/music.nix",
+      old: "  mpdris2.enable = true;\n",
+      new: "  # $& kept literally\n",
+    });
+
+    expect(context.sources.writes).toEqual([
+      { path: "/ws/usr/music.nix", content: "{\n  # $& kept literally\n  $x = 1;\n}\n" },
+    ]);
+    expect(spentAttempts(context.state(), "gfx")).toBe(1);
+  });
+
+  test("a passage missing or repeated is refused, and costs no attempt", async () => {
+    const { context, tool } = tools(
+      { sources: { "/ws/usr/music.nix": ["a = 1;", "a = 1;"] }, commands: [{ match: ["git"] }] },
+      UNDER_REPAIR,
+    );
+    const edit = (args: object) =>
+      call(tool, "repair", "edit_code", { host: "gfx", path: "usr/music.nix", ...args });
+
+    await expect(edit({ old: "b = 2;", new: "" })).rejects.toThrow("old not found");
+    await expect(edit({ old: "a = 1;", new: "" })).rejects.toThrow("old occurs 2 times");
+    await expect(edit({ old: "a", new: "b", content: "x" })).rejects.toThrow("either content");
+    await expect(edit({})).rejects.toThrow("either content");
+    expect(context.sources.writes).toEqual([]);
+    expect(spentAttempts(context.state(), "gfx")).toBe(0);
+    expect(context.state().actions.map((action) => action.outcome)).toEqual([
+      "refused",
+      "refused",
+      "refused",
+      "refused",
+    ]);
+  });
+
   test("a tree that is not clean refuses the edit before it touches anything", async () => {
     const { context, tool } = tools(
       {
@@ -576,20 +620,77 @@ describe("service_action", () => {
 
     const result = await call(tool, "repair", "commit", {
       host: "gfx",
+      scope: "nginx",
       subject: "bind nginx after acme",
     });
 
     expect(result.lines).toEqual(["committed: dnf 1a2b3c4, consumer 9f8e7d6"]);
     expect(spentAttempts(context.state(), "gfx")).toBe(0);
 
-    // The scope is the host: an AI repair is obvious in `git log`.
+    // The scope names what the fix touches, in both trees alike.
     const messages = context.events.events.flatMap((event) =>
       event.kind === "commit" ? [event.message] : [],
     );
     expect(messages).toEqual([
-      "fix(gfx): bind nginx after acme",
-      "fix(gfx): bind nginx after acme",
+      "fix(nginx): bind nginx after acme",
+      "fix(nginx): bind nginx after acme",
     ]);
+  });
+
+  test("a framework commit naming a fleet host is refused, before anything is written", async () => {
+    const { context, tool } = tools(
+      {
+        codev: true,
+        commands: [
+          {
+            match: (argv) => argv.includes("status"),
+            output: [{ stream: "stdout", line: " M home/modules/music.nix" }],
+          },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+
+    await expect(
+      call(tool, "repair", "commit", { host: "gfx", scope: "gfx", subject: "drop mpdris2" }),
+    ).rejects.toThrow("dnf/ is published: its commit may not name the host gfx");
+    expect(context.commands.calls.some((spec) => spec.argv.includes("commit"))).toBe(false);
+    expect(context.state().actions.at(-1)).toMatchObject({ outcome: "refused", spends: false });
+  });
+
+  test("a consumer-only commit may name the host its machine directory holds", async () => {
+    const { context, tool } = tools(
+      {
+        commands: [
+          {
+            match: (argv) => argv.includes("status"),
+            output: [{ stream: "stdout", line: " M usr/machines/gfx/configuration.nix" }],
+            once: true,
+          },
+          { match: (argv) => argv.includes("add"), once: true },
+          { match: (argv) => argv.includes("commit"), once: true },
+          {
+            match: (argv) => argv.includes("rev-parse"),
+            output: [{ stream: "stdout", line: "9f8e7d6c5b4a" }],
+            once: true,
+          },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+
+    await call(tool, "repair", "commit", { host: "gfx", scope: "gfx", subject: "pin the gpu" });
+    const messages = context.events.events.flatMap((event) =>
+      event.kind === "commit" ? [event.message] : [],
+    );
+    expect(messages).toEqual(["fix(gfx): pin the gpu"]);
+  });
+
+  test("a scope the commit gate would refuse is refused by the schema", async () => {
+    const { tool } = tools({}, UNDER_REPAIR);
+    await expect(
+      call(tool, "repair", "commit", { host: "gfx", scope: "Music Box", subject: "x" }),
+    ).rejects.toThrow("commit: scope");
   });
 
   test("nothing changed: the commit is refused rather than invented", async () => {
@@ -599,7 +700,7 @@ describe("service_action", () => {
     );
 
     await expect(
-      call(tool, "repair", "commit", { host: "gfx", subject: "nothing" }),
+      call(tool, "repair", "commit", { host: "gfx", scope: "nginx", subject: "nothing" }),
     ).rejects.toThrow("nothing to commit");
   });
 

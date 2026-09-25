@@ -231,6 +231,13 @@ export class MemorySources implements SourceFiles {
     return Promise.resolve(ok({ lines: kept, dropped: held.length - kept.length }));
   }
 
+  text(path: string): Promise<Result<string>> {
+    const held = this.files[path];
+    return Promise.resolve(
+      held === undefined ? fail(`no such file: ${path}`) : ok(held.join("\n")),
+    );
+  }
+
   /** Paths held at or under `path`, sorted. */
   private under(path: string): string[] {
     const prefix = path.endsWith("/") ? path : `${path}/`;

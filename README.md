@@ -147,7 +147,7 @@ it is not shown, it cannot ask for:
 | Level | Tools |
 |---|---|
 | `passive` | deployment state, host diagnosis, build and activation logs |
-| `active` / `analysis` | + read the code (consumer, `dnf/`), host units and journals, read-only |
+| `active` / `analysis` | + read, search and list the code (consumer, `dnf/`), host units and journals (user units included), read-only |
 | `repair` | + one action on the units this run saw fall, and the code that describes them |
 
 The built-in tools of `claude` and `opencode` are denied, and so is the project
@@ -157,9 +157,11 @@ the run's — the call is refused, and the refusal is traced like any other call
 
 At `repair` the AI gets a second session on a failed host, in state `AI repair`.
 It may act on services — `systemctl start`, `stop`, `restart`, `reset-failed`,
-on **the units this run saw fall** — and, when that cannot help, rewrite a file
-of the sources, validate it (`just clean`, then a rebuild of **that host
-alone**) and commit it as `fix(<host>): <subject>`. The host is then served once
+on **the units this run saw fall** — and, when that cannot help, edit a file
+of the sources (one exact passage replaced, or the whole file), validate it
+(`just clean`, then a rebuild of **that host alone**) and commit it as
+`fix(<scope>): <subject>`, the scope naming what the fix touches. A `dnf/`
+commit is published: one naming a fleet host is refused. The host is then served once
 more by its own wave. Three attempts per host: an attempt is a *change*, so a
 validation and a commit cost none. Refusals cost none either, a confirmation is
 asked before each action when interactive, and nothing at all happens once the

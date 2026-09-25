@@ -160,6 +160,13 @@ export class DirectorySources implements SourceFiles {
     return excerpt === undefined ? fail(`cannot read: ${path}`) : ok(excerpt);
   }
 
+  async text(path: string): Promise<Result<string>> {
+    const target = await this.inside(path);
+    if (!target.ok) return target;
+    const text = await readText(target.value);
+    return text === undefined ? fail(`not a text file under 1 MiB: ${path}`) : ok(text);
+  }
+
   async list(path: string, limit: number): Promise<Result<Excerpt>> {
     const target = await this.inside(path);
     if (!target.ok) return target;

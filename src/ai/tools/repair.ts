@@ -12,10 +12,13 @@ import {
   unitAction,
 } from "../../engine/commands/host.ts";
 import { type PersistedHost, spentAttempts } from "../../model/persist.ts";
-import { defineTool, type RegisteredTool, type ToolContext, ToolError } from "./types.ts";
+import { defineTool, Refused, type RegisteredTool, type ToolContext, ToolError } from "./types.ts";
 
 /** A file the model rewrites whole: past this it is not editing, it is generating. */
 const MAX_LINES = 2000;
+
+/** What the commit gate of `dnf/` accepts as a scope. */
+const COMMIT_SCOPE = /^[a-z0-9._,/-]+$/;
 
 /** Refused, recorded, thrown: the three always go together, and cost no attempt. */
 function refuse(context: ToolContext, host: string, action: string, reason: string): never {
@@ -112,23 +115,74 @@ async function act(
   };
 }
 
+/** How many times `needle` occurs in `text`, overlaps not counted. */
+const occurrences = (text: string, needle: string): number => text.split(needle).length - 1;
+
+/**
+ * The file as the edit leaves it: `content` whole, or `old` replaced by `new`
+ * where it occurs exactly once (spec § réparation, Remplacement).
+ */
+async function edited(
+  context: ToolContext,
+  args: {
+    path: string;
+    content?: string | undefined;
+    old?: string | undefined;
+    new?: string | undefined;
+  },
+): Promise<string> {
+  const whole = args.content !== undefined;
+  const replacing = args.old !== undefined || args.new !== undefined;
+  if (whole === replacing) throw new Refused("give either content, or old and new");
+  if (args.content !== undefined) return args.content;
+  if (args.old === undefined || args.new === undefined || args.old === "") {
+    throw new Refused("a replacement needs a non-empty old and a new");
+  }
+
+  const text = await context.readSourceText(args.path);
+  const found = occurrences(text, args.old);
+  if (found !== 1) {
+    throw new Refused(
+      found === 0
+        ? `old not found in ${args.path}: copy it exactly, whitespace included`
+        : `old occurs ${found} times in ${args.path}: widen it until it is unique`,
+    );
+  }
+  const replacement = args.new;
+  return text.replace(args.old, () => replacement);
+}
+
 const editCode = defineTool({
   name: "edit_code",
   level: "repair",
   description:
-    "Replace a file of the deployment sources, whole. Only while a host is under repair, only inside the project (and dnf/ in co-development), and never a lock, generated data or the fleet declaration. Returns the diff. Spends one of the host's repair attempts; the host is then rebuilt from it, and it alone.",
+    "Change a file of the deployment sources: replace one exact passage (old, new), or write the whole file (content) to create or redo it. Only while a host is under repair, only inside the project (and dnf/ in co-development), and never a lock, generated data or the fleet declaration. Returns the diff. Spends one of the host's repair attempts; the host is then rebuilt from it, and it alone.",
   input: z.strictObject({
     host: z
       .string()
       .describe("host under repair: the fix is attributed to it, and it alone is rebuilt"),
     path: z.string().describe("path of the file, relative to the deployment project"),
-    content: z.string().describe("the complete new content of the file"),
+    old: z
+      .string()
+      .optional()
+      .describe("exact passage to replace, whitespace included; it must occur once in the file"),
+    new: z.string().optional().describe("what replaces old"),
+    content: z
+      .string()
+      .optional()
+      .describe("the complete new content of the file, instead of old and new"),
   }),
   summary: (args) => `edits ${args.path} for ${args.host}`,
   run: async (context, args) => {
     const host = context.host(args.host);
     const label = `edit ${args.path}`;
-    const lines = args.content.split("\n").length;
+    let content: string;
+    try {
+      content = await edited(context, args);
+    } catch (error) {
+      refuse(context, host.name, label, error instanceof Error ? error.message : String(error));
+    }
+    const lines = content.split("\n").length;
     if (lines > MAX_LINES) {
       refuse(
         context,
@@ -141,7 +195,7 @@ const editCode = defineTool({
 
     let diff: string[];
     try {
-      diff = await context.writeSource(args.path, args.content);
+      diff = await context.writeSource(args.path, content);
     } catch (error) {
       refuse(context, host.name, label, error instanceof Error ? error.message : String(error));
     }
@@ -189,9 +243,13 @@ const commit = defineTool({
   name: "commit",
   level: "repair",
   description:
-    "Commit what you edited, once validate has passed. The message is built for you as fix(<host>): <subject>; give the subject alone, one short line. In co-development dnf/ is committed first and the consumer lock realigned. Costs no repair attempt.",
+    "Commit what you edited, once validate has passed. The message is built for you as fix(<scope>): <subject>. In co-development dnf/ is committed first and the consumer lock realigned; dnf/ is a published framework, so its message names the module, never a host nor anything particular to this project. Costs no repair attempt.",
   input: z.strictObject({
-    host: z.string().describe("host under repair: it becomes the scope of the message"),
+    host: z.string().describe("host under repair"),
+    scope: z
+      .string()
+      .regex(COMMIT_SCOPE)
+      .describe("what the fix touches, lowercase, e.g. music or nginx; not the host in dnf/"),
     subject: z
       .string()
       .min(1)
@@ -208,10 +266,11 @@ const commit = defineTool({
 
     let written: string[];
     try {
-      written = await context.commitRepair(host.name, args.subject);
+      written = await context.commitRepair(host.name, args.scope, args.subject);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      context.record({ host: host.name, action: label, outcome: "failed", spends: false, detail });
+      const outcome = error instanceof Refused ? "refused" : "failed";
+      context.record({ host: host.name, action: label, outcome, spends: false, detail });
       throw error;
     }
     context.record({
