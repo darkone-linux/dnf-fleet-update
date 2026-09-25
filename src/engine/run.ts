@@ -1,8 +1,9 @@
 // Run orchestration (spec § Étapes): lock, parameters, prerequisites, the
 // steps in order, early ends, report, exit code.
 
-import { AiAnalyses, analyseFree, analyseRun } from "../ai/analysis.ts";
+import { AiAnalyses, analyseFree, analyseRun, reviewRun } from "../ai/analysis.ts";
 import { AiToolSession } from "../ai/server.ts";
+import { AiSuggestions } from "../ai/suggestions.ts";
 import { youLabel } from "../model/ai-labels.ts";
 import type { Event } from "../model/events.ts";
 import { ExitCode } from "../model/exit-codes.ts";
@@ -24,6 +25,7 @@ import type {
   LocalHost,
   RunLock,
   SourceFiles,
+  SuggestionFiles,
   ToolServer,
 } from "./ports.ts";
 import { Presence } from "./presence.ts";
@@ -45,6 +47,7 @@ export interface RunPorts {
   lock: RunLock;
   store: DeploymentStore;
   sources: SourceFiles;
+  suggestions: SuggestionFiles;
   toolServer: ToolServer;
 }
 
@@ -285,6 +288,8 @@ export async function runFleetUpdate(
       state: () => recorder.state,
       tools: new AiToolSession(),
       analyses: new AiAnalyses(),
+      suggestionFiles: ports.suggestions,
+      suggestions: new AiSuggestions(),
       repaired: new Map(),
       startedAt,
     };
@@ -354,8 +359,9 @@ export async function runFleetUpdate(
       await answering;
     }
 
-    // Summary of the whole run, before the report that carries it.
+    // Summary of the whole run, then its review, before the report that carries both.
     await analyseRun(context);
+    await reviewRun(context);
     await context.tools.stop(context);
 
     // Cut by `now`, or by an internal error: the step never ended on its own.
@@ -381,6 +387,7 @@ export async function runFleetUpdate(
         warnings: progress.warnings,
         knownErrors: context.known.all(),
         analyses: context.analyses.all(),
+        suggestions: context.suggestions.all(),
         zonesWithoutCache: progress.hosts?.zonesWithoutCache() ?? [],
       },
       errors.last,

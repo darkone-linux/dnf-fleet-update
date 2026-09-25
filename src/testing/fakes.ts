@@ -6,6 +6,7 @@
 import { relative } from "node:path";
 import { AiAnalyses } from "../ai/analysis.ts";
 import { AiToolSession } from "../ai/server.ts";
+import { AiSuggestions } from "../ai/suggestions.ts";
 import { AiGate, QuestionQueue, type RunContext } from "../engine/context.ts";
 import { RunFlow } from "../engine/flow.ts";
 import { KnownErrors, type Signature } from "../engine/known-errors.ts";
@@ -30,6 +31,8 @@ import {
   type RunStore,
   type SavedRun,
   type SourceFiles,
+  type SuggestionFile,
+  type SuggestionFiles,
   type ToolEndpoint,
   type ToolServer,
 } from "../engine/ports.ts";
@@ -279,6 +282,29 @@ export class MemorySources implements SourceFiles {
   }
 }
 
+/** Suggestion files a test starts from, by slug; what the run wrote lands here too. */
+export class MemorySuggestions implements SuggestionFiles {
+  readonly files: Map<string, string>;
+
+  constructor(files: Readonly<Record<string, string>> = {}) {
+    this.files = new Map(Object.entries(files));
+  }
+
+  list(): Promise<SuggestionFile[]> {
+    const slugs = [...this.files.keys()].sort();
+    return Promise.resolve(slugs.map((slug) => ({ slug, text: this.files.get(slug) ?? "" })));
+  }
+
+  read(slug: string): Promise<string | undefined> {
+    return Promise.resolve(this.files.get(slug));
+  }
+
+  write(slug: string, text: string): Promise<Result<void>> {
+    this.files.set(slug, text);
+    return Promise.resolve(ok(undefined));
+  }
+}
+
 /** Every run starts at the same date: a second run of the same mode is refused, like on disk. */
 export class MemoryDeploymentStore implements DeploymentStore {
   readonly runs: MemoryRunStore[] = [];
@@ -434,6 +460,7 @@ export interface FakeRunContext extends RunContext {
   events: RecordingChannel;
   run: MemoryRunStore;
   sources: MemorySources;
+  suggestionFiles: MemorySuggestions;
   toolServer: MemoryToolServer;
   local: FakeLocalHost;
 }
@@ -448,6 +475,9 @@ export interface FakeRunOptions {
 
   /** Files the AI may read, by the path the tool asks for. */
   sources?: Record<string, string[]>;
+
+  /** Suggestion files already there, by slug. */
+  suggestions?: Record<string, string>;
   codev?: boolean;
   hostname?: string;
   addresses?: string[];
@@ -476,6 +506,8 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     state: () => events.persisted,
     tools: new AiToolSession(),
     analyses: new AiAnalyses(),
+    suggestionFiles: new MemorySuggestions(options.suggestions),
+    suggestions: new AiSuggestions(),
     repaired: new Map(),
     startedAt: 0,
   };

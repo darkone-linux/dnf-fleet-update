@@ -14,7 +14,9 @@ import { LoopbackToolServer } from "./adapters/mcp.ts";
 import { ProcessRunner } from "./adapters/process.ts";
 import { DirectorySources } from "./adapters/sources.ts";
 import { DirectoryStore } from "./adapters/store.ts";
+import { DirectorySuggestions } from "./adapters/suggestions.ts";
 import { readableRoots, unwalked } from "./ai/paths.ts";
+import { SUGGESTIONS_DIR } from "./ai/suggestions.ts";
 import { HELP } from "./cli/help.ts";
 import { interactively, parseCli, resolveParams, resumeParams } from "./cli/options.ts";
 import { RunFlow } from "./engine/flow.ts";
@@ -72,6 +74,7 @@ const ports: RunPorts = {
 
   // `dnf/` too: a store path outside codev, readable either way.
   sources: new DirectorySources(readableRoots(workspace), unwalked),
+  suggestions: new DirectorySuggestions(join(workspace, SUGGESTIONS_DIR)),
   toolServer: new LoopbackToolServer(),
   store: {
     create: (mode) => {

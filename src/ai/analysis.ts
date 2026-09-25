@@ -5,10 +5,18 @@
 
 import type { RunContext } from "../engine/context.ts";
 import type { HostTable } from "../engine/hosts.ts";
-import { freePrompt, hostPrompt, runPrompt, systemPrompt } from "./prompts.ts";
+import {
+  freePrompt,
+  hostPrompt,
+  runPrompt,
+  type SessionKind,
+  suggestionsPrompt,
+  systemPrompt,
+} from "./prompts.ts";
 import type { AiTools } from "./providers.ts";
 import { askAi } from "./session.ts";
 import { toolLevel } from "./tools/registry.ts";
+import { runWarnings } from "./warnings.ts";
 
 /** What the AI concluded, kept for the report (spec § Rapport et Matrix). */
 export interface Analysis {
@@ -41,8 +49,8 @@ export interface AiQuestion {
   summary: string;
   prompt: string;
 
-  /** The repair session: the only one told it may act (spec § réparation). */
-  acting?: boolean;
+  /** Default `analysis`; `repair` is the only one told it may act (spec § réparation). */
+  session?: SessionKind;
 }
 
 /** One session with the tools of the run's level attached, when there are any. */
@@ -51,7 +59,7 @@ export async function ask(
   question: AiQuestion,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const { id, summary, prompt, acting } = question;
+  const { id, summary, prompt, session } = question;
   const tools: AiTools | undefined = await context.tools.start(context, context.state);
   return askAi(
     context,
@@ -59,7 +67,7 @@ export async function ask(
       id,
       summary,
       prompt,
-      system: systemPrompt(toolLevel(context.params), acting ?? false),
+      system: systemPrompt(toolLevel(context.params), session),
       ...(tools === undefined ? {} : { tools }),
     },
     signal,
@@ -138,4 +146,29 @@ export async function analyseRun(context: RunContext): Promise<void> {
     prompt: runPrompt(context.state(), context.params.aiContext),
   });
   context.analyses.add(answer);
+}
+
+/**
+ * End of run, `--ai-analysis active`: the warnings reviewed for improvements,
+ * filed as suggestions (spec § Suggestions d'amélioration). Nothing to review,
+ * nothing paid for.
+ */
+export async function reviewRun(context: RunContext): Promise<void> {
+  if (context.params.aiAnalysis !== "active" || quiet(context)) return;
+  const groups = await runWarnings(context.run.logNames(), (name, lines) =>
+    context.run.readLog(name, lines),
+  );
+  if (groups.length === 0) return;
+
+  context.suggestions.reviewing = true;
+  try {
+    await ask(context, {
+      id: "suggestions",
+      summary: "reviewing the run for improvements",
+      prompt: suggestionsPrompt(context.state(), context.params.aiContext),
+      session: "suggestions",
+    });
+  } finally {
+    context.suggestions.reviewing = false;
+  }
 }

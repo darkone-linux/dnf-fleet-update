@@ -21,6 +21,7 @@ import { aiLabel } from "../model/ai-labels.ts";
 import type { AskOption } from "../model/events.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import { confine, readableRoots, repoOf, writable } from "./paths.ts";
+import { markSeen, parseSuggestion, renderSuggestion, suggestionPath } from "./suggestions.ts";
 import { Refused, type ToolContext, ToolError } from "./tools/types.ts";
 
 /** Log of the run holding every AI call, questions and tool calls alike. */
@@ -100,6 +101,13 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
       throw new ToolError(`${repo} is not clean: a repair commit must carry only the fix`);
     }
     clean.add(repo);
+  };
+
+  // Filed by the end-of-run review alone: a host analysis explains, it does not file.
+  const reviewing = (): void => {
+    if (!context.suggestions.reviewing) {
+      throw new Refused("suggestions are filed by the end-of-run review only");
+    }
   };
 
   const confined = (path: string): string => {
@@ -222,6 +230,33 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
       });
       if (built.path !== undefined) context.repaired.set(host.name, built.path);
       return built;
+    },
+
+    async knownSuggestions() {
+      reviewing();
+      const files = await context.suggestionFiles.list();
+      return files.map((file) => parseSuggestion(file.slug, file.text));
+    },
+
+    async suggest(slug, title, body) {
+      reviewing();
+      const path = suggestionPath(slug);
+      if (context.suggestions.has(slug)) return `${path}: already filed or seen by this run`;
+
+      const known = await context.suggestionFiles.read(slug);
+      const runId = context.run.id;
+      const text =
+        known === undefined ? renderSuggestion(title, body, runId) : markSeen(known, runId);
+      const written = await context.suggestionFiles.write(slug, text);
+      if (!written.ok) throw new ToolError(written.error);
+
+      const { title: filedTitle, status, runs } = parseSuggestion(slug, text);
+      const fresh = known === undefined;
+      context.suggestions.add({ slug, title: filedTitle, status, runs, fresh });
+      if (fresh) return `filed: ${path}`;
+      return status === "ignored"
+        ? `${path}: ignored by the operator; marked seen, nothing else`
+        : `${path}: known already, marked seen (${runs} runs); its text is kept`;
     },
 
     halting: () => context.flow.halt.aborted || context.flow.ending !== undefined,

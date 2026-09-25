@@ -79,6 +79,8 @@ describe("tools/list", () => {
       "list_code",
       "host_units",
       "host_journal",
+      "known_suggestions",
+      "suggest",
     ]);
     expect(result.tools[0]?.inputSchema.type).toBe("object");
   });

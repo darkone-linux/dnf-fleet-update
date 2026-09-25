@@ -11,6 +11,15 @@ const ROLE = ["You are diagnosing a NixOS fleet deployment run by fleet-update."
 
 const READ_ONLY = ["You are read-only: you observe and explain, you never change anything."];
 
+/** Kind of session: what it may do, and the answer it owes. */
+export type SessionKind = "analysis" | "repair" | "suggestions";
+
+/** End-of-run review: files notes for a human, touches nothing (spec § Suggestions). */
+const MAY_SUGGEST = [
+  "You review this run for improvements. You change nothing, neither the code nor the fleet:",
+  "you file suggestions with suggest, for a human to read and decide.",
+];
+
 /** Repair session only: the two ways, in their order (spec § réparation, J8). */
 const MAY_ACT = [
   "You may act on this host alone, in two ways, in this order:",
@@ -51,27 +60,31 @@ const ACT_SHAPE = [
   "Say what you did, what it changed, and what is left for a human. Four sentences at most.",
 ];
 
+const SUGGEST_SHAPE = [
+  "Use concise Markdown. Say what you filed and what you left aside as noise.",
+  "Two sentences at most: the files carry the detail.",
+];
+
+const ROLE_OF: Record<SessionKind, { may: readonly string[]; shape: readonly string[] }> = {
+  analysis: { may: READ_ONLY, shape: SHAPE },
+  repair: { may: MAY_ACT, shape: ACT_SHAPE },
+  suggestions: { may: MAY_SUGGEST, shape: SUGGEST_SHAPE },
+};
+
 /** Without a tool the AI has only the prompt: it is told so, to stop it asking. */
 const NO_TOOLS = [
   "You have no tools in this run: answer from the context below alone,",
   "and say what you would need to be sure.",
 ];
 
-/** `acting`: the repair session, the only one allowed to touch a host. */
-export function systemPrompt(level: ToolLevel | undefined, acting = false): string {
+/** `repair`: the only session allowed to touch a host. */
+export function systemPrompt(level: ToolLevel | undefined, kind: SessionKind = "analysis"): string {
   const tools = level === undefined ? NO_TOOLS : CONDUCT;
   const method = level !== undefined && reaches(level, "active") ? ["", ...METHOD] : [];
-  return [
-    ...ROLE,
-    ...(acting ? MAY_ACT : READ_ONLY),
-    "",
-    ...CONTEXT_BOUNDARY,
-    "",
-    ...tools,
-    ...method,
-    "",
-    ...(acting ? ACT_SHAPE : SHAPE),
-  ].join("\n");
+  const { may, shape } = ROLE_OF[kind];
+  return [...ROLE, ...may, "", ...CONTEXT_BOUNDARY, "", ...tools, ...method, "", ...shape].join(
+    "\n",
+  );
 }
 
 /** Seed of a host: where it stands, why it stopped, what it showed. Bounded. */
@@ -170,6 +183,32 @@ export function repairPrompt(
     "else a fix of the code the cause lies in.",
     ...editable(state),
     "If nothing you may do here would help, act on nothing and say why.",
+  ].join("\n");
+}
+
+/**
+ * End-of-run review of the warnings (spec § Suggestions d'amélioration): what
+ * the files already hold first, so nothing is filed twice.
+ */
+export function suggestionsPrompt(state: PersistedState, context?: string): string {
+  const scope = state.run?.codev
+    ? ["Scope: the project and the framework under dnf/."]
+    : [
+        "Scope: the project only. dnf/ is a locked input here: a finding only the framework",
+        "can fix is not filed.",
+      ];
+  return [
+    ...runSeed(state),
+    ...contextSeed(context),
+    "",
+    "Review the warnings of this run for improvements worth a change: an option renamed or",
+    "deprecated, a change that would silence a warning, a problem worth investigating.",
+    "1. known_suggestions: what is filed already. Never file a known finding under a new",
+    "   slug: call suggest with its own slug when it shows up again, ignored ones included.",
+    "2. run_warnings, then search_code and read_code: find where each warning comes from.",
+    "3. suggest, once per cause: the body says what, where (path:line), why, and the change",
+    "   proposed. Leave out what nobody can act on.",
+    ...scope,
   ].join("\n");
 }
 

@@ -7,7 +7,7 @@ import type { HostState } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
 import { type CommandScript, fakeRunContext, feed } from "../testing/fakes.ts";
 import { fleetSelection } from "../testing/fleet.ts";
-import { analyseFree, analyseHost, analyseRun } from "./analysis.ts";
+import { analyseFree, analyseHost, analyseRun, reviewRun } from "./analysis.ts";
 
 /** An answer the scripted tool streams back on stdout. */
 const ANSWER: CommandScript = {
@@ -121,6 +121,45 @@ describe("analyseRun", () => {
 
     expect(context.commands.calls).toEqual([]);
     expect(context.analyses.all()).toEqual([]);
+  });
+});
+
+describe("reviewRun", () => {
+  /** A run whose logs hold one warning, under `--ai-analysis active`. */
+  function warned(params: Partial<RunParams> = { aiAnalysis: "active" }) {
+    const context = fakeRunContext({ commands: [ANSWER], params });
+    context.run.appendLog({ host: "gfx", phase: "test" }, "warning: not applying UID change");
+    return context;
+  }
+
+  test("reviews the warnings once the run is over, in its own session", async () => {
+    const context = warned();
+    await reviewRun(context);
+
+    const call = context.commands.calls[0];
+    const argv: readonly string[] = call?.argv ?? [];
+    expect(argv[argv.indexOf("--system-prompt") + 1]).toContain("you file suggestions");
+    expect(call?.stdin).toContain("known_suggestions");
+    expect(call?.stdin).toContain("Scope: the project only");
+
+    // Closed again: a later session cannot file.
+    expect(context.suggestions.reviewing).toBe(false);
+  });
+
+  test("only under --ai-analysis active", async () => {
+    for (const aiAnalysis of ["none", "passive"] as const) {
+      const context = warned({ aiAnalysis, aiErrorAction: "repair" });
+      await reviewRun(context);
+      expect(context.commands.calls).toEqual([]);
+    }
+  });
+
+  test("no warning in the logs: no session, nothing paid for", async () => {
+    const context = fakeRunContext({ commands: [ANSWER], params: { aiAnalysis: "active" } });
+    context.run.appendLog({ phase: "ai" }, "warning: the AI's own words do not count");
+    await reviewRun(context);
+
+    expect(context.commands.calls).toEqual([]);
   });
 });
 

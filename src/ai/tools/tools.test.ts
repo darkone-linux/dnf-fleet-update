@@ -58,6 +58,8 @@ describe("registry", () => {
       "list_code",
       "host_units",
       "host_journal",
+      "known_suggestions",
+      "suggest",
     ]);
     expect(toolsFor("repair").map((tool) => tool.name)).toEqual([
       ...active,
@@ -215,6 +217,88 @@ describe("run_warnings", () => {
     expect(await call(tool, "passive", "run_warnings")).toEqual({
       lines: ["no warning in this run's logs"],
     });
+  });
+});
+
+describe("suggestions", () => {
+  const SUGGESTION = {
+    slug: "gdm-greeter-uid-shift",
+    title: "Pin the gdm greeter UIDs",
+    body: "`not applying UID change` on 5 hosts, every activation.",
+  };
+
+  /** The end-of-run review under way: the only time the two tools answer. */
+  function reviewing(options: FakeRunOptions = {}) {
+    const made = tools(options);
+    made.context.suggestions.reviewing = true;
+    return made;
+  }
+
+  test("outside the end-of-run review both tools refuse, and nothing is written", async () => {
+    const { context, tool } = tools();
+
+    await expect(call(tool, "active", "suggest", SUGGESTION)).rejects.toThrow(
+      "end-of-run review only",
+    );
+    await expect(call(tool, "active", "known_suggestions")).rejects.toThrow(
+      "end-of-run review only",
+    );
+    expect(context.suggestionFiles.files.size).toBe(0);
+  });
+
+  test("a new slug files its file, and the run keeps it for the report", async () => {
+    const { context, tool } = reviewing();
+
+    expect(await call(tool, "active", "suggest", SUGGESTION)).toEqual({
+      lines: ["filed: var/deployments/suggestions/gdm-greeter-uid-shift.md"],
+    });
+    expect(context.suggestionFiles.files.get("gdm-greeter-uid-shift")).toContain(
+      "- First seen: 20260917T020000Z-full",
+    );
+    expect(context.suggestions.all()).toEqual([
+      {
+        slug: "gdm-greeter-uid-shift",
+        title: "Pin the gdm greeter UIDs",
+        status: "open",
+        runs: 1,
+        fresh: true,
+      },
+    ]);
+  });
+
+  test("a known slug is marked seen, its text kept; ignored ones say so", async () => {
+    const known =
+      "# Pin them\n\n- Status: ignored\n- Last seen: old\n- Runs: 2\n\nOperator note.\n";
+    const { context, tool } = reviewing({ suggestions: { "gdm-greeter-uid-shift": known } });
+
+    expect(await call(tool, "active", "known_suggestions")).toEqual({
+      lines: ["gdm-greeter-uid-shift | ignored | 2 runs, last old | Pin them"],
+    });
+    expect(await call(tool, "active", "suggest", SUGGESTION)).toEqual({
+      lines: [
+        "var/deployments/suggestions/gdm-greeter-uid-shift.md: ignored by the operator; marked seen, nothing else",
+      ],
+    });
+    expect(context.suggestionFiles.files.get("gdm-greeter-uid-shift")).toBe(
+      "# Pin them\n\n- Status: ignored\n- Last seen: 20260917T020000Z-full\n- Runs: 3\n\nOperator note.\n",
+    );
+
+    // Once per run: a second call moves nothing.
+    expect((await call(tool, "active", "suggest", SUGGESTION)).lines[0]).toContain(
+      "already filed or seen by this run",
+    );
+    expect(context.suggestions.all()).toHaveLength(1);
+  });
+
+  test("a slug or a body out of bounds is refused by the schema", async () => {
+    const { tool } = reviewing();
+
+    await expect(
+      call(tool, "active", "suggest", { ...SUGGESTION, slug: "../../etc/passwd" }),
+    ).rejects.toThrow("suggest: slug");
+    await expect(
+      call(tool, "active", "suggest", { ...SUGGESTION, body: "x\n".repeat(61) }),
+    ).rejects.toThrow("60 lines at most");
   });
 });
 

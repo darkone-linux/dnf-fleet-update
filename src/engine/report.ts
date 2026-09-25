@@ -2,6 +2,7 @@
 // markdown for `report.md`. Pure: built from the `state.json` fold.
 
 import type { Analysis } from "../ai/analysis.ts";
+import { type SuggestionEntry, suggestionPath } from "../ai/suggestions.ts";
 import type { PullSource, RunInfo } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULTS } from "../model/params.ts";
@@ -25,6 +26,9 @@ export interface ReportInput {
 
   /** What the AI concluded, per host and for the run (spec § analyse, Rapport). */
   analyses: readonly Analysis[];
+
+  /** Suggestions this run filed or met again (spec § analyse, Suggestions). */
+  suggestions?: readonly SuggestionEntry[];
 
   /** Zones of the run no harmonia serves (spec § Rapport): actionable warning. */
   zonesWithoutCache?: readonly string[];
@@ -214,6 +218,18 @@ function aiRepair(actions: readonly AiAction[]): string[] {
 }
 
 /**
+ * What the review filed or met again (spec § analyse, Suggestions), ignored
+ * ones left out: the operator silenced them. Not an alert: never in Matrix.
+ */
+function suggestions(entries: readonly SuggestionEntry[]): string[] {
+  const shown = entries.filter((entry) => entry.status !== "ignored");
+  if (shown.length === 0) return [];
+  const line = (entry: SuggestionEntry) =>
+    `- **${entry.title}** — ${entry.fresh ? "new" : `seen in ${entry.runs} runs`} — \`${suggestionPath(entry.slug)}\``;
+  return ["", "## Suggestions", "", ...shown.map(line)];
+}
+
+/**
  * Hosts a repair commit sent out on new code (spec § réparation, Ce que ça
  * fait au reste du run). Said in the header, so the alert room carries it too:
  * the fleet is split across two revisions until the next run.
@@ -374,7 +390,12 @@ export function renderReport(input: ReportInput): Report {
     markdown.push("", "## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`));
   }
 
-  markdown.push(...diagnostics(hosts), ...aiAnalysis(analyses), ...aiRepair(state.actions));
+  markdown.push(
+    ...diagnostics(hosts),
+    ...aiAnalysis(analyses),
+    ...aiRepair(state.actions),
+    ...suggestions(input.suggestions ?? []),
+  );
 
   if (state.notes.length > 0) {
     const line = (note: PersistedState["notes"][number]) =>

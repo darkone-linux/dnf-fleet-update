@@ -173,6 +173,28 @@ export interface SourceFiles {
   write(path: string, content: string): Promise<Result<void>>;
 }
 
+/** One suggestion file: its name without `.md`, and its text. */
+export interface SuggestionFile {
+  slug: string;
+  text: string;
+}
+
+/**
+ * Suggestion files kept across runs, `var/deployments/suggestions/` (spec
+ * § analyse, Suggestions d'amélioration). Slugs come validated: a name outside
+ * `[a-z0-9-]` throws.
+ */
+export interface SuggestionFiles {
+  /** Every file, sorted by slug; none while the directory does not exist. */
+  list(): Promise<SuggestionFile[]>;
+
+  /** `undefined`: no such file. */
+  read(slug: string): Promise<string | undefined>;
+
+  /** Created or replaced, the directory with it. */
+  write(slug: string, text: string): Promise<Result<void>>;
+}
+
 /** Last run directory, as `--resume` finds it (spec § État et reprise). */
 export interface SavedRun {
   id: string;

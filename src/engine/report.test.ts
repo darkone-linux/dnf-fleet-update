@@ -78,6 +78,31 @@ describe("renderReport", () => {
     analyses: [],
   };
 
+  test("suggestions filed or met again are listed, ignored ones left out, never in Matrix", () => {
+    const report = renderReport({
+      ...BASE,
+      state,
+      suggestions: [
+        { slug: "gdm-uid", title: "Pin the greeter UIDs", status: "open", runs: 1, fresh: true },
+        { slug: "nextcloud", title: "Legacy Nextcloud", status: "open", runs: 3, fresh: false },
+        { slug: "info-dir", title: "Info dir noise", status: "ignored", runs: 9, fresh: false },
+      ],
+    });
+
+    expect(report.markdown).toContain(
+      [
+        "## Suggestions",
+        "",
+        "- **Pin the greeter UIDs** — new — `var/deployments/suggestions/gdm-uid.md`",
+        "- **Legacy Nextcloud** — seen in 3 runs — `var/deployments/suggestions/nextcloud.md`",
+        "",
+      ].join("\n"),
+    );
+    expect(report.markdown).not.toContain("Info dir noise");
+    expect(report.summary).toEqual([]);
+    expect(renderReport({ ...BASE, state }).markdown).not.toContain("## Suggestions");
+  });
+
   test("short lines for the end of the run", () => {
     const report = renderReport({
       runId: RUN_ID,

@@ -180,6 +180,16 @@ report's **AI repair** section, refusals and their reason included. `report.md` 
 host analysed, then the end-of-run summary, which also rides along — trimmed —
 on the Matrix message. The analysis never replaces a host's raw reason.
 
+At `--ai-analysis active` the run ends with a review of its warnings, grouped
+across every log: a renamed option, a change that would silence a warning, a
+problem worth a look. Each finding is filed as
+`var/deployments/suggestions/<slug>.md` — in the project, and in `dnf/` in
+co-development — and listed under the report's **Suggestions** section, never
+in Matrix. The files outlive the run: a finding met again only moves its
+`Last seen` and `Runs` lines, and writing `Status: ignored` in one silences it.
+The review changes neither the code nor the fleet, and a run without warnings
+asks nothing.
+
 ### Execution
 
 | Option | Default | Description |

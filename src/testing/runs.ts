@@ -22,6 +22,7 @@ import {
   MemoryDeploymentStore,
   type MemoryRunStore,
   MemorySources,
+  MemorySuggestions,
   MemoryToolServer,
   RecordingChannel,
 } from "./fakes.ts";
@@ -49,6 +50,9 @@ export interface RunCase extends Omit<SimOptions, "hooks"> {
   /** Files the AI may read, by the path its tool asks for. */
   sources?: Record<string, string[]>;
 
+  /** Suggestion files already there, by slug. */
+  suggestions?: Record<string, string>;
+
   /** Lock busy at the start: the takeover belongs to the run (spec § Verrou). */
   lock?: { holder: LockHolder; diesOn?: readonly ("SIGTERM" | "SIGKILL")[] };
 
@@ -73,6 +77,9 @@ export interface RunOutcome {
 
   /** Every run directory, the resumed ones included. */
   store: MemoryDeploymentStore;
+
+  /** Suggestion files, carried over to a run `after` this one. */
+  suggestions: MemorySuggestions;
   sim: SimFleet;
   clock: FakeClock;
   flow: RunFlow;
@@ -108,6 +115,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     lock,
     store,
     sources: new MemorySources(runCase.sources),
+    suggestions: previous?.suggestions ?? new MemorySuggestions(runCase.suggestions),
     toolServer: new MemoryToolServer(),
   };
 
@@ -136,6 +144,7 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
     events: stream,
     recorded,
     store,
+    suggestions: ports.suggestions,
     sim,
     clock,
     flow,

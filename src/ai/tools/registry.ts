@@ -9,6 +9,7 @@ import { hostTools } from "./host.ts";
 import { logTools } from "./logs.ts";
 import { repairTools } from "./repair.ts";
 import { stateTools } from "./state.ts";
+import { suggestionTools } from "./suggestions.ts";
 import { highest, type RegisteredTool, reaches, type ToolLevel } from "./types.ts";
 
 export const TOOLS: readonly RegisteredTool[] = [
@@ -16,6 +17,7 @@ export const TOOLS: readonly RegisteredTool[] = [
   ...logTools,
   ...codeTools,
   ...hostTools,
+  ...suggestionTools,
   ...repairTools,
 ];
 

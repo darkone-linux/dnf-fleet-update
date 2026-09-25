@@ -45,7 +45,7 @@ export async function repairHost(
         analysis?.lines ?? [],
         context.params.aiContext,
       ),
-      acting: true,
+      session: "repair",
     });
     if (quiet(context)) return;
 

@@ -2,12 +2,20 @@
 
 import type { AiAnalyses } from "../ai/analysis.ts";
 import type { AiToolSession } from "../ai/server.ts";
+import type { AiSuggestions } from "../ai/suggestions.ts";
 import type { AskOption, Event, Level } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
 import type { RunFlow } from "./flow.ts";
 import type { KnownErrors } from "./known-errors.ts";
-import type { EngineContext, LocalHost, RunStore, SourceFiles, ToolServer } from "./ports.ts";
+import type {
+  EngineContext,
+  LocalHost,
+  RunStore,
+  SourceFiles,
+  SuggestionFiles,
+  ToolServer,
+} from "./ports.ts";
 import type { SavedState } from "./resume.ts";
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -93,6 +101,12 @@ export interface RunContext extends EngineContext {
 
   /** What the AI concluded, for the report (spec § analyse, Rapport). */
   analyses: AiAnalyses;
+
+  /** Suggestion files, kept across runs (spec § analyse, Suggestions d'amélioration). */
+  suggestionFiles: SuggestionFiles;
+
+  /** What this run filed or met again, and whether the review is underway. */
+  suggestions: AiSuggestions;
 
   /** Toplevel a repair rebuilt, by host: the wave serves it on its next pass. */
   repaired: Map<string, string>;

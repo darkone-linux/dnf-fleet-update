@@ -11,6 +11,7 @@ import type { Excerpt, LogName } from "../../engine/ports.ts";
 import type { Rebuilt } from "../../engine/steps/build.ts";
 import type { RunParams } from "../../model/params.ts";
 import type { AiAction, PersistedHost, PersistedState } from "../../model/persist.ts";
+import type { Suggestion } from "../suggestions.ts";
 
 export const TOOL_LEVELS = ["passive", "active", "repair"] as const;
 
@@ -92,6 +93,15 @@ export interface ToolContext {
    * bypassed — and `Refused` when a published `dnf/` commit would name a host.
    */
   commitRepair(host: string, scope: string, subject: string): Promise<string[]>;
+
+  /** Suggestion files kept across runs. Throws `Refused` outside the end-of-run review. */
+  knownSuggestions(): Promise<Suggestion[]>;
+
+  /**
+   * Files a suggestion, or marks a known one seen by this run, its text kept.
+   * Returns what happened, for the model. Throws `Refused` outside the review.
+   */
+  suggest(slug: string, title: string, body: string): Promise<string>;
 
   /** Run on its way out (stop, rollback, abort): a repair is a new operation. */
   halting(): boolean;
