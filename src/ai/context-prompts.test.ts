@@ -35,3 +35,19 @@ test("empty operator context adds no section", () => {
 test("operator guidance does not change the system's safety boundaries", () => {
   expect(systemPrompt(undefined)).toContain("not permission to exceed these boundaries");
 });
+
+test("the repair prompt says which trees an edit may reach", () => {
+  const run = {
+    version: "0",
+    selection: "all",
+    mode: "full" as const,
+    aiModel: "claude",
+    maxParallel: 1,
+  };
+  const codev = { ...initialPersisted(), run: { ...run, codev: true } };
+  const consumer = { ...initialPersisted(), run: { ...run, codev: false } };
+
+  expect(repairPrompt(codev, HOST, [])).toContain("framework under dnf/ may both be edited");
+  expect(repairPrompt(consumer, HOST, [])).toContain("only the project may be edited");
+  expect(repairPrompt(consumer, HOST, [])).toContain("a fix of the code");
+});

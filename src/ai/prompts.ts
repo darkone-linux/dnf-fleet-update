@@ -5,25 +5,35 @@
 // the tool prints.
 
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
-import type { ToolLevel } from "./tools/types.ts";
+import { reaches, type ToolLevel } from "./tools/types.ts";
 
 const ROLE = ["You are diagnosing a NixOS fleet deployment run by fleet-update."];
 
 const READ_ONLY = ["You are read-only: you observe and explain, you never change anything."];
 
-/** Repair session only: what it may do, and where that stops (spec § réparation). */
+/** Repair session only: the two ways, in their order (spec § réparation, J8). */
 const MAY_ACT = [
-  "You may act on this host alone, through service_action on units this run saw fail, or by",
-  "editing the code with edit_code. Prefer the service action: it is local and reversible.",
-  "An edit must then be checked with validate and sealed with commit — the host is redeployed",
-  "from what validate builds, and no other host is. You have three attempts, a check and a",
-  "commit cost none, and the operator may decline any action. Stop as soon as nothing fails.",
+  "You may act on this host alone, in two ways, in this order:",
+  "- service_action on units this run saw fail, when restarting or resetting them can be enough;",
+  "- otherwise, when the cause is in the code: find it (search_code, read_code), fix it with",
+  "  edit_code (old and new replace one exact passage), check it with validate, seal it with",
+  "  commit. The host is redeployed from what validate builds, and no other host is.",
+  "You have three attempts; a check and a commit cost none, and the operator may decline any",
+  "action. Stop as soon as nothing fails.",
 ];
 
 const CONDUCT = [
   "Ground every claim in what the tools return. Say plainly when you do not know.",
   "You have no shell and no SSH. The tools listed to you are all you have;",
   "there is no other way to reach the hosts or the sources, and asking for one is a dead end.",
+];
+
+/** With the code and the hosts in reach: dig to the first cause (spec § analyse, Prompts). */
+const METHOD = [
+  "Follow a failure to its first cause: when a unit failed because another did, read that one;",
+  "a home-manager-<login>.service starts user units, whose journal host_journal gives with",
+  "scope user. Search the code (search_code, list_code) before saying something cannot be",
+  "found. The length limit below is on your answer, not on your investigation.",
 ];
 
 const CONTEXT_BOUNDARY = [
@@ -50,6 +60,7 @@ const NO_TOOLS = [
 /** `acting`: the repair session, the only one allowed to touch a host. */
 export function systemPrompt(level: ToolLevel | undefined, acting = false): string {
   const tools = level === undefined ? NO_TOOLS : CONDUCT;
+  const method = level !== undefined && reaches(level, "active") ? ["", ...METHOD] : [];
   return [
     ...ROLE,
     ...(acting ? MAY_ACT : READ_ONLY),
@@ -57,6 +68,7 @@ export function systemPrompt(level: ToolLevel | undefined, acting = false): stri
     ...CONTEXT_BOUNDARY,
     "",
     ...tools,
+    ...method,
     "",
     ...(acting ? ACT_SHAPE : SHAPE),
   ].join("\n");
@@ -127,6 +139,16 @@ export function runPrompt(state: PersistedState, context?: string): string {
   ].join("\n");
 }
 
+/** Which trees an edit may reach (spec § réparation, Portée de l'édition). */
+function editable(state: PersistedState): string[] {
+  return state.run?.codev
+    ? ["Co-development: the project and the framework under dnf/ may both be edited."]
+    : [
+        "dnf/ is a locked input here: only the project may be edited; a defect of the",
+        "framework itself ends as an analysis.",
+      ];
+}
+
 /**
  * Repair of one host, seeded by the analysis its own session just wrote: the
  * reasoning is not paid for twice.
@@ -144,7 +166,9 @@ export function repairPrompt(
     ...hostSeed(host),
     ...(analysis.length > 0 ? ["", "Your analysis of this host:", ...analysis] : []),
     "",
-    `Bring the failed units of ${host.name} back up if a service action can do it.`,
+    `Bring the failed units of ${host.name} back up: a service action if it can be enough,`,
+    "else a fix of the code the cause lies in.",
+    ...editable(state),
     "If nothing you may do here would help, act on nothing and say why.",
   ].join("\n");
 }
