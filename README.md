@@ -260,7 +260,6 @@ needs attention, the right column gives the overall state.
 | `↑↓` | scroll the focused pane; change host in the log view |
 | `↵` | selected host → its logs; confirm a question button |
 | `←→` | pick a question button |
-| `alt+↓` `alt+↑` | expand / collapse the AI answer |
 | `a` | free-text question to the AI |
 | `^C` | abort: `after wave`, `now` or `cancel` (twice: `now`) |
 | `Esc` | close help, AI input, log view; cancel a question |
@@ -269,6 +268,9 @@ needs attention, the right column gives the overall state.
 Host states: ☁️ pending · 🌥️ built · 🌤️ tested · ☀️ deployed · 🌦️ failed
 (service) · 🌧️ failed (other) · 💤 offline. Excluded hosts are hidden and
 counted in the table header.
+
+AI answers scroll in an 8-line window while they stream, then show in full.
+Selecting text with the mouse copies it to the clipboard (OSC 52).
 
 Needs a terminal of at least 100×24, and a font covering *Symbols for Legacy
 Computing* for the panel rules. `--no-ui` covers everything else.

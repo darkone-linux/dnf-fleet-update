@@ -181,12 +181,8 @@ export function AccentBlock({ accent, children }: { accent: string; children: Re
 // FEED
 // -----------------------------------------------------------------------------
 
-/** Rolling window while the answer streams; collapsed height once it is closed. */
+/** Rolling window while the answer streams; shown whole once it is closed. */
 const AI_STREAM_ROWS = 8;
-const AI_COLLAPSED_ROWS = 4;
-
-/** Body indent, matching the width of the `AI` label so the title aligns with it. */
-const AI_INDENT = "   ";
 
 function highlightedLabels(message: string, foreground: string): ReactNode[] {
   return message.split(/(\b(?:AI|YOU)\b)/gi).map((part, index) => {
@@ -200,7 +196,7 @@ function highlightedLabels(message: string, foreground: string): ReactNode[] {
   });
 }
 
-function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
+function AiBlock({ item }: { item: FeedItem }) {
   const detail = item.detail ?? [];
   const streaming = item.streaming === true;
   const syntaxStyle = useMemo(
@@ -215,13 +211,8 @@ function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
 
   useEffect(() => () => syntaxStyle.destroy(), [syntaxStyle]);
 
-  const shown = streaming
-    ? detail.slice(-AI_STREAM_ROWS)
-    : expanded
-      ? detail
-      : detail.slice(0, AI_COLLAPSED_ROWS);
-
-  const hidden = streaming || expanded ? 0 : detail.length - shown.length;
+  // Whole once closed: the feed scrolls, so any past answer stays readable.
+  const shown = streaming ? detail.slice(-AI_STREAM_ROWS) : detail;
 
   return (
     <AccentBlock accent={color.magenta}>
@@ -239,18 +230,13 @@ function AiBlock({ item, expanded }: { item: FeedItem; expanded: boolean }) {
           streaming={streaming}
         />
       </box>
-      {hidden > 0 ? (
-        <text fg={color.dim} bg={color.block}>
-          {`${AI_INDENT}⏵ ${hidden} more lines (alt+↓)`}
-        </text>
-      ) : null}
     </AccentBlock>
   );
 }
 
-function FeedLine({ item, expanded }: { item: FeedItem; expanded: boolean }) {
+function FeedLine({ item }: { item: FeedItem }) {
   // Blocks span the full width: no gutter, the rule sits on the left edge.
-  if (item.kind === "ai") return <AiBlock item={item} expanded={expanded} />;
+  if (item.kind === "ai") return <AiBlock item={item} />;
 
   if (item.kind === "step") {
     return (
@@ -272,15 +258,7 @@ function FeedLine({ item, expanded }: { item: FeedItem; expanded: boolean }) {
   );
 }
 
-export function Feed({
-  state,
-  focused,
-  expanded,
-}: {
-  state: RunState;
-  focused: boolean;
-  expanded: Set<number>;
-}) {
+export function Feed({ state, focused }: { state: RunState; focused: boolean }) {
   return (
     <scrollbox
       flexGrow={1}
@@ -293,7 +271,7 @@ export function Feed({
       scrollbarOptions={{ visible: false }}
     >
       {state.feed.map((item) => (
-        <FeedLine key={item.id} item={item} expanded={expanded.has(item.id)} />
+        <FeedLine key={item.id} item={item} />
       ))}
     </scrollbox>
   );
@@ -668,7 +646,6 @@ export function HelpCallout() {
     ["⇥", "switch focus feed ↔ hosts"],
     ["↑↓", "scroll, or change host in the log view"],
     ["↵", "selected host → logs"],
-    ["alt+↓↑", "expand / collapse the AI answer"],
     ["a", "AI dialog"],
     ["p", "ping the tracked hosts now"],
     ["s", "stop now, stay to inspect"],

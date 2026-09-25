@@ -272,3 +272,39 @@ test("AI and YOU mentions are magenta in logs, including error text", async () =
       .slice(0, 3),
   ).toEqual([249, 112, 102]);
 });
+
+test("closed AI answers show in full, an older one too, under a pending question", async () => {
+  const older = ["first", "second", "third", "fourth", "fifth", "sixth"].map((l) => `old ${l}`);
+  const treeSitterClient = getTreeSitterClient();
+  await treeSitterClient.initialize();
+  await treeSitterClient.highlightOnce(older.join("\n"), "markdown");
+  const setup = await testRender(
+    <App
+      preload={[
+        { t: 0, kind: "ai", message: "older answer", detail: older },
+        { t: 1, kind: "ai", message: "newer answer", detail: ["short"] },
+        {
+          t: 2,
+          kind: "ask",
+          id: "build",
+          question: "Start publish?",
+          options: [{ value: "yes", label: "yes" }],
+        },
+      ]}
+    />,
+    { width: 110, height: 40 },
+  );
+  current = setup;
+  await setup.waitForVisualIdle();
+
+  try {
+    const frame = setup.captureCharFrame();
+    expect(frame).toContain("old sixth");
+    expect(frame).toContain("Start publish?");
+    expect(frame).not.toContain("more lines");
+  } finally {
+    setup.renderer.destroy();
+    current = undefined;
+    await destroyTreeSitterClient();
+  }
+});

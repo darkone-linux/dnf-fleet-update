@@ -79,7 +79,6 @@ export function App({
   const [view, setView] = useState<View>(initialView);
   const [focus, setFocus] = useState<"feed" | "hosts">("feed");
   const [selected, setSelected] = useState(initialSelected);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [localAsk, setLocalAsk] = useState<Ask | null>(null);
   const [choice, setChoice] = useState(0);
   const [aiPrompt, setAiPrompt] = useState(false);
@@ -142,30 +141,7 @@ export function App({
   const moveSelection = (delta: number) =>
     setSelected((value) => Math.max(0, Math.min(hosts.length - 1, value + delta)));
 
-  /** alt+↓ / alt+↑: `↵` is taken by the buttons of a pending question. */
-  const setLastAiExpanded = (open: boolean) => {
-    const last = [...state.feed].reverse().find((item) => item.kind === "ai");
-    if (!last) return;
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (open) next.add(last.id);
-      else next.delete(last.id);
-      return next;
-    });
-  };
-
   useKeyboard((key) => {
-    const alt = key.option || key.meta;
-
-    if (alt && key.name === "down") {
-      setLastAiExpanded(true);
-      return;
-    }
-    if (alt && key.name === "up") {
-      setLastAiExpanded(false);
-      return;
-    }
-
     if (aiPrompt) {
       if (key.name === "escape") setAiPrompt(false);
       return;
@@ -288,7 +264,7 @@ export function App({
           <HostLogs host={host} />
         ) : (
           <>
-            <Feed state={state} focused={focus === "feed"} expanded={expanded} />
+            <Feed state={state} focused={focus === "feed"} />
             <Active state={state} spinner={spinner.host} />
           </>
         )}
