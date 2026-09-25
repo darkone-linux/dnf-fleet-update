@@ -1,6 +1,7 @@
 // Keys that act on the run: they must reach `RunControl`, never fake the stream.
 
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { ClipboardTarget } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import type { AbortMode, Event, RunControl, RunSource } from "../model/events.ts";
@@ -255,4 +256,25 @@ test("`a` sends the typed question to the engine, esc closes the input", async (
 
   expect(calls).toEqual(["askAi why is gfx slow?"]);
   expect(await frame()).not.toContain("ask the AI");
+});
+
+test("a mouse selection is copied to the clipboard and the primary selection", async () => {
+  const { setup, emit, frame } = await start();
+  emit({ t: 1, kind: "log", level: "info", message: "copy me please" });
+  const row = (await frame()).split("\n").findIndex((line) => line.includes("copy me please"));
+  expect(row).toBeGreaterThanOrEqual(0);
+
+  const copies: [string, number | undefined][] = [];
+  setup.renderer.copyToClipboardOSC52 = (text, target) => {
+    copies.push([text, target]);
+    return true;
+  };
+  const line = (await frame()).split("\n")[row] ?? "";
+  const from = line.indexOf("copy me");
+  await act(() => setup.mockMouse.drag(from, row, from + "copy me".length - 1, row));
+
+  expect(copies).toEqual([
+    ["copy me", ClipboardTarget.Clipboard],
+    ["copy me", ClipboardTarget.Primary],
+  ]);
 });

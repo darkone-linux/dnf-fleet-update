@@ -1,7 +1,13 @@
 // Main screen: feed and active region on the left, steps and hosts on the right,
 // dialog and footer at the bottom.
 
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
+import { ClipboardTarget } from "@opentui/core";
+import {
+  useKeyboard,
+  useRenderer,
+  useSelectionHandler,
+  useTerminalDimensions,
+} from "@opentui/react";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Event, RunControl, RunSource } from "../model/events.ts";
 import { type Ask, initialState, reduce, visibleHosts } from "../model/state.ts";
@@ -250,6 +256,15 @@ export function App({
       default:
         break;
     }
+  });
+
+  // Copy on select, like the terminal: mouse capture takes its own selection away.
+  // OSC 52, so it also reaches the local clipboard over ssh.
+  useSelectionHandler((selection) => {
+    const text = selection.getSelectedText();
+    if (!text) return;
+    renderer.copyToClipboardOSC52(text, ClipboardTarget.Clipboard);
+    renderer.copyToClipboardOSC52(text, ClipboardTarget.Primary);
   });
 
   const buttons = useMemo(() => ask?.options ?? [], [ask]);
