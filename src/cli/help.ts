@@ -32,6 +32,7 @@ Output
 AI
   --ai-model <tool>[:<model>][@<effort>]   default "claude:opus@high"
   --ai-context <text>                     add operator context to every AI prompt
+                                          (default: /etc/fleet-update/ai-context)
   --ai-analysis none|passive|active        AI analysis and report (default "none")
   --ai-error-action none|analysis|repair   AI action on error (default "none")
 

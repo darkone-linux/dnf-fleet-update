@@ -137,6 +137,7 @@ network:
 | Option | Default | Description |
 |---|---|---|
 | `--ai-model <tool>[:<model>][@<effort>]` | `claude:opus@high` | e.g. `claude:opus@max`, `opencode:ollama/qwen3:32b` |
+| `--ai-context <text>` | `/etc/fleet-update/ai-context` | operator guidance added to every AI prompt (language, style); the file is written by the module option `aiContext` |
 | `--ai-analysis none\|passive\|active` | `none` | analysis depth and AI-enriched report |
 | `--ai-error-action none\|analysis\|repair` | `none` | what the AI may do when something fails |
 

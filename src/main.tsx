@@ -18,7 +18,14 @@ import { DirectorySuggestions } from "./adapters/suggestions.ts";
 import { readableRoots, unwalked } from "./ai/paths.ts";
 import { SUGGESTIONS_DIR } from "./ai/suggestions.ts";
 import { HELP } from "./cli/help.ts";
-import { interactively, parseCli, resolveParams, resumeParams } from "./cli/options.ts";
+import {
+  AI_CONTEXT_FILE,
+  hostAiContext,
+  interactively,
+  parseCli,
+  resolveParams,
+  resumeParams,
+} from "./cli/options.ts";
 import { RunFlow } from "./engine/flow.ts";
 import { type RunPorts, type RunRequest, runFleetUpdate } from "./engine/run.ts";
 import type { RunControl, RunSource } from "./model/events.ts";
@@ -34,6 +41,15 @@ let runDirectory: string | undefined;
 function leave(code: number): never {
   if (runDirectory !== undefined) console.log(`report and logs: ${runDirectory}`);
   process.exit(code);
+}
+
+/** `undefined` when the file is absent or unreadable: a default, never a failure. */
+function readIfPresent(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
 }
 
 function exitWith(message: string, code: ExitCode): never {
@@ -85,12 +101,14 @@ const ports: RunPorts = {
     last: () => store.last(),
   },
 };
+// Interactive or unattended alike; `--resume` keeps its saved context instead.
+const host = { aiContext: hostAiContext(readIfPresent(AI_CONTEXT_FILE)) };
 const request: RunRequest = {
   workspace,
   codev: existsSync(join(workspace, "dnf", ".git")),
   version,
   interactive: interactively(options),
-  resolve: (defaults) => resolveParams(options, defaults),
+  resolve: (defaults) => resolveParams(options, defaults, host),
   resume: options.resume,
 
   // Resuming: the saved parameters lead, the options this run accepts override.

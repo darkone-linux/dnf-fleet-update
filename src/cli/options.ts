@@ -1,7 +1,8 @@
 // Command line → run parameters (spec § Options, § État et reprise).
 //
 // Invalid input is data (`invalid`): the entry point exits `2`. Resolution
-// order: option > `network.fleetUpdate` > built-in default.
+// order: option > `network.fleetUpdate` > built-in default; `--ai-context`:
+// option > host file (`AI_CONTEXT_FILE`) > none.
 
 import { parseArgs } from "node:util";
 import { parseAiModel } from "../ai/model.ts";
@@ -190,7 +191,25 @@ export const interactively = (options: CliOptions): boolean =>
   !options.nonInteractive && !options.noUi;
 
 /** Parameters of a new run. Fleet defaults are outside data: checked again. */
-export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result<RunParams> {
+/** Left by `darkone.admin.fleet-update.aiContext`: every run on the host reads it. */
+export const AI_CONTEXT_FILE = "/etc/fleet-update/ai-context";
+
+/** What the deployment host itself declares, below the options. */
+export interface HostDefaults {
+  aiContext?: string;
+}
+
+/** Content of `AI_CONTEXT_FILE`, trimmed; `undefined` when absent or blank. */
+export function hostAiContext(text: string | undefined): string | undefined {
+  const trimmed = text?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export function resolveParams(
+  options: CliOptions,
+  fleet: FleetDefaults,
+  host: HostDefaults = {},
+): Result<RunParams> {
   const deploymentOrder =
     options.deploymentOrder ?? fleet.deploymentOrder ?? DEFAULTS.deploymentOrder;
   const criticalProfiles =
@@ -222,7 +241,7 @@ export function resolveParams(options: CliOptions, fleet: FleetDefaults): Result
     ui: !options.noUi,
     sendReport: options.sendReport,
     aiModel: options.aiModel ?? fleet.aiModel ?? DEFAULTS.aiModel,
-    aiContext: options.aiContext,
+    aiContext: options.aiContext ?? host.aiContext,
     aiAnalysis: options.aiAnalysis ?? DEFAULTS.aiAnalysis,
     aiErrorAction: options.aiErrorAction ?? DEFAULTS.aiErrorAction,
     maxParallel: options.maxParallel ?? DEFAULTS.maxParallel,

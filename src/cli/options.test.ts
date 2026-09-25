@@ -3,7 +3,13 @@
 import { describe, expect, test } from "bun:test";
 import type { FleetDefaults } from "../engine/fleet.ts";
 import { DEFAULT_TIMEOUTS, DEFAULTS, type RunParams, runMode } from "../model/params.ts";
-import { type CliOptions, parseCli, resolveParams, resumeParams } from "./options.ts";
+import {
+  type CliOptions,
+  hostAiContext,
+  parseCli,
+  resolveParams,
+  resumeParams,
+} from "./options.ts";
 
 const NO_FLEET: FleetDefaults = { timeouts: {} };
 
@@ -177,6 +183,25 @@ describe("resolution order", () => {
     );
     expect(params(["--ai-model", "claude:opus@max"], fleet).aiModel).toBe("claude:opus@max");
     expect(params(["--ai-context", "custom"], fleet).aiContext).toBe("custom");
+  });
+
+  test("--ai-context: the option, else the host file, else nothing", () => {
+    const host = { aiContext: "Répondre en français." };
+    const resolved = (argv: string[]) => {
+      const result = resolveParams(options(argv), fleet, host);
+      if (!result.ok) throw new Error(result.error);
+      return result.value.aiContext;
+    };
+
+    expect(resolved([])).toBe("Répondre en français.");
+    expect(resolved(["--ai-context", "custom"])).toBe("custom");
+    expect(params([], fleet).aiContext).toBeUndefined();
+  });
+
+  test("the host file is trimmed, and a blank one is no context", () => {
+    expect(hostAiContext("  Répondre en français.\n")).toBe("Répondre en français.");
+    expect(hostAiContext(" \n")).toBeUndefined();
+    expect(hostAiContext(undefined)).toBeUndefined();
   });
 
   test("an invalid fleet default is reported with its source", () => {
