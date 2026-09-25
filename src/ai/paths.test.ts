@@ -1,7 +1,7 @@
 // Confinement of what the AI may read: pure, before any filesystem access.
 
 import { describe, expect, test } from "bun:test";
-import { confine, readableRoots, writable } from "./paths.ts";
+import { confine, readableRoots, unwalked, writable } from "./paths.ts";
 
 const roots = readableRoots("/ws");
 
@@ -86,5 +86,25 @@ describe("writable", () => {
   test("what a read refuses, a write refuses first", () => {
     expect(denied("usr/secrets/keys.yaml")).toBe("not readable: usr/secrets");
     expect(denied("/etc/shadow")).toContain("outside the readable trees");
+  });
+});
+
+describe("unwalked", () => {
+  test("secrets, the bin and the run traces are never walked", () => {
+    expect(unwalked("usr/secrets")).toBe(true);
+    expect(unwalked("usr/secrets/keys.yaml")).toBe(true);
+    expect(unwalked(".trash")).toBe(true);
+    expect(unwalked("var/deployments")).toBe(true);
+    expect(unwalked("var/generated/hosts.nix")).toBe(false);
+  });
+
+  test("dependencies, out-links and caches are skipped at any depth", () => {
+    expect(unwalked("src/app/node_modules")).toBe(true);
+    expect(unwalked("usr/.git")).toBe(true);
+    expect(unwalked("result")).toBe(true);
+    expect(unwalked("result-gfx")).toBe(true);
+    expect(unwalked(".direnv")).toBe(true);
+    expect(unwalked(".Trash-1000")).toBe(true);
+    expect(unwalked("usr/modules/results.nix")).toBe(false);
   });
 });

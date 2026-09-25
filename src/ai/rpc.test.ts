@@ -74,6 +74,8 @@ describe("tools/list", () => {
       "host_log",
       "run_log",
       "read_code",
+      "search_code",
+      "list_code",
       "host_units",
       "host_journal",
     ]);

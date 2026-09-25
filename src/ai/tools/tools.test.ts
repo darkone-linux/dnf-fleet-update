@@ -45,7 +45,14 @@ describe("registry", () => {
     const active = toolsFor("active").map((tool) => tool.name);
 
     expect(passive).toEqual(["deployment_state", "host_diagnosis", "host_log", "run_log"]);
-    expect(active).toEqual([...passive, "read_code", "host_units", "host_journal"]);
+    expect(active).toEqual([
+      ...passive,
+      "read_code",
+      "search_code",
+      "list_code",
+      "host_units",
+      "host_journal",
+    ]);
     expect(toolsFor("repair").map((tool) => tool.name)).toEqual([
       ...active,
       "service_action",
@@ -191,6 +198,47 @@ describe("active tools", () => {
 
     expect(await call(tool, "active", "read_code", { path: "usr/modules/nginx.nix" })).toEqual({
       lines: ["{ nginx = true; }"],
+    });
+  });
+
+  test("search_code finds the module behind a name, in both trees", async () => {
+    const { tool } = tools({
+      sources: {
+        "/ws/dnf/home/modules/music.nix": ["{", "  services.mpdris2.enable = true;", "}"],
+        "/ws/usr/modules/nginx.nix": ["{ nginx = true; }"],
+      },
+    });
+
+    expect(await call(tool, "active", "search_code", { pattern: "MPDRIS2" })).toEqual({
+      lines: ["dnf/home/modules/music.nix:2: services.mpdris2.enable = true;"],
+    });
+    expect(await call(tool, "active", "search_code", { pattern: "mpdris2", path: "usr" })).toEqual({
+      lines: ['no line holds "mpdris2"'],
+    });
+  });
+
+  test("search_code and list_code refuse what read_code refuses", async () => {
+    const { tool } = tools();
+    expect(
+      call(tool, "active", "search_code", { pattern: "key", path: "usr/secrets" }),
+    ).rejects.toThrow("not readable: usr/secrets");
+    expect(call(tool, "active", "list_code", { path: "/etc" })).rejects.toThrow(
+      "outside the readable trees",
+    );
+  });
+
+  test("list_code gives one level, sub-directories marked", async () => {
+    const { tool } = tools({
+      sources: {
+        "/ws/dnf/home/modules/music.nix": ["{ }"],
+        "/ws/dnf/home/default.nix": ["{ }"],
+        "/ws/flake.nix": ["{ }"],
+      },
+    });
+
+    expect(await call(tool, "active", "list_code", {})).toEqual({ lines: ["dnf/", "flake.nix"] });
+    expect(await call(tool, "active", "list_code", { path: "dnf/home" })).toEqual({
+      lines: ["default.nix", "modules/"],
     });
   });
 

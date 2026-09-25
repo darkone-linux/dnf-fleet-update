@@ -139,6 +139,19 @@ export interface SourceFiles {
   read(path: string, lines: number): Promise<Result<Excerpt>>;
 
   /**
+   * One level of a directory, sorted, `name/` for a sub-directory. `limit`
+   * entries at most, the rest counted in `dropped`.
+   */
+  list(path: string, limit: number): Promise<Result<Excerpt>>;
+
+  /**
+   * Lines holding `pattern` — literal, case ignored — in the files under `path`
+   * (or in that one file), as `<path>:<line>: <text>`, paths relative to the
+   * workspace. `limit` matches at most, the rest counted in `dropped`.
+   */
+  search(pattern: string, path: string, limit: number): Promise<Result<Excerpt>>;
+
+  /**
    * Whole file, created or replaced (spec § réparation). The caller has already
    * decided the path may be written; this refuses only what the disk refuses.
    */

@@ -96,6 +96,12 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     clean.add(repo);
   };
 
+  const confined = (path: string): string => {
+    const target = confine(roots, path);
+    if (!target.ok) throw new ToolError(target.error);
+    return target.value;
+  };
+
   const hostOf = (name: string): PersistedHost => {
     const host = state().hosts.find((candidate) => candidate.name === name);
     if (host === undefined) throw new ToolError(`unknown host: ${name}`);
@@ -121,11 +127,21 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     readLog: (name, lines) => context.run.readLog(name, lines),
 
     async readSource(path, lines) {
-      const target = confine(roots, path);
-      if (!target.ok) throw new ToolError(target.error);
-      const read = await context.sources.read(target.value, lines);
+      const read = await context.sources.read(confined(path), lines);
       if (!read.ok) throw new ToolError(read.error);
       return read.value;
+    },
+
+    async listSource(path, limit) {
+      const listed = await context.sources.list(confined(path), limit);
+      if (!listed.ok) throw new ToolError(listed.error);
+      return listed.value;
+    },
+
+    async searchSource(pattern, path, limit) {
+      const found = await context.sources.search(pattern, confined(path), limit);
+      if (!found.ok) throw new ToolError(found.error);
+      return found.value;
     },
 
     async writeSource(path, content) {

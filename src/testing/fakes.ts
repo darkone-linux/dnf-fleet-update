@@ -3,6 +3,7 @@
 // Deterministic by construction: no process, no timer, no network. Strict too:
 // an unscripted command or an unanswered question fails the test, never passes.
 
+import { relative } from "node:path";
 import { AiAnalyses } from "../ai/analysis.ts";
 import { AiToolSession } from "../ai/server.ts";
 import { AiGate, QuestionQueue, type RunContext } from "../engine/context.ts";
@@ -228,6 +229,41 @@ export class MemorySources implements SourceFiles {
     if (held === undefined) return Promise.resolve(fail(`no such file: ${path}`));
     const kept = lines <= 0 ? [] : held.slice(0, lines);
     return Promise.resolve(ok({ lines: kept, dropped: held.length - kept.length }));
+  }
+
+  /** Paths held at or under `path`, sorted. */
+  private under(path: string): string[] {
+    const prefix = path.endsWith("/") ? path : `${path}/`;
+    return Object.keys(this.files)
+      .filter((key) => key === path || key.startsWith(prefix))
+      .sort();
+  }
+
+  list(path: string, limit: number): Promise<Result<Excerpt>> {
+    const prefix = path.endsWith("/") ? path : `${path}/`;
+    const names = new Set<string>();
+    for (const key of this.under(path)) {
+      const [head = "", ...rest] = key.slice(prefix.length).split("/");
+      if (head !== "") names.add(rest.length > 0 ? `${head}/` : head);
+    }
+    if (names.size === 0) return Promise.resolve(fail(`not a directory: ${path}`));
+    const kept = [...names].slice(0, limit);
+    return Promise.resolve(ok({ lines: kept, dropped: names.size - kept.length }));
+  }
+
+  /** Paths shown relative to the workspace `/ws`, as the real adapter shows them. */
+  search(pattern: string, path: string, limit: number): Promise<Result<Excerpt>> {
+    const needle = pattern.toLowerCase();
+    const hits: string[] = [];
+    let dropped = 0;
+    for (const key of this.under(path)) {
+      for (const [index, line] of (this.files[key] ?? []).entries()) {
+        if (!line.toLowerCase().includes(needle)) continue;
+        if (hits.length < limit) hits.push(`${relative("/ws", key)}:${index + 1}: ${line.trim()}`);
+        else dropped += 1;
+      }
+    }
+    return Promise.resolve(ok({ lines: hits, dropped }));
   }
 }
 

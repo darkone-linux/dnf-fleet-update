@@ -19,6 +19,12 @@ const READ_ONLY = ["var/generated", "etc/config.yaml"];
 /** A lock is regenerated, never edited: `flake.lock`, `bun.lock`, `Cargo.lock`. */
 const LOCK = /\.lock$/;
 
+/** Walked by no search nor listing, on top of `DENIED`: the trace of the runs. */
+const UNWALKED = ["var/deployments"];
+
+/** Skipped at any depth: git internals, dependencies, nix out-links, caches, desktop bins. */
+const UNWALKED_NAME = /^(\.git|\.direnv|\.Trash-\d+|node_modules|result(-.*)?)$/;
+
 /**
  * Trees the AI may read: the consumer workspace, and `dnf/` beside it. Outside
  * codev `dnf/` is a locked flake input, so the directory may be absent — a read
@@ -67,6 +73,17 @@ export function confine(roots: readonly string[], path: string): Result<string> 
   const relative = target.slice(root.length + 1);
   const denied = DENIED.find((entry) => under(relative, entry));
   return denied === undefined ? ok(target) : fail(`not readable: ${denied}`);
+}
+
+/**
+ * `true`: a search or a listing met this entry and leaves it out (spec
+ * § analyse, Trouver le code). `relative` to the root holding it; nested git
+ * repositories and symlinks are the adapter's to catch, on the disk.
+ */
+export function unwalked(relative: string): boolean {
+  const name = relative.split(sep).at(-1) ?? relative;
+  if (UNWALKED_NAME.test(name)) return true;
+  return [...DENIED, ...UNWALKED].some((entry) => under(relative, entry));
 }
 
 /**

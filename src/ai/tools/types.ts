@@ -54,6 +54,12 @@ export interface ToolContext {
   /** Throws `ToolError` when the path leaves the readable trees. */
   readSource(path: string, lines: number): Promise<Excerpt>;
 
+  /** One level of a directory of the readable trees; same refusals as `readSource`. */
+  listSource(path: string, limit: number): Promise<Excerpt>;
+
+  /** Lines holding a literal, under a path of the readable trees; same refusals. */
+  searchSource(pattern: string, path: string, limit: number): Promise<Excerpt>;
+
   /**
    * Writes a whole file of the repairable trees and returns its diff, already
    * in `logs/ai.log`. Throws `ToolError` on a path a human or a generator owns,
