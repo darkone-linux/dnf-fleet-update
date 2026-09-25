@@ -9,6 +9,23 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-09-25
+
+### Added
+
+- **ui**: Copy mouse selection to the clipboard
+- **ai**: Search and list the deployment sources
+- **ai**: Read the journal of a user unit
+- **ai**: Dig to the first cause, and offer the code path to a repair
+- **ai**: Edit by exact replacement, commit a repair under its own scope
+- **ai**: Group the warnings of a run for the model
+- **ai**: Review the run's warnings and file improvement suggestions
+- **cli**: Default --ai-context from /etc/fleet-update/ai-context
+
+### Fixed
+
+- **ui**: Show closed AI answers in full instead of folding them
+
 ## [0.7.2] - 2026-09-25
 
 ### Changed
@@ -221,7 +238,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.6.1...v0.7.0
