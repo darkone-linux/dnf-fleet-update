@@ -6,6 +6,7 @@ import type { HostState } from "../../model/events.ts";
 import type { RunParams } from "../../model/params.ts";
 import { type CommandScript, drive, fakeRunContext, feed } from "../../testing/fakes.ts";
 import {
+  anyPing,
   anywhere,
   fleetSelection,
   HAPPY_HOSTS as HAPPY,
@@ -42,9 +43,11 @@ function setup(
       string,
       HostState
     >;
+  // Deploy commands only: presence probes belong to § Présence.
   const commandsOf = (host: string) =>
     context.commands.calls
       .map((call) => call.argv)
+      .filter((argv) => !anyPing(argv))
       .filter((argv) => argv.includes(`nix@${host}`) || argv.includes(`ssh-ng://nix@${host}`));
   return { context, selection, hosts, presence, states, commandsOf };
 }
@@ -399,7 +402,7 @@ describe("switch waves", () => {
   });
 
   test("no tested host: switch skipped, straight to the report", async () => {
-    const { context, selection, hosts, presence } = setup([{ match: ["ping"], exitCode: 1 }]);
+    const { context, selection, hosts, presence } = setup([{ match: anyPing, exitCode: 1 }]);
     await testWaves(context, hosts, presence, selection);
 
     await switchWaves(context, hosts, presence, selection);

@@ -134,6 +134,10 @@ export const remote =
 export const anywhere = (word: string) => (argv: readonly string[]) =>
   argv.join(" ").includes(word);
 
+/** Presence probe of any host (`ping`): the bare deploy connection. */
+export const anyPing = (argv: readonly string[]): boolean =>
+  argv.at(-1) === "true" && argv.some((arg) => arg.startsWith("nix@"));
+
 export const pingOf = (host: string, exitCode: number, once = false): CommandScript => ({
   match: [...ping(host, DEFAULT_TIMEOUTS).argv],
   exitCode,
@@ -181,7 +185,7 @@ export const SOURCE_SCRIPTS: CommandScript[] = [
 
 /** Hosts that answer and deploy: placed last, after the scripts of a test case. */
 export const HAPPY_HOSTS: CommandScript[] = [
-  { match: ["ping"] },
+  { match: anyPing },
   ...SOURCE_SCRIPTS,
 
   // A freshly built path sits in no cache: the pull fails and the push follows.

@@ -5,6 +5,7 @@ import type { HostState } from "../../model/events.ts";
 import type { RunParams } from "../../model/params.ts";
 import { type CommandScript, fakeRunContext, feed } from "../../testing/fakes.ts";
 import {
+  anyPing,
   anywhere,
   centralSelection,
   evalLine,
@@ -57,7 +58,7 @@ function setup(
     ...rest,
     commands: [
       ...(offline === undefined ? [] : [pingOf(offline, 1)]),
-      { match: ["ping"], exitCode: 0 },
+      { match: anyPing, exitCode: 0 },
       ...commands,
       ...(delegated ? SOURCE_SCRIPTS : []),
       { match: ["nix", "build"] },
@@ -312,7 +313,10 @@ describe("build", () => {
     await build(context, hosts, presence);
     await presence.stop();
 
-    const sent = context.commands.calls.map(({ argv }) => argv.join(" "));
+    // Its presence probes aside: they are no delegation.
+    const sent = context.commands.calls
+      .filter(({ argv }) => !anyPing(argv))
+      .map(({ argv }) => argv.join(" "));
     expect(sent.filter((line) => line.includes("nix@pc-ag"))).toEqual([]);
     expect(feed(context.events.events)).toContain(
       "warn pc-ag: auto-build host offline, building here",

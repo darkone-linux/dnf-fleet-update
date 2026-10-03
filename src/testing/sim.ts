@@ -397,7 +397,6 @@ export class SimFleet implements CommandRunner {
       const host = /-nixos-system-([a-zA-Z0-9_-]+)\.drv\^\*$/.exec(argv[2] ?? "")?.[1];
       return { kind: "build", host, at };
     }
-    if (program === "ping") return { kind: "ping", host: argv.at(-1), at };
     if (program === "claude" || program === "opencode") {
       return { kind: "ai", detail: program, at };
     }
@@ -414,6 +413,9 @@ export class SimFleet implements CommandRunner {
     const host = sshTarget?.slice(4) ?? this.options.local;
     const inner = sshTarget === undefined ? joined : (argv.at(-1) ?? "");
     if (host === undefined) throw new Error(`unsimulated command: ${joined}`);
+
+    // Presence probe: the bare deploy connection.
+    if (sshTarget !== undefined && inner === "true") return { kind: "ping", host, at };
 
     // Before `nix path-info`: the fetch script checks the paths it already holds.
     if (inner.includes("nix flake prefetch")) return { kind: "fetch-sources", host, at };

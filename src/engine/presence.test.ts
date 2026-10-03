@@ -15,6 +15,9 @@ const answers = (host: string, ...codes: number[]): CommandScript[] =>
     once: index < codes.length - 1,
   }));
 
+/** Host a probe went to: its `nix@` target. */
+const pinged = (argv: readonly string[]) => argv.find((arg) => arg.startsWith("nix@"))?.slice(4);
+
 function setup(commands: CommandScript[]) {
   const context = fakeRunContext({ commands, hostname: "pc-ag" });
   const hosts = new HostTable(context, fleetSelection("pc-ag"));
@@ -35,7 +38,7 @@ describe("Presence", () => {
     await flush();
 
     expect(changes().sort()).toEqual(["gw-ag up", "pc-ag up", "srv-ag down"]);
-    expect(context.commands.calls.map((call) => call.argv.at(-1))).toEqual(["gw-ag", "srv-ag"]);
+    expect(context.commands.calls.map((call) => pinged(call.argv))).toEqual(["gw-ag", "srv-ag"]);
     await presence.stop();
   });
 
@@ -66,7 +69,7 @@ describe("Presence", () => {
     presence.untrack(["gw-ag"]);
     context.clock.advance(DEFAULTS.pingInterval * 1000);
     await flush();
-    expect(context.commands.calls.map((call) => call.argv.at(-1))).toEqual([
+    expect(context.commands.calls.map((call) => pinged(call.argv))).toEqual([
       "gw-ag",
       "gw-cp",
       "gw-cp",

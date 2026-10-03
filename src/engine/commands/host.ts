@@ -9,7 +9,7 @@ import { fail, ok, type Result } from "../../model/result.ts";
 import { HOSTNAME } from "../fleet.ts";
 import { GITHUB_REF, STORE_PATH } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
-import { limits, sudoLimits } from "./limits.ts";
+import { sudoLimits } from "./limits.ts";
 import { shellJoin, shellQuote } from "./shell.ts";
 
 export const SYSTEM_PROFILE = "/nix/var/nix/profiles/system";
@@ -97,16 +97,22 @@ export function onHost(target: Target, command: HostCommand, timeouts: Timeouts)
 }
 
 /**
- * `-W`: seconds to wait for an answer. Two probes, exit `0` as soon as either
- * answers: one packet lost inter-zone is not an outage. Default 1 s interval,
- * no `-i`: iputils parses it with the locale, `fr_FR` rejects `0.3`.
+ * Presence probe (spec § Présence): the deploy connection itself, `true` as
+ * `nix`. Present means deployable, along the route the ssh config picks
+ * (`dnf-locate`: a host roaming on the tailnet); ICMP sees neither.
  */
 export function ping(host: string, timeouts: Timeouts): CommandSpec {
   assertSafe("host", host, HOSTNAME);
-  return {
-    argv: ["ping", "-c", "2", "-W", String(timeouts.ping), host],
-    ...limits(timeouts.ping + timeouts.killGrace, timeouts),
-  };
+  const ssh = [
+    "ssh",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    `ConnectTimeout=${timeouts.ping}`,
+    `nix@${host}`,
+    "true",
+  ];
+  return asNix(ssh, timeouts.ping, timeouts);
 }
 
 /** `sudo` resets the environment: the ssh options travel through `env`. */
