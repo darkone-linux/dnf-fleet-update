@@ -172,13 +172,13 @@ describe("placement", () => {
     ]);
   });
 
-  test("ping is the deploy connection, bounded by the ping delay", () => {
+  test("ping is the deploy connection: the ping delay to reach the host, ssh past it", () => {
     expect(ping("fd-01", T)).toEqual({
       argv: [
         ...AS_NIX,
         "timeout",
         `--kill-after=${T.killGrace}`,
-        String(T.ping),
+        String(T.ping + T.ssh),
         "ssh",
         "-o",
         "BatchMode=yes",
@@ -187,7 +187,7 @@ describe("placement", () => {
         "nix@fd-01",
         "true",
       ],
-      timeoutMs: (T.ping + 2 * T.killGrace) * 1000,
+      timeoutMs: (T.ping + T.ssh + 2 * T.killGrace) * 1000,
       killGraceMs: 2 * T.killGrace * 1000,
     });
   });

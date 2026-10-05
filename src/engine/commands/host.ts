@@ -103,6 +103,9 @@ export function onHost(target: Target, command: HostCommand, timeouts: Timeouts)
  */
 export function ping(host: string, timeouts: Timeouts): CommandSpec {
   assertSafe("host", host, HOSTNAME);
+
+  // `ping` reaches the host (`ConnectTimeout`: `dnf-locate`, TCP, banner);
+  // `ssh` bounds the session past it, seconds long on a loaded host or link.
   const ssh = [
     "ssh",
     "-o",
@@ -112,7 +115,7 @@ export function ping(host: string, timeouts: Timeouts): CommandSpec {
     `nix@${host}`,
     "true",
   ];
-  return asNix(ssh, timeouts.ping, timeouts);
+  return asNix(ssh, timeouts.ping + timeouts.ssh, timeouts);
 }
 
 /** `sudo` resets the environment: the ssh options travel through `env`. */
