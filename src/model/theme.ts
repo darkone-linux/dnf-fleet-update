@@ -62,6 +62,7 @@ export const hostGlyph: Record<ShownState, string> = {
   excluded: "⛔",
   interrupted: "🌩️",
   offline: "💤",
+  searching: "🔎",
   unknown: "❔",
 };
 
@@ -86,6 +87,7 @@ export const hostStateColor: Record<ShownState, string> = {
   excluded: color.dim,
   interrupted: color.warn,
   offline: color.dim,
+  searching: color.dim,
   unknown: color.dim,
 };
 

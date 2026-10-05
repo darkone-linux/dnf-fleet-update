@@ -11,6 +11,7 @@ import {
   fleetSelection,
   HAPPY_HOSTS as HAPPY,
   ORIGIN_PATH as OLD,
+  offlineOnce,
   pingOf,
   remote,
   storePath,
@@ -118,7 +119,7 @@ describe("test waves", () => {
 
   test("offline at its wave: joins the next one once back; offline to the end: not tested", async () => {
     const { context, selection, hosts, presence, states } = setup([
-      pingOf("srv-ag", 1, true),
+      ...offlineOnce("srv-ag"),
       pingOf("lt-cp", 1),
     ]);
 

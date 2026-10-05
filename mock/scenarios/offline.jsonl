@@ -18,13 +18,21 @@
 {"t":3001,"kind":"host.presence","host":"gw-ag","online":true}
 {"t":3002,"kind":"host.presence","host":"gfx","online":true}
 {"t":3003,"kind":"host.presence","host":"fd-01","online":true}
-{"t":3004,"kind":"host.presence","host":"alt","online":false}
-{"t":3005,"kind":"host.presence","host":"vbox-test","online":false}
-{"t":3006,"kind":"host.presence","host":"vbox-umi","online":false}
+{"t":3004,"kind":"host.searching","host":"alt","attempt":1}
+{"t":3005,"kind":"host.searching","host":"vbox-test","attempt":1}
+{"t":3006,"kind":"host.searching","host":"vbox-umi","attempt":1}
 {"t":3100,"kind":"host.state","host":"gw-ag","state":"building"}
 {"t":3120,"kind":"host.state","host":"gfx","state":"building"}
 {"t":3140,"kind":"host.state","host":"fd-01","state":"building"}
 {"t":3400,"kind":"host.output","host":"gfx","phase":"build","line":"building home-manager-generation.drv"}
+{"t":3504,"kind":"host.searching","host":"alt","attempt":2}
+{"t":3505,"kind":"host.searching","host":"vbox-test","attempt":2}
+{"t":3506,"kind":"host.searching","host":"vbox-umi","attempt":2}
+{"t":3800,"kind":"host.searching","host":"fd-01","attempt":1}
+{"t":4004,"kind":"host.presence","host":"alt","online":false}
+{"t":4005,"kind":"host.presence","host":"vbox-test","online":false}
+{"t":4006,"kind":"host.presence","host":"vbox-umi","online":false}
+{"t":4300,"kind":"host.presence","host":"fd-01","online":true}
 {"t":4600,"kind":"host.state","host":"gw-ag","state":"built"}
 {"t":4700,"kind":"host.state","host":"gfx","state":"built"}
 {"t":4800,"kind":"host.state","host":"fd-01","state":"built"}

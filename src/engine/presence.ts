@@ -6,8 +6,14 @@ import type { RunContext } from "./context.ts";
 import { execute, succeeded } from "./exec.ts";
 import type { HostTable } from "./hosts.ts";
 
+/** Failed probes in a row before a reachable or unknown host reads offline. */
+export const PROBE_ATTEMPTS = 3;
+
 export class Presence {
   private readonly tracked = new Set<string>();
+
+  /** Probes under way, per host: a second `check` joins them. */
+  private readonly probing = new Map<string, Promise<void>>();
   private readonly stopped = new AbortController();
   private loop: Promise<void> | undefined;
   private wake: (() => void) | undefined;
@@ -27,21 +33,10 @@ export class Presence {
     for (const name of names) this.tracked.delete(name);
   }
 
-  /** Pings now; the deployment host answers without a ping. */
+  /** Probes now, until a verdict; the deployment host answers without a probe. */
   async check(names: readonly string[]): Promise<void> {
     const signal = AbortSignal.any([this.stopped.signal, this.context.flow.halt]);
-    await Promise.all(
-      names.map(async (name) => {
-        if (signal.aborted) return;
-        if (this.hosts.get(name).local) {
-          this.hosts.presence(name, true);
-          return;
-        }
-        const { timeouts } = this.context.params;
-        const execution = await execute(this.context, ping(name, timeouts), { signal });
-        if (!signal.aborted) this.hosts.presence(name, succeeded(execution.result));
-      }),
-    );
+    await Promise.all(names.map((name) => this.probe(name, signal)));
   }
 
   /** First round at once, then every `pingInterval` or on `p`, until `stop` or a halt. */
@@ -54,6 +49,40 @@ export class Presence {
     this.stopped.abort(new Error("presence stopped"));
     this.leave?.();
     await this.loop;
+  }
+
+  private probe(name: string, signal: AbortSignal): Promise<void> {
+    const running = this.probing.get(name);
+    if (running !== undefined) return running;
+    const probe = this.attempts(name, signal).finally(() => this.probing.delete(name));
+    this.probing.set(name, probe);
+    return probe;
+  }
+
+  /**
+   * One failed probe is no outage: `searching` until `PROBE_ATTEMPTS` failures
+   * in a row. Offline already: one probe watches for its return.
+   */
+  private async attempts(name: string, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
+    const host = this.hosts.get(name);
+    if (host.local) {
+      this.hosts.presence(name, true);
+      return;
+    }
+
+    const attempts = host.online === false ? 1 : PROBE_ATTEMPTS;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const spec = ping(name, this.context.params.timeouts);
+      const execution = await execute(this.context, spec, { signal });
+      if (signal.aborted) return;
+      if (succeeded(execution.result)) {
+        this.hosts.presence(name, true);
+        return;
+      }
+      if (attempt < attempts) this.hosts.searching(name, attempt);
+    }
+    this.hosts.presence(name, false);
   }
 
   private async run(): Promise<void> {

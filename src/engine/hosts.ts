@@ -18,6 +18,9 @@ export interface HostEntry {
   /** Last ping answer; undefined until the first one, unreachable for the waves. */
   online?: boolean;
 
+  /** A probe failed, attempts left: `online` keeps its last verdict meanwhile. */
+  searching?: boolean;
+
   /** Guarded when lost: never excluded (spec § Erreurs et réparations). */
   gateway: boolean;
 
@@ -145,11 +148,18 @@ export class HostTable {
     emit(this.context, { kind: "host.state", host: name, state: entry.state, note });
   }
 
-  /** Emits the first answer, then only a change. */
+  /** Emits the first answer, a change, or the end of a search. */
   presence(name: string, online: boolean): void {
     const entry = this.get(name);
-    if (entry.online === online) return;
+    if (entry.online === online && !entry.searching) return;
     entry.online = online;
+    entry.searching = false;
     emit(this.context, { kind: "host.presence", host: name, online });
+  }
+
+  /** `attempt`: failed probes so far, the verdict still to come. */
+  searching(name: string, attempt: number): void {
+    this.get(name).searching = true;
+    emit(this.context, { kind: "host.searching", host: name, attempt });
   }
 }

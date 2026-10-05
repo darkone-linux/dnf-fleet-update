@@ -33,6 +33,9 @@ export interface HostRow {
 
   /** Last ping answer; undefined until the first one. */
   online?: boolean;
+
+  /** A probe failed, attempts left: until the next `host.presence`. */
+  searching?: boolean;
   note?: string;
   path?: string;
   origin?: HostOrigin;
@@ -221,7 +224,13 @@ function apply(state: RunState, event: Event): RunState {
       };
 
     case "host.presence":
-      return { ...state, hosts: patchHost(state, event.host, { online: event.online }) };
+      return {
+        ...state,
+        hosts: patchHost(state, event.host, { online: event.online, searching: undefined }),
+      };
+
+    case "host.searching":
+      return { ...state, hosts: patchHost(state, event.host, { searching: true }) };
 
     case "host.state": {
       const patch: Partial<HostRow> = { state: event.state, note: event.note, known: event.known };
@@ -304,7 +313,7 @@ function apply(state: RunState, event: Event): RunState {
       return state.ask?.id === event.id ? { ...state, ask: undefined } : state;
 
     // Report rendered in the feed (spec § Rendu). A question the run left
-    // unanswered, or a host still active, was cut by the end of the run.
+    // unanswered, a host still active, or a search, was cut by the end of the run.
     case "run.end": {
       const report = event.report ?? [];
       const level = END_LEVELS[event.status];
@@ -313,11 +322,12 @@ function apply(state: RunState, event: Event): RunState {
       );
       return {
         ...state,
-        hosts: state.hosts.map((host) =>
-          isActive(host.state)
-            ? { ...host, interrupted: true, phase: undefined, lastLine: undefined }
-            : host,
-        ),
+        hosts: state.hosts.map((host) => {
+          const settled = { ...host, searching: undefined };
+          return isActive(host.state)
+            ? { ...settled, interrupted: true, phase: undefined, lastLine: undefined }
+            : settled;
+        }),
         feed: [...state.feed, ...lines],
         ask: undefined,
         end: { status: event.status, exitCode: event.exitCode, report },
@@ -347,9 +357,10 @@ export function excludedCount(state: RunState): number {
 
 /**
  * Progress state, `interrupted` when cut by the end of the run, or presence:
- * `offline` when unreachable, `unknown` before any ping answer.
+ * `offline` when unreachable, `searching` while attempts are left, `unknown`
+ * before any ping answer.
  */
-export type ShownState = HostState | "interrupted" | "offline" | "unknown";
+export type ShownState = HostState | "interrupted" | "offline" | "searching" | "unknown";
 
 /** Spec § États affichés: exclusion > failure > error > interruption > presence > progress. */
 export function shownState(host: HostRow): ShownState {
@@ -357,6 +368,7 @@ export function shownState(host: HostRow): ShownState {
     return host.state;
   }
   if (host.interrupted) return "interrupted";
+  if (host.searching) return "searching";
   if (host.online === undefined) return "unknown";
   return host.online ? host.state : "offline";
 }

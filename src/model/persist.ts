@@ -273,6 +273,10 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
     case "host.presence":
       return { ...state, hosts: patchHost(state, event.host, { online: event.online }) };
 
+    // No verdict yet: `online` keeps the last one.
+    case "host.searching":
+      return state;
+
     case "host.state": {
       const patch: Partial<PersistedHost> = {
         state: event.state,

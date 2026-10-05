@@ -279,8 +279,9 @@ needs attention, the right column gives the overall state.
 | `?` | help |
 
 Host states: ☁️ pending · 🌥️ built · 🌤️ tested · ☀️ deployed · 🌦️ failed
-(service) · 🌧️ failed (other) · 💤 offline. Excluded hosts are hidden and
-counted in the table header.
+(service) · 🌧️ failed (other) · 🔎 searching (probe failed, retrying) ·
+💤 offline (3 failed probes in a row). Excluded hosts are hidden and counted in
+the table header.
 
 AI answers scroll in an 8-line window while they stream, then show in full.
 Selecting text with the mouse copies it to the clipboard (OSC 52).

@@ -38,6 +38,13 @@ const hostState = (state: HostState, extra: Partial<Event> = {}): Event =>
 
 const presence = (online: boolean): Event => ({ t: 1, kind: "host.presence", host: "h", online });
 
+const searching = (attempt: number): Event => ({
+  t: 1,
+  kind: "host.searching",
+  host: "h",
+  attempt,
+});
+
 test("every scenario is discoverable", () => {
   expect(listScenarios().sort()).toEqual([
     "abort",
@@ -65,6 +72,14 @@ test("nominal deploys every reachable host", () => {
   for (const step of STEPS) {
     expect(state.steps[step].status).toBe("done");
   }
+});
+
+test("offline searches its hosts before the verdict, one of them back", () => {
+  const searched = loadScenario("offline")
+    .filter((event) => event.t <= 3900)
+    .reduce(reduce, initialState());
+  expect(countState(searched, "searching")).toBe(4);
+  expect(countState(fold("offline"), "searching")).toBe(0);
 });
 
 test("offline hides excluded hosts and keeps them counted", () => {
@@ -187,6 +202,27 @@ test("an unreachable host keeps the offline glyph while it builds", () => {
   const { host } = hostAfter([presence(false), hostState("building")]);
   expect(host.state).toBe("building");
   expect(shownState(host)).toBe("offline");
+});
+
+test("a failed probe searches until the next verdict, over the progress", () => {
+  expect(shownState(hostAfter([searching(1)]).host)).toBe("searching");
+  expect(shownState(hostAfter([presence(true), hostState("building"), searching(1)]).host)).toBe(
+    "searching",
+  );
+  expect(shownState(hostAfter([searching(1), searching(2), presence(false)]).host)).toBe("offline");
+  const { host } = hostAfter([presence(true), hostState("building"), searching(1), presence(true)]);
+  expect(host.online).toBe(true);
+  expect(shownState(host)).toBe("building");
+});
+
+test("failures win over a search; the end of the run ends it", () => {
+  expect(shownState(hostAfter([searching(1), hostState("failed")]).host)).toBe("failed");
+  const { host } = hostAfter([
+    presence(true),
+    searching(1),
+    { t: 2, kind: "run.end", status: "done", exitCode: 0 },
+  ]);
+  expect(shownState(host)).toBe("pending");
 });
 
 test("failures and exclusions win over presence, failed over error", () => {

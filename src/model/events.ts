@@ -115,6 +115,10 @@ export type Event =
   | (Base & { kind: "plan"; waves: string[][]; builders?: Record<string, string> })
   | (Base & { kind: "host.add"; host: string; profile: string; zone: string })
   | (Base & { kind: "host.presence"; host: string; online: boolean })
+
+  // A probe failed, attempts left (spec § Présence): no verdict yet, the next
+  // `host.presence` ends the search. `attempt`: failures so far.
+  | (Base & { kind: "host.searching"; host: string; attempt: number })
   | (Base & { kind: "step.start"; step: StepId; total?: number })
   | (Base & { kind: "step.progress"; step: StepId; done: number; total: number })
   | (Base & { kind: "step.end"; step: StepId; status: StepEndStatus })

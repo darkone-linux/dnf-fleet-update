@@ -102,6 +102,7 @@ const ACTIVE_LABEL: Partial<Record<ShownState, string>> = {
   repairing: "under repair",
   "ai-analysing": `${AI_LABEL} analysis`,
   "ai-repairing": `${AI_LABEL} repair`,
+  searching: "searching...",
 };
 
 /** Someone is working on that host right now: the label blinks (§ États affichés). */
@@ -109,7 +110,13 @@ const BLINKING: ReadonlySet<ShownState> = new Set<ShownState>([
   "repairing",
   "ai-analysing",
   "ai-repairing",
+  "searching",
 ]);
+
+/** No spinner to carry the search: its glyph blinks with the label, the name never. */
+const BLINKING_GLYPH: ReadonlySet<ShownState> = new Set<ShownState>(["searching"]);
+
+const blink = (on: boolean) => (on ? TextAttributes.BLINK : TextAttributes.NONE);
 
 /**
  * Only `vertical` is ever drawn: the blocks carry a left border and nothing
@@ -461,16 +468,14 @@ function HostRows({
         const label = ACTIVE_LABEL[shown] ?? shown;
         return (
           <box key={host.name} flexDirection="row" backgroundColor={background}>
-            <text bg={background}>{`${hostCell(shown, spinner)} `}</text>
+            <text bg={background} attributes={blink(BLINKING_GLYPH.has(shown))}>
+              {`${hostCell(shown, spinner)} `}
+            </text>
             <text fg={nameColor} bg={background}>
               {host.name}
             </text>
             <box flexGrow={1} backgroundColor={background} />
-            <text
-              fg={stateColor}
-              bg={background}
-              attributes={BLINKING.has(shown) ? TextAttributes.BLINK : TextAttributes.NONE}
-            >
+            <text fg={stateColor} bg={background} attributes={blink(BLINKING.has(shown))}>
               {label}
             </text>
           </box>
