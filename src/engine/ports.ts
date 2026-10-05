@@ -23,6 +23,9 @@ export interface CommandSpec {
 
   /** SIGTERM (deadline or abort) to SIGKILL of the process group. */
   killGraceMs: number;
+
+  /** Shown as `***` on the `$ <command>` line of the run log, which keeps argv. */
+  secrets?: readonly string[];
 }
 
 export interface OutputLine {

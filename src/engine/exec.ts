@@ -55,7 +55,7 @@ async function runOnce(
   const { log: logName, onLine } = options;
   const stdout: string[] = [];
   const stderr: string[] = [];
-  if (logName) context.run.appendLog(logName, `$ ${shellJoin(spec.argv)}`);
+  if (logName) context.run.appendLog(logName, `$ ${masked(shellJoin(spec.argv), spec.secrets)}`);
 
   const result = await context.commands.run(spec, {
     signal: options.signal === null ? undefined : (options.signal ?? context.signal),
@@ -75,6 +75,13 @@ async function runOnce(
     log(context, "warn", `hint: ${known.message}`);
   }
   return { result, stdout, stderr, ...(known === undefined ? {} : { known }) };
+}
+
+function masked(line: string, secrets: readonly string[] = []): string {
+  return secrets.reduce(
+    (text, secret) => (secret === "" ? text : text.replaceAll(secret, "***")),
+    line,
+  );
 }
 
 export function succeeded(result: CommandResult): boolean {

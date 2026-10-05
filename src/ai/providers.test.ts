@@ -133,6 +133,11 @@ describe("both", () => {
     expect(command({ tool: "opencode" }, TOOLS).argv.join(" ")).not.toContain("s3cr3t");
   });
 
+  test("the token in argv is a secret of the command: masked in the run log", () => {
+    expect(command({ tool: "claude" }, TOOLS).secrets).toEqual(["s3cr3t"]);
+    expect(command({ tool: "claude" }).secrets).toBeUndefined();
+  });
+
   test("bounded like every other command", () => {
     const spec = command({ tool: "claude" });
     expect(spec.timeoutMs).toBe(DEFAULT_AI.timeoutSeconds * 1000);

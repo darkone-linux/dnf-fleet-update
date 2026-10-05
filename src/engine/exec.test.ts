@@ -53,6 +53,23 @@ describe("execute", () => {
     expect(execution.known).toBeUndefined();
   });
 
+  test("secrets of the command are masked on its logged line, nowhere else", async () => {
+    const context = fakeRunContext({ commands: [{ match: ["claude"] }] });
+    const spec = {
+      argv: ["claude", "--mcp-config", '{"Authorization":"Bearer s3cr3t"}'] as const,
+      timeoutMs: 1000,
+      killGraceMs: 10,
+      secrets: ["s3cr3t"],
+    };
+
+    await execute(context, spec, { log: { phase: "ai" } });
+
+    expect([...context.run.logs.values()].flat()).toEqual([
+      `$ claude --mcp-config '{"Authorization":"Bearer ***"}'`,
+    ]);
+    expect(context.commands.calls[0]?.argv.at(-1)).toContain("s3cr3t");
+  });
+
   // Activation, profile, commit: replaying them is not the same as retrying.
   test("a command that is not replayable runs once, trap or not", async () => {
     const context = flaky(10);

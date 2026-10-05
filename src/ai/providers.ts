@@ -132,8 +132,11 @@ function opencodeArgv(target: AiTarget): [string, ...string[]] {
 /** One question, one answer. The prompt travels on stdin, never in argv. */
 export function aiCommand(target: AiTarget, call: AiCall, ai: Ai, timeouts: Timeouts): CommandSpec {
   const base = { stdin: call.prompt, ...limits(ai.timeoutSeconds, timeouts) };
+
+  // `--mcp-config` carries the bearer token in argv: never in the run log.
+  const secrets = call.tools === undefined ? {} : { secrets: [call.tools.endpoint.token] };
   return target.tool === "claude"
-    ? { argv: claudeArgv(target, ai, call), ...base }
+    ? { argv: claudeArgv(target, ai, call), ...base, ...secrets }
     : {
         argv: opencodeArgv(target),
         env: { OPENCODE_CONFIG_CONTENT: opencodeConfig(call) },
