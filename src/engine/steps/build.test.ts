@@ -26,6 +26,30 @@ const nixLog = (json: object) => ({
   line: `@nix ${JSON.stringify(json)}`,
 });
 
+/** Dependency shared by several closures, failing by itself (its tests). */
+const ANYIO = "/nix/store/h595cdhgvy8s9ajn3b4xrpxrwy8isylm-python3.12-anyio-4.14.2.drv";
+
+/** `Cannot build` as nix reports it, one message per derivation. */
+const cannotBuild = (drv: string, reason: string, log: string[] = []) =>
+  nixLog({
+    action: "msg",
+    level: 0,
+    msg: [`error: Cannot build '${drv}'.`, `       Reason: ${reason}.`, ...log].join("\n"),
+  });
+
+/** Build of `host` broken by `ANYIO`: its own failure, then the chain up to the toplevel. */
+const ownFailure = (host: string): CommandScript => ({
+  match: ["nix", "build", `${storePath(host, ".drv")}^*`],
+  exitCode: 1,
+  output: [
+    cannotBuild(ANYIO, "builder failed with exit code 1", [
+      "       Last 25 log lines:",
+      "       > FAILED tests/streams/test_tls.py",
+    ]),
+    cannotBuild(storePath(host, ".drv"), "1 dependency failed"),
+  ],
+});
+
 function evaluation(lines: string[]): CommandScript {
   return {
     match: ["nix-eval-jobs"],
@@ -447,5 +471,28 @@ describe("build", () => {
       "lt-cp": "excluded",
     });
     expect(feed(context.events.events)).toContain("warn excluded: srv-ag, pc-ag, lt-cp");
+  });
+
+  test("a dependency failed by itself: the reason names it, the hosts it broke decided once", async () => {
+    const { context, hosts, presence, states } = setup([
+      evaluation(NAMES.map(evalLine)),
+      ownFailure("pc-ag"),
+      ownFailure("lt-cp"),
+    ]);
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    expect(states()).toMatchObject({ "pc-ag": "excluded", "lt-cp": "excluded", hcs: "built" });
+    expect(hosts.get("pc-ag").note).toBe(`Cannot build '${ANYIO}'.`);
+    expect(feed(context.events.events)).toContain("warn excluded: pc-ag, lt-cp");
+
+    // Its own message, end of its build log included: the toplevel says nothing.
+    const diagnosis = context.events.events.find(
+      (event) => event.kind === "host.diagnosis" && event.host === "pc-ag",
+    );
+    expect(diagnosis).toMatchObject({
+      excerpt: expect.arrayContaining(["       > FAILED tests/streams/test_tls.py"]),
+    });
   });
 });

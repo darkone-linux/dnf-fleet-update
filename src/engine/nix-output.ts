@@ -148,6 +148,22 @@ export function errorSummary(message: string): string {
   return causes.at(-1) ?? lines.find((line) => line !== "")?.replace(/^error:\s*/, "") ?? "";
 }
 
+const CANNOT_BUILD = /^error: Cannot build '(\/nix\/store\/[^']+\.drv)'\./;
+const OWN_FAILURE = /^Reason: builder failed with exit code \d+/;
+
+/**
+ * Derivation whose own builder exited non-zero, from one nix `error`: the
+ * cause behind the `N dependencies failed` chain. A builder killed by a
+ * signal (OOM) is not one: another machine may succeed.
+ */
+export function failedDerivation(message: string): string | undefined {
+  const lines = stripAnsi(message)
+    .split("\n")
+    .map((line) => line.trim());
+  if (!lines.some((line) => OWN_FAILURE.test(line))) return undefined;
+  return CANNOT_BUILD.exec(lines[0] ?? "")?.[1];
+}
+
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
 
 export function stripAnsi(text: string): string {

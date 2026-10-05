@@ -18,7 +18,14 @@ import { describeFailure, errorLines, execute, succeeded } from "../exec.ts";
 import { type SourceSeeder, sourceSeeder } from "../flake-sources.ts";
 import type { HostEntry, HostTable } from "../hosts.ts";
 import type { KnownError } from "../known-errors.ts";
-import { errorSummary, parseEvalJob, parseNixLog, STORE_PATH, stripAnsi } from "../nix-output.ts";
+import {
+  errorSummary,
+  failedDerivation,
+  parseEvalJob,
+  parseNixLog,
+  STORE_PATH,
+  stripAnsi,
+} from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
 import type { Presence } from "../presence.ts";
 import { endStep } from "./step.ts";
@@ -58,6 +65,9 @@ interface Built {
 
   /** Trap recognised behind the failure: decides instead of the question. */
   known?: KnownError;
+
+  /** Derivation that failed by itself, behind the reason: it fails the same anywhere. */
+  derivation?: string;
   durationMs: number;
 }
 
@@ -65,6 +75,10 @@ interface Built {
 async function runBuild(context: RunContext, name: string, spec: CommandSpec): Promise<Built> {
   let lastError: string | undefined;
   let lastErrorLines: string[] | undefined;
+
+  // First derivation failed by itself: the cause, not the `dependency failed`
+  // chain nix then reports up to the toplevel (spec § Erreurs et réparations).
+  let cause: { drv: string; note: string; lines: string[] } | undefined;
   const output = (line: string) =>
     emit(context, { kind: "host.output", host: name, phase: "build", line });
 
@@ -85,11 +99,16 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
           return output(`phase ${entry.phase}`);
         case "warning":
           return output(`warning: ${entry.message}`);
-        case "error":
+        case "error": {
           lastError = errorSummary(entry.message);
           lastErrorLines = entry.message.split("\n");
-          for (const text of entry.message.split("\n")) output(text);
+          const drv = failedDerivation(entry.message);
+          if (cause === undefined && drv !== undefined) {
+            cause = { drv, note: lastError, lines: lastErrorLines };
+          }
+          for (const text of lastErrorLines) output(text);
           return;
+        }
       }
     },
   });
@@ -101,9 +120,10 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
     };
   }
   return {
-    note: lastError ?? describeFailure(execution),
-    excerpt: lastErrorLines ?? errorLines(execution),
+    note: cause?.note ?? lastError ?? describeFailure(execution),
+    excerpt: cause?.lines ?? lastErrorLines ?? errorLines(execution),
     ...(execution.known === undefined ? {} : { known: execution.known }),
+    ...(cause === undefined ? {} : { derivation: cause.drv }),
     durationMs,
   };
 }

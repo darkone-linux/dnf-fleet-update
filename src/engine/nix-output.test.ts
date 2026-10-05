@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   errorSummary,
+  failedDerivation,
   GITHUB_REF,
   parseCopyPath,
   parseEvalJob,
@@ -173,6 +174,24 @@ describe("errorSummary", () => {
       "builder for 'x.drv' failed with exit code 1;",
     );
     expect(errorSummary("\n  cannot connect to daemon\n")).toBe("cannot connect to daemon");
+  });
+});
+
+describe("failedDerivation", () => {
+  const message = (reason: string) =>
+    `error: Cannot build '${DRV}'.\n       Reason: ${reason}.\n       Output paths:\n         ${OUT}`;
+
+  test("a builder that exited non-zero: its derivation, colours or not", () => {
+    expect(failedDerivation(message("builder failed with exit code 1"))).toBe(DRV);
+    const coloured = `${ESC}[31;1merror:${ESC}[0m Cannot build '${ESC}[35;1m${DRV}${ESC}[0m'.\n       Reason: ${ESC}[31;1mbuilder failed with exit code 3${ESC}[0m.`;
+    expect(failedDerivation(coloured)).toBe(DRV);
+  });
+
+  test("a failed dependency, a killed builder or another error: none", () => {
+    expect(failedDerivation(message("1 dependency failed"))).toBeUndefined();
+    expect(failedDerivation(message("2 dependencies failed"))).toBeUndefined();
+    expect(failedDerivation(message("builder failed due to signal 9 (Killed)"))).toBeUndefined();
+    expect(failedDerivation("error: builder for 'x.drv' failed with exit code 1")).toBeUndefined();
   });
 });
 
