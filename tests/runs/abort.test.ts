@@ -8,21 +8,28 @@ import { simulateRun } from "../../src/testing/runs.ts";
 test("after wave during the build: the build ends, nothing asked, nothing deployed, exit 5", async () => {
   const run = await simulateRun({
     argv: [],
-    hooks: (flow) => [{ kind: "build", host: "hcs", run: () => flow.abort("after-wave") }],
+    hooks: (flow) => [
+      { kind: "build", host: "hcs", run: () => flow.abort("after-wave", "operator") },
+    ],
   });
 
   expect(run.exitCode).toBe(5);
   expect(run.events.filter((event) => event.kind === "ask")).toEqual([]);
   expect(run.recorded?.state?.steps.build.status).toBe("done");
   expect(run.sim.count("copy")).toBe(0);
-  expect(run.feed).toContain("warn aborting after the current step or wave");
+  expect(run.feed).toContain("warn aborting after the current step or wave (by the operator)");
 });
 
 test("after wave during a test wave: the whole wave ends, left in test, exit 5", async () => {
   const run = await simulateRun({
     argv: ["--no-ui", "--no-current-zone-before"],
     hooks: (flow) => [
-      { kind: "activate", host: "gw-ag", phase: "test", run: () => flow.abort("after-wave") },
+      {
+        kind: "activate",
+        host: "gw-ag",
+        phase: "test",
+        run: () => flow.abort("after-wave", "operator"),
+      },
     ],
   });
 
@@ -40,7 +47,7 @@ test("after wave during a test wave: the whole wave ends, left in test, exit 5",
   expect(run.ui.end?.report).toEqual([
     "3 left in test (hcs, gw-ag, gw-cp), 3 not done (srv-ag, pc-ag, lt-cp)",
     expect.stringMatching(/^duration /),
-    "run aborted",
+    "run aborted by the operator",
   ]);
 });
 
@@ -51,7 +58,7 @@ test("now during an activation: nothing settled, its timer kept, the host back a
         kind: "activate",
         host: "gw-ag",
         phase: "test",
-        run: () => flow.abort("now"),
+        run: () => flow.abort("now", "operator"),
         gate: new Promise(() => {}),
       },
     ],
@@ -65,7 +72,7 @@ test("now during an activation: nothing settled, its timer kept, the host back a
     kind: "maintenance",
     detail: "off",
   });
-  expect(run.feed).toContain("warn aborting now");
+  expect(run.feed).toContain("warn aborting now (by the operator)");
   expect(run.recorded?.state?.end).toEqual({ status: "aborted", exitCode: 5 });
   expect(run.recorded?.report).toMatch(/\| test \| aborted \|/);
   expect(run.ui.hosts.find((host) => host.name === "gw-ag")?.interrupted).toBe(true);
@@ -78,7 +85,7 @@ test("now during an activation: nothing settled, its timer kept, the host back a
 test("now while a question is open: the question dropped, exit 5", async () => {
   const run = await simulateRun({
     argv: [],
-    answers: { build: (flow) => flow.abort("now") },
+    answers: { build: (flow) => flow.abort("now", "operator") },
   });
 
   expect(run.exitCode).toBe(5);
@@ -93,6 +100,8 @@ test("no to the switch: hosts left in test, exit 5", async () => {
   expect(run.exitCode).toBe(5);
   expect(Object.values(run.statuses)).toEqual(Array(6).fill("tested"));
   expect(run.sim.count("profile")).toBe(0);
+  expect(run.feed).toContain("warn aborting after the current step or wave (on a no answer)");
+  expect(run.recorded?.report).toContain("- Status: aborted (exit 5), on a no answer");
 });
 
 test("--build-only, interactive: no ends the run normally, yes goes on with the test", async () => {
@@ -126,13 +135,18 @@ test("a rollback decided wins over an abort now requested during it: exit 1", as
     argv: ["--no-ui", "--stop-loss"],
     behaviours: { "srv-ag": { activation: { test: 2 } } },
     hooks: (flow) => [
-      { kind: "rollback", run: () => flow.abort("now"), gate: new Promise(() => {}), once: true },
+      {
+        kind: "rollback",
+        run: () => flow.abort("now", "operator"),
+        gate: new Promise(() => {}),
+        once: true,
+      },
     ],
   });
 
   expect(run.exitCode).toBe(1);
   expect(run.ui.end?.status).toBe("failed");
-  expect(run.feed).toContain("warn aborting now");
+  expect(run.feed).toContain("warn aborting now (by the operator)");
 });
 
 test("after wave: failures of the step or wave still decided normally, then the run ends", async () => {
@@ -140,7 +154,9 @@ test("after wave: failures of the step or wave still decided normally, then the 
     argv: [],
     answers: { "failed-srv-ag": "exclude" },
     behaviours: { "srv-ag": { buildError: "boom" } },
-    hooks: (flow) => [{ kind: "build", host: "hcs", run: () => flow.abort("after-wave") }],
+    hooks: (flow) => [
+      { kind: "build", host: "hcs", run: () => flow.abort("after-wave", "operator") },
+    ],
   });
   expect(duringBuild.exitCode).toBe(5);
   expect(duringBuild.recorded?.state?.answers.map((answer) => answer.id)).toEqual([
@@ -152,7 +168,12 @@ test("after wave: failures of the step or wave still decided normally, then the 
     answers: { build: "yes", "lost-pc-ag": "exclude" },
     behaviours: { "pc-ag": { dropsOn: "test" } },
     hooks: (flow) => [
-      { kind: "activate", host: "srv-ag", phase: "test", run: () => flow.abort("after-wave") },
+      {
+        kind: "activate",
+        host: "srv-ag",
+        phase: "test",
+        run: () => flow.abort("after-wave", "operator"),
+      },
     ],
     stepMs: 5000,
   });

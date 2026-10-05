@@ -7,6 +7,7 @@ import type { PullSource, RunInfo } from "../model/events.ts";
 import type { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULTS } from "../model/params.ts";
 import type { AiAction, HostStatus, PersistedHost, PersistedState } from "../model/persist.ts";
+import { type AbortCause, abortedBy } from "./flow.ts";
 
 export interface ReportInput {
   /** `20260917T020000Z-full`: also the only wall clock of the report. */
@@ -32,6 +33,9 @@ export interface ReportInput {
 
   /** Zones of the run no harmonia serves (spec § Rapport): actionable warning. */
   zonesWithoutCache?: readonly string[];
+
+  /** Who asked for the abort, when the run was aborted. */
+  abortCause?: AbortCause;
 }
 
 export interface Report {
@@ -282,8 +286,13 @@ export function renderReport(input: ReportInput): Report {
   const { runId, state, status, exitCode, durationMs, warnings, knownErrors } = input;
   const { analyses } = input;
   const hosts = state.hosts;
+  const cause = input.abortCause === undefined ? "" : ` ${abortedBy(input.abortCause)}`;
   const ending =
-    status === "failed" ? "run stopped on error" : status === "aborted" ? "run aborted" : undefined;
+    status === "failed"
+      ? "run stopped on error"
+      : status === "aborted"
+        ? `run aborted${cause}`
+        : undefined;
   const lines = [summary(hosts), `duration ${formatDuration(durationMs)}`];
   if (ending) lines.push(ending);
 
@@ -306,7 +315,7 @@ export function renderReport(input: ReportInput): Report {
   const markdown = [
     "# Fleet Update Report",
     "",
-    `- Status: ${status} (exit ${exitCode})`,
+    `- Status: ${status} (exit ${exitCode})${status === "aborted" && cause !== "" ? `,${cause}` : ""}`,
     ...facts.map((fact) => `- ${fact}`),
     `- Commits: ${commits.length > 0 ? commits.join("; ") : "none"}`,
     "",
@@ -381,7 +390,10 @@ export function renderReport(input: ReportInput): Report {
     (host) => host.status !== "deployed" && host.status !== "tested",
   );
   if (notDeployed.length > 0) {
-    const rows = notDeployed.map((host) => [host.name, host.status, host.note ?? ""]);
+    // No reason of its own: where the end of the run left it.
+    const left = (host: PersistedHost) =>
+      host.status !== "remaining" ? "" : [host.state, ending].filter(Boolean).join(", ");
+    const rows = notDeployed.map((host) => [host.name, host.status, host.note ?? left(host)]);
     markdown.push("", "## Hosts not deployed", "", ...table(["Host", "Status", "Reason"], rows));
   }
 

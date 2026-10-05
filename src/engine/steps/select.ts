@@ -204,7 +204,7 @@ async function choose(context: RunContext): Promise<Selection | undefined> {
       log(context, "warn", "current zone not found: waves by profile, all zones together");
       const question = "Current zone not found. Continue with waves by profile?";
       if (params.interactive && (await ask(context, "zone", question, YES_NO)) === "no") {
-        context.flow.abort("after-wave");
+        context.flow.abort("after-wave", "answer");
       }
     }
   }

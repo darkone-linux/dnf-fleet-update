@@ -123,7 +123,7 @@ for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
   process.on(signal, () => {
     if (ended !== undefined) process.exit(ended);
     signalled = true;
-    flow.abort("now");
+    flow.abort("now", signal);
   });
 }
 
@@ -142,7 +142,7 @@ if (options.noUi) {
 const renderer = await createCliRenderer({ exitOnCtrlC: false, targetFps: 30 });
 const control: RunControl = {
   respond: (value) => channel.respond(value),
-  abort: (mode) => flow.abort(mode),
+  abort: (mode) => flow.abort(mode, "operator"),
   ping: () => flow.requestPing(),
   askAi: (question) => flow.requestAi(question),
 };

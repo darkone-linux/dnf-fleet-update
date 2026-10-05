@@ -513,7 +513,7 @@ export async function build(
       : `Build done. Start ${next}?`;
     if ((await ask(context, "build", question, YES_NO)) === "no") {
       if (params.buildOnly) flow.finish();
-      else flow.abort("after-wave");
+      else flow.abort("after-wave", "answer");
     }
   } else if (params.buildOnly) {
     flow.finish();

@@ -13,7 +13,7 @@ import { gitStatus, readGenerated } from "./commands/workspace.ts";
 import { AiGate, type EventInput, emit, log, QuestionQueue, type RunContext } from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
 import { type FleetDefaults, parseNetwork } from "./fleet.ts";
-import type { RunFlow } from "./flow.ts";
+import { abortedBy, type RunFlow } from "./flow.ts";
 import { HostTable } from "./hosts.ts";
 import { KnownErrors } from "./known-errors.ts";
 import { takeLock } from "./lock.ts";
@@ -324,9 +324,9 @@ export async function runFleetUpdate(
     }
 
     // `^C`, a signal or a `no` answer: said before the commands are killed.
-    const leaveAborts = flow.onAbort((mode) => {
+    const leaveAborts = flow.onAbort((mode, cause) => {
       const message = mode === "now" ? "aborting now" : "aborting after the current step or wave";
-      log(context, "warn", message);
+      log(context, "warn", `${message} (${abortedBy(cause)})`);
     });
     // `a`: answered beside the steps, never blocking one, one at a time. The
     // chain is awaited below, so no `ai.line` lands after `run.end`.
@@ -389,6 +389,7 @@ export async function runFleetUpdate(
         analyses: context.analyses.all(),
         suggestions: context.suggestions.all(),
         zonesWithoutCache: progress.hosts?.zonesWithoutCache() ?? [],
+        ...(flow.abortCause === undefined ? {} : { abortCause: flow.abortCause }),
       },
       errors.last,
     );

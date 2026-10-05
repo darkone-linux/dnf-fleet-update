@@ -101,7 +101,7 @@ describe("update", () => {
   test("aborted now during a command: no failure reported, the step does not end", async () => {
     const context = fakeRunContext({
       params: { consumerFlake: false },
-      commands: [{ match: ["just", "clean"], onRun: () => context.flow.abort("now") }],
+      commands: [{ match: ["just", "clean"], onRun: () => context.flow.abort("now", "operator") }],
     });
 
     expect(await update(context)).toBe(false);

@@ -151,7 +151,7 @@ describe("runFleetUpdate", () => {
       commands: [
         {
           match: (argv) => argv.join(" ").endsWith("/network.nix"),
-          onRun: () => flowHolder.flow?.abort("now"),
+          onRun: () => flowHolder.flow?.abort("now", "operator"),
           gate: new Promise(() => {}),
         },
       ],
@@ -225,13 +225,15 @@ describe("runFleetUpdate", () => {
   test("aborted now during the evaluation: exit 5, lock released", async () => {
     const flowHolder: { flow?: RunFlow } = {};
     const { ports, flow, run, end } = harness({
-      commands: [{ match: ["nix-eval-jobs"], onRun: () => flowHolder.flow?.abort("now") }],
+      commands: [
+        { match: ["nix-eval-jobs"], onRun: () => flowHolder.flow?.abort("now", "operator") },
+      ],
     });
     flowHolder.flow = flow;
 
     expect(await run()).toBe(5);
 
-    expect(feed(ports.events.events)).toContain("warn aborting now");
+    expect(feed(ports.events.events)).toContain("warn aborting now (by the operator)");
     expect(ports.events.events).toContainEqual(
       expect.objectContaining({ kind: "step.end", step: "build", status: "aborted" }),
     );

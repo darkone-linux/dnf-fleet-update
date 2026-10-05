@@ -286,7 +286,10 @@ describe("test waves", () => {
 
   test("abort after wave: the wave in progress ends, no other starts", async () => {
     const { context, selection, hosts, presence, states } = setup([
-      { match: remote("gw-ag", "rc=$?"), onRun: () => context.flow.abort("after-wave") },
+      {
+        match: remote("gw-ag", "rc=$?"),
+        onRun: () => context.flow.abort("after-wave", "operator"),
+      },
     ]);
 
     await testWaves(context, hosts, presence, selection);

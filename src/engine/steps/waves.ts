@@ -227,7 +227,7 @@ export async function switchWaves(
   if (params.interactive && !params.skipTest) {
     const question = `Test done. Switch ${ready.length} tested hosts?`;
     if ((await ask(context, "switch", question, YES_NO)) === "no") {
-      flow.abort("after-wave");
+      flow.abort("after-wave", "answer");
       return;
     }
   }

@@ -128,6 +128,27 @@ describe("renderReport", () => {
     ]);
   });
 
+  test("aborted: who asked, and where the end left hosts without a reason of their own", () => {
+    const left = [
+      ...EVENTS,
+      { t: 63_000, kind: "host.add", host: "lt-cp", profile: "laptop", zone: "cp" },
+      { t: 63_010, kind: "host.presence", host: "lt-cp", online: true },
+      { t: 63_020, kind: "host.state", host: "lt-cp", state: "ready" },
+    ] satisfies Event[];
+    const report = renderReport({
+      ...BASE,
+      state: left.reduce(persist, initialPersisted()),
+      status: "aborted",
+      exitCode: 5,
+      abortCause: "operator",
+    });
+
+    expect(report.markdown).toContain("- Status: aborted (exit 5), by the operator\n");
+    expect(report.lines.at(-1)).toBe("run aborted by the operator");
+    expect(report.markdown).toContain("| lt-cp | remaining | ready, run aborted by the operator |");
+    expect(report.markdown).toContain("| nlt | failed | build failed: x \\| y |");
+  });
+
   test("markdown: header, steps, waves, hosts not deployed, hosts left in test, warnings", () => {
     const { markdown } = renderReport({
       runId: RUN_ID,
