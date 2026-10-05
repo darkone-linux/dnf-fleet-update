@@ -167,6 +167,9 @@ async function delegate(
     onHost(target, buildDerivation(job.drvPath, name, timeouts), timeouts),
   );
   if (context.flow.halt.aborted || built.note === undefined) return built;
+
+  // The derivation failed, not the delegation: the same build fails here too.
+  if (built.derivation !== undefined) return built;
   return give(built.note);
 }
 
@@ -203,8 +206,8 @@ async function buildJob(
     built = await delegate(context, name, where.builder, job, seeder);
     if (context.flow.halt.aborted) return undefined;
 
-    // Whatever the builder failed on, the deployment machine takes over: no
-    // host fails because of the delegation (spec § Erreurs et réparations).
+    // Delegation failed (copy, ssh, killed build): the deployment machine takes
+    // over, no host fails because of it (spec § Erreurs et réparations).
     if (built === undefined) where.builder = here;
   }
   built ??= await runBuild(

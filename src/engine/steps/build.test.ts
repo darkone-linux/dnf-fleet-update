@@ -12,6 +12,7 @@ import {
   fleetSelection,
   NIXPKGS_SOURCE,
   pingOf,
+  remote,
   SOURCE_SCRIPTS,
   storePath,
 } from "../../testing/fleet.ts";
@@ -38,8 +39,11 @@ const cannotBuild = (drv: string, reason: string, log: string[] = []) =>
   });
 
 /** Build of `host` broken by `ANYIO`: its own failure, then the chain up to the toplevel. */
-const ownFailure = (host: string): CommandScript => ({
-  match: ["nix", "build", `${storePath(host, ".drv")}^*`],
+const ownFailure = (host: string, where: "here" | "builder" = "here"): CommandScript => ({
+  match:
+    where === "here"
+      ? ["nix", "build", `${storePath(host, ".drv")}^*`]
+      : anywhere(`${storePath(host, ".drv")}^*`),
   exitCode: 1,
   output: [
     cannotBuild(ANYIO, "builder failed with exit code 1", [
@@ -320,6 +324,55 @@ describe("build", () => {
     );
     expect(hosts.get("hcs").state).toBe("built");
     expect(hosts.get("hcs").builder).toBe("deployer");
+  });
+
+  test("derivation failed by itself on the builder: no fallback here, the host fails", async () => {
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        ownFailure("pc-ag", "builder"),
+        { match: anywhere("ssh-ng://") },
+        { match: anywhere(".drv^*") },
+      ],
+      { delegated: true },
+    );
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    const sent = context.commands.calls.map(({ argv }) => argv.join(" "));
+    expect(sent.filter((line) => line.startsWith("nix build"))).toEqual([]);
+    expect(feed(context.events.events).filter((line) => line.includes("building here"))).toEqual(
+      [],
+    );
+    expect(hosts.get("pc-ag").state).toBe("excluded");
+    expect(hosts.get("pc-ag").note).toBe(`Cannot build '${ANYIO}'.`);
+    expect(hosts.get("pc-ag").builder).toBe("srv-ag");
+  });
+
+  test("builder killed by a signal: built here instead, another machine may succeed", async () => {
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        {
+          match: remote("srv-ag", `${storePath("pc-ag", ".drv")}^*`),
+          exitCode: 1,
+          output: [cannotBuild(ANYIO, "builder failed due to signal 9 (Killed)")],
+        },
+        { match: anywhere("ssh-ng://") },
+        { match: anywhere(".drv^*") },
+      ],
+      { delegated: true },
+    );
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    expect(feed(context.events.events)).toContain(
+      `warn pc-ag: builder srv-ag: Cannot build '${ANYIO}'., building here`,
+    );
+    expect(hosts.get("pc-ag").state).toBe("built");
+    expect(hosts.get("pc-ag").builder).toBe("deployer");
   });
 
   test("auto-build host offline: nothing delegated to it, built here, warned", async () => {
