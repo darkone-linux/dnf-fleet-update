@@ -50,7 +50,10 @@ test("--build-only: a failed build is not decided, the host keeps its reason", a
 
   expect(run.exitCode).toBe(0);
   expect(run.events.filter((event) => event.kind === "ask")).toEqual([]);
-  expect(run.statuses).toMatchObject({ "srv-ag": "failed", "pc-ag": "remaining" });
+  expect(run.statuses["srv-ag"]).toBe("failed");
+
+  // Undecided too: built, its presence verdict maybe still to come (spaced probes).
+  expect(["remaining", "offline"]).toContain(run.statuses["pc-ag"] ?? "");
   expect(run.recorded?.report).toContain("| srv-ag | failed | boom |");
   expect(run.sim.count("copy")).toBe(0);
 });

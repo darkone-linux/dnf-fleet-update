@@ -135,7 +135,7 @@ describe("test waves", () => {
       pingOf("lt-cp", 1),
     ]);
 
-    await testWaves(context, hosts, presence, selection);
+    await drive(context.clock, testWaves(context, hosts, presence, selection), PING_ROUND);
 
     // Numbered on the waves that run: the wave left empty by an offline host
     // is not one, and the total drops as hosts turn out unreachable.
@@ -271,13 +271,15 @@ describe("test waves", () => {
       pingOf("pc-ag", 1),
     ]);
 
-    await testWaves(context, hosts, presence, selection);
+    await drive(context.clock, testWaves(context, hosts, presence, selection), PING_ROUND);
 
     expect(states()["pc-ag"]).toBe("excluded");
     expect(hosts.get("pc-ag").lost).toBe(true);
     expect(hosts.get("pc-ag").activated).toBeUndefined();
     expect(hosts.get("pc-ag").note).toBe("unreachable: copy failed: exit 1");
-    expect(context.clock.now()).toBe(0);
+
+    // The search alone, its attempts `pingInterval` apart: no rollback waited for.
+    expect(context.clock.now()).toBe(2 * PING_ROUND);
   });
 
   test("deployment host: no copy, no ssh, no timer, no reconnection", async () => {
@@ -406,7 +408,7 @@ describe("switch waves", () => {
       },
     );
 
-    await switchWaves(context, hosts, presence, selection);
+    await drive(context.clock, switchWaves(context, hosts, presence, selection), PING_ROUND);
 
     expect(states()).toMatchObject({ hcs: "deployed", "gw-cp": "deployed", "lt-cp": "built" });
     const waves = context.events.events.flatMap((event) =>
@@ -436,9 +438,9 @@ describe("switch waves", () => {
 
   test("no tested host: switch skipped, straight to the report", async () => {
     const { context, selection, hosts, presence } = setup([{ match: anyPing, exitCode: 1 }]);
-    await testWaves(context, hosts, presence, selection);
+    await drive(context.clock, testWaves(context, hosts, presence, selection), PING_ROUND);
 
-    await switchWaves(context, hosts, presence, selection);
+    await drive(context.clock, switchWaves(context, hosts, presence, selection), PING_ROUND);
 
     expect(context.events.events.at(-1)).toMatchObject({ kind: "step.end", status: "skipped" });
     expect(context.flow.ending).toBe("done");

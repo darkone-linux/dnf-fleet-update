@@ -158,8 +158,8 @@ export class HostTable {
   }
 
   /** `attempt`: failed probes so far, the verdict still to come. */
-  searching(name: string, attempt: number): void {
+  searching(name: string, attempt: number, reason: string): void {
     this.get(name).searching = true;
-    emit(this.context, { kind: "host.searching", host: name, attempt });
+    emit(this.context, { kind: "host.searching", host: name, attempt, reason });
   }
 }

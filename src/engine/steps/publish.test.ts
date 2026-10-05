@@ -3,7 +3,8 @@
 
 import { describe, expect, test } from "bun:test";
 import type { HostState } from "../../model/events.ts";
-import { type CommandScript, fakeRunContext } from "../../testing/fakes.ts";
+import { DEFAULTS } from "../../model/params.ts";
+import { type CommandScript, drive, fakeRunContext } from "../../testing/fakes.ts";
 import {
   anyPing,
   anywhere,
@@ -116,7 +117,8 @@ describe("publish", () => {
   test("an offline host stays built, named, and its zone cache warned about", async () => {
     const { context, hosts, presence, states } = setup([pingOf("srv-ag", 1)]);
 
-    await publish(context, hosts, presence);
+    // Every attempt of the search, `pingInterval` apart.
+    await drive(context.clock, publish(context, hosts, presence), DEFAULTS.pingInterval * 1000);
 
     expect(states()["srv-ag"]).toBe("built");
     expect(states()["gw-ag"]).toBe("ready");

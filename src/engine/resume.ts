@@ -10,6 +10,7 @@ import {
   AI_ERROR_ACTION,
   DEFAULT_AI,
   DEFAULT_DIAGNOSTICS,
+  DEFAULT_PRESENCE,
   DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
   type RunParams,
@@ -76,6 +77,11 @@ const savedParams = z.object({
     killGrace: seconds,
   }),
   pingInterval: z.number().int().positive(),
+
+  // Added after 0.7.3: an older state file resumes with the built-in bounds.
+  presence: z
+    .object({ attempts: count, onlineFactor: count, spacingMs: z.number().int().nonnegative() })
+    .default(DEFAULT_PRESENCE),
 
   // Added after 0.4: an older state file resumes with the built-in bounds.
   diagnostics: z

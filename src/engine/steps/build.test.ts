@@ -2,8 +2,8 @@
 
 import { describe, expect, test } from "bun:test";
 import type { HostState } from "../../model/events.ts";
-import type { RunParams } from "../../model/params.ts";
-import { type CommandScript, fakeRunContext, feed } from "../../testing/fakes.ts";
+import { DEFAULTS, type RunParams } from "../../model/params.ts";
+import { type CommandScript, drive, fakeRunContext, feed, flush } from "../../testing/fakes.ts";
 import {
   anyPing,
   anywhere,
@@ -125,6 +125,9 @@ describe("build", () => {
     ]);
 
     const outcome = await build(context, hosts, presence);
+
+    // The first round, its starts queued one after the other, ends too.
+    await flush();
     await presence.stop();
 
     expect(Object.values(states())).toEqual(NAMES.map(() => "built"));
@@ -148,7 +151,7 @@ describe("build", () => {
     expect(feed(events)).toContain("ok hcs: build ok 1.8s");
     expect(feed(events)).toContain("ok 6 builds ok, 0 failed");
     expect(outcome?.warnings).toEqual(["evaluation warning: 'system' has been renamed"]);
-    expect(events.at(-1)).toMatchObject({ kind: "step.end", status: "ok" });
+    expect(events.findLast((event) => event.kind === "step.end")).toMatchObject({ status: "ok" });
     expect(context.flow.ending).toBeUndefined();
   });
 
@@ -424,8 +427,9 @@ describe("build", () => {
       { delegated: true, autoBuild: "pc-ag", offline: "pc-ag" },
     );
 
-    // Ping before the step: the build reads the presence the loop already has.
-    await presence.check(["pc-ag"]);
+    // Ping before the step: the build reads the presence the loop already has,
+    // its search over once every attempt failed.
+    await drive(context.clock, presence.check(["pc-ag"]), DEFAULTS.pingInterval * 1000);
     await build(context, hosts, presence);
     await presence.stop();
 

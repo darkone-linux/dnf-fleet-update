@@ -65,6 +65,21 @@ export interface Repair {
   aiAttempts: number;
 }
 
+/**
+ * Presence probes (spec § Présence). A zone resolver rate-limits per subnet:
+ * a burst of probes loses DNS answers, and each loss costs a 5 s retry.
+ */
+export interface PresenceBounds {
+  /** Failed probes in a row before a reachable or unknown host reads offline. */
+  attempts: number;
+
+  /** A host that answered is pinged this many `pingInterval`s apart. */
+  onlineFactor: number;
+
+  /** Milliseconds between two probe starts, whatever their host. */
+  spacingMs: number;
+}
+
 export interface RunParams {
   /** Raw `--on` query; absent: the whole fleet. */
   on?: string;
@@ -105,6 +120,7 @@ export interface RunParams {
 
   /** Seconds between two pings of the tracked hosts. */
   pingInterval: number;
+  presence: PresenceBounds;
   diagnostics: Diagnostics;
   repair: Repair;
   ai: Ai;
@@ -128,6 +144,12 @@ export const DEFAULTS = {
 
 /** No option and no fleet key today: the resolution point of the two bounds. */
 export const DEFAULT_DIAGNOSTICS: Diagnostics = { journalLines: 200, excerptLines: 20 };
+
+/**
+ * Three attempts, two `pingInterval`s apart: a search outlasts a DNS stall.
+ * Starts 500 ms apart: a 15-host round stays far below 20 queries a second.
+ */
+export const DEFAULT_PRESENCE: PresenceBounds = { attempts: 3, onlineFactor: 4, spacingMs: 500 };
 
 /** One restart, no loop: a bounded retry belongs to the signature table. */
 export const DEFAULT_REPAIR: Repair = { settleSeconds: 10, aiAttempts: 3 };

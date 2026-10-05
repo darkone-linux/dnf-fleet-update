@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { interactively, parseCli, resolveParams, resumeParams } from "../cli/options.ts";
 import type { Event } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
+import { ok } from "../model/result.ts";
 import {
   type CommandScript,
   FakeClock,
@@ -79,8 +80,13 @@ function harness(
     codev: false,
     version: "0.2.0",
     interactive: interactively(cli.options),
-    resolve: (defaults: Parameters<typeof resolveParams>[1]) =>
-      resolveParams(cli.options, defaults),
+    resolve: (defaults: Parameters<typeof resolveParams>[1]) => {
+      // Probes back to back: the clock of this harness never moves.
+      const resolved = resolveParams(cli.options, defaults);
+      if (!resolved.ok) return resolved;
+      const { presence } = resolved.value;
+      return ok({ ...resolved.value, presence: { ...presence, spacingMs: 0 } });
+    },
     resume: cli.options.resume,
     resumeFrom: (saved: RunParams) => resumeParams(saved, cli.options),
   };

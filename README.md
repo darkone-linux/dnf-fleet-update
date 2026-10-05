@@ -68,7 +68,7 @@ exercised, not simulated.
 |---|---|
 | **Update** | `nix flake update` of `dnf/` (codev) and of the consumer, `just clean`, one commit per repository |
 | **Select** | hosts, profiles and zones read from `var/generated/`, filtered by `--on`; current zone detected from the local IP |
-| **Probe** | parallel ssh probes (the deploy connection), offline hosts set aside |
+| **Probe** | spaced ssh probes (the deploy connection), searched 3 times before offline |
 | **Build** | every selected host, online or not, on the deployment machine |
 | **Test** | `switch-to-configuration test` wave by wave; the next wave starts once every host is OK or excluded |
 | **Switch** | every host validated in test, all at once (`--skip-test`: wave by wave) |

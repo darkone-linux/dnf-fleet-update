@@ -40,6 +40,7 @@ import type { Event, RunInfo } from "../model/events.ts";
 import {
   DEFAULT_AI,
   DEFAULT_DIAGNOSTICS,
+  DEFAULT_PRESENCE,
   DEFAULT_REPAIR,
   DEFAULT_TIMEOUTS,
   DEFAULTS,
@@ -447,6 +448,9 @@ export function testParams(overrides: Partial<RunParams> = {}): RunParams {
     rollbackTimeout: DEFAULTS.rollbackTimeout,
     timeouts: DEFAULT_TIMEOUTS,
     pingInterval: DEFAULTS.pingInterval,
+
+    // Back to back: a step test asserts its outcome, not the probe pacing.
+    presence: { ...DEFAULT_PRESENCE, spacingMs: 0 },
     diagnostics: DEFAULT_DIAGNOSTICS,
     repair: DEFAULT_REPAIR,
     ai: DEFAULT_AI,

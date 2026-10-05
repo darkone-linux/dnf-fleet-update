@@ -4,9 +4,8 @@
 import { ping } from "../engine/commands/host.ts";
 import { Fabric } from "../engine/fabric.ts";
 import { parseFleet } from "../engine/fleet.ts";
-import { PROBE_ATTEMPTS } from "../engine/presence.ts";
 import type { Selection } from "../engine/steps/select.ts";
-import { DEFAULT_TIMEOUTS } from "../model/params.ts";
+import { DEFAULT_PRESENCE, DEFAULT_TIMEOUTS } from "../model/params.ts";
 import type { CommandScript } from "./fakes.ts";
 
 /**
@@ -147,7 +146,7 @@ export const pingOf = (host: string, exitCode: number, once = false): CommandScr
 
 /** Every attempt of one presence check fails, then the next scripts answer. */
 export const offlineOnce = (host: string): CommandScript[] =>
-  Array.from({ length: PROBE_ATTEMPTS }, () => pingOf(host, 1, true));
+  Array.from({ length: DEFAULT_PRESENCE.attempts }, () => pingOf(host, 1, true));
 
 /** nixpkgs of the synthetic lock, and the store path its `narHash` fixes. */
 export const NIXPKGS_SOURCE = {
