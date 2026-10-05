@@ -114,6 +114,18 @@ describe("publish", () => {
     expect(copy).not.toContain("--to");
   });
 
+  test("a push is announced in the host feed, with the store it relays through", async () => {
+    const { context, hosts, presence } = setup([], "pc-ag");
+
+    await publish(context, hosts, presence);
+
+    // Every pull misses (fakes): `gw-ag` relayed here, `pc-ag` taken into its own store.
+    expect(outputOf(context, "gw-ag")).toContain(
+      "not in its substituters, pushing from srv-ag through pc-ag",
+    );
+    expect(outputOf(context, "pc-ag")).toContain("not in its substituters, pushing from srv-ag");
+  });
+
   test("an offline host stays built, named, and its zone cache warned about", async () => {
     const { context, hosts, presence, states } = setup([pingOf("srv-ag", 1)]);
 
@@ -139,6 +151,11 @@ describe("publish", () => {
     expect(feedOf(context)).toContain("warn zone ag: cache not seeded, its hosts pay one by one");
   });
 });
+
+const outputOf = (context: ReturnType<typeof fakeRunContext>, host: string) =>
+  context.events.events.flatMap((event) =>
+    event.kind === "host.output" && event.host === host ? [event.line] : [],
+  );
 
 const feedOf = (context: ReturnType<typeof fakeRunContext>) =>
   context.events.events.flatMap((event) =>

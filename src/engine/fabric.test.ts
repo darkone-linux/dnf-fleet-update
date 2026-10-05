@@ -60,6 +60,14 @@ describe("Fabric", () => {
     expect(builders(fleet(hosts))["pc-ag"]).toBe("pc-ag");
   });
 
+  test("builder: roaming builds itself, away from its zone no cache serves it", () => {
+    const hosts = HOSTS_JSON.map((host) =>
+      host.hostname === "lt-cp" ? { ...host, features: { roaming: "cp" } } : host,
+    );
+
+    expect(builders(fleet(hosts))["lt-cp"]).toBe("lt-cp");
+  });
+
   test("builder: a cpu the elected builder does not share stays central", () => {
     const hosts = HOSTS_JSON.map((host) =>
       host.hostname === "pc-ag" ? { ...host, arch: "aarch64:rpi4" } : host,

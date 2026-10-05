@@ -26,7 +26,7 @@ export interface FleetHost {
   /** Colmena deployment tags, the `@tag` of `--on`. */
   tags: string[];
 
-  /** Fleet features declared on the host; `auto-build` elects it as its own builder. */
+  /** Fleet features declared on the host; `auto-build`, `roaming` elect it as its own builder. */
   features: string[];
 }
 

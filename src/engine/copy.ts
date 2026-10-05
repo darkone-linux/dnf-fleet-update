@@ -128,7 +128,13 @@ export async function serveHost(
   // not an incident, and the push behind it is the fallback, not a repair.
   let failure: Failure | undefined;
   if (!succeeded((await pull()).result) && !flow.halt.aborted) {
-    const from = builder === context.local.hostname() ? undefined : builder;
+    const here = context.local.hostname();
+    const from = builder === here ? undefined : builder;
+
+    // Else the feed keeps the pull's nix error while a push may print nothing
+    // for minutes (spec § Publication).
+    const relay = from !== undefined && !target.local ? ` through ${here}` : "";
+    onLine({ stream: "stderr", line: `not in its substituters, pushing from ${builder}${relay}` });
     failure = await push(context, target, path, from, watch);
 
     // Roots what the push landed: same command, instant from the local store.

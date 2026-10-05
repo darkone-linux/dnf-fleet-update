@@ -12,6 +12,12 @@ const CACHES = ["harmonia", "nix-cache"] as const;
 export const AUTO_BUILD = "auto-build";
 
 /**
+ * Nomadic host: builds itself too. Away from its zone no fleet cache serves it,
+ * its zone's would only push, relayed (spec § Substituteurs, interim rule).
+ */
+export const ROAMING = "roaming";
+
+/**
  * `arch` is `cpu[:board]` and defaults to x86_64 (generator): the board picks
  * the image, the cpu alone says where a derivation can be built.
  */
@@ -58,16 +64,16 @@ export class Fabric {
 
   /**
    * Builder elected for `host` (spec § Substituteurs et plomberie de build):
-   * itself under `auto-build`, else the harmonia of its zone, else the `global`
-   * harmonia, else `local`, the deployment machine. A builder must be able to
-   * serve what it builds, so it is a harmonia host — its store is the cache of
-   * its zone by construction.
+   * itself under `auto-build` or `roaming`, else the harmonia of its zone, else
+   * the `global` harmonia, else `local`, the deployment machine. A builder must
+   * be able to serve what it builds, so it is a harmonia host — its store is the
+   * cache of its zone by construction.
    *
    * Pure, topology only: a builder unreachable or in failure falls back to the
    * deployment machine at build time.
    */
   builder(host: FleetHost, local: string): string {
-    if (host.features.includes(AUTO_BUILD)) return host.name;
+    if (host.features.includes(AUTO_BUILD) || host.features.includes(ROAMING)) return host.name;
     const elected = this.byZone.get(host.zone) ?? this.globalCache;
     const builder = this.hosts.find((candidate) => candidate.name === elected);
     if (builder === undefined || cpu(builder.arch) !== cpu(host.arch)) return local;
