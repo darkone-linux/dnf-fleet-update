@@ -56,7 +56,7 @@ async function volume(context: RunContext, paths: readonly string[]): Promise<nu
 
 async function push(
   context: RunContext,
-  name: string,
+  target: Target,
   path: string,
   from: string | undefined,
   onLine: (line: OutputLine) => void,
@@ -68,15 +68,23 @@ async function push(
   // resume — and gives up on the paths after it. Retried at most twice: the
   // second run skips whatever is already valid (spec § Exécution).
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
-    const execution = await execute(context, copyClosure(name, path, params.timeouts, from), {
+    const execution = await execute(context, copyClosure(target, path, params.timeouts, from), {
       signal: flow.halt,
       onLine,
     });
     if (flow.halt.aborted || succeeded(execution.result)) return undefined;
     failure = failureOf(execution, `copy failed: ${describeFailure(execution)}`);
-    if (attempt < RETRY_ATTEMPTS) log(context, "warn", `${failure.note}, retrying`, name);
+    if (attempt < RETRY_ATTEMPTS) log(context, "warn", `${failure.note}, retrying`, target.host);
   }
   return failure;
+}
+
+/**
+ * The deployment host holds its closure only when it built it: a distributed
+ * build elects its zone cache, and that store is the one to serve it from.
+ */
+export function builtHere(host: { name: string; local: boolean; builder: string }): boolean {
+  return host.local && host.builder === host.name;
 }
 
 export interface Served {
@@ -121,7 +129,7 @@ export async function serveHost(
   let failure: Failure | undefined;
   if (!succeeded((await pull()).result) && !flow.halt.aborted) {
     const from = builder === context.local.hostname() ? undefined : builder;
-    failure = await push(context, target.host, path, from, watch);
+    failure = await push(context, target, path, from, watch);
 
     // Roots what the push landed: same command, instant from the local store.
     if (failure === undefined && !flow.halt.aborted) await pull();

@@ -14,7 +14,7 @@ import {
   type Target,
 } from "./commands/host.ts";
 import { emit, log, type RunContext } from "./context.ts";
-import { serveHost } from "./copy.ts";
+import { builtHere, serveHost } from "./copy.ts";
 import { decideFailure, decideLost } from "./decisions.ts";
 import {
   describeFailure,
@@ -146,7 +146,7 @@ export async function deployHost(
   // (spec § Publication). A `ready` or `tested` host already holds its closure.
   if (host.state === "built") {
     hosts.set(name, "copying");
-    if (!host.local) {
+    if (!builtHere(host)) {
       const served = { target, path, builder: host.builder };
       const copied = await serveHost(context, hosts.fabric, served, output("copy"));
       if (flow.halt.aborted) return;

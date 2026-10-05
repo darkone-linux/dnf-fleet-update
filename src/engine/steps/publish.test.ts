@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import type { HostState } from "../../model/events.ts";
 import { type CommandScript, fakeRunContext } from "../../testing/fakes.ts";
 import {
+  anyPing,
   anywhere,
   fleetSelection,
   HAPPY_HOSTS as HAPPY,
@@ -16,9 +17,15 @@ import { HostTable } from "../hosts.ts";
 import { Presence } from "../presence.ts";
 import { publish } from "./publish.ts";
 
-function setup(commands: CommandScript[] = [], local?: string) {
-  const context = fakeRunContext({ commands: [...commands, ...HAPPY] });
-  const hosts = new HostTable(context, fleetSelection(local));
+function setup(commands: CommandScript[] = [], local?: string, builtLocally = false) {
+  const context = fakeRunContext({
+    commands: [...commands, ...HAPPY],
+    ...(local === undefined ? {} : { hostname: local }),
+  });
+  const selection = fleetSelection(local);
+  const builders = new Map(selection.builders);
+  if (local !== undefined && builtLocally) builders.set(local, local);
+  const hosts = new HostTable(context, { ...selection, builders });
   for (const host of hosts.all()) {
     hosts.set(host.name, "building");
     hosts.set(host.name, "built", { path: storePath(host.name) });
@@ -81,12 +88,29 @@ describe("publish", () => {
   });
 
   test("the deployment host built it: nothing travels", async () => {
-    const { context, hosts, presence } = setup([], "pc-ag");
+    const { context, hosts, presence } = setup([], "pc-ag", true);
 
     await publish(context, hosts, presence);
 
     expect(hosts.get("pc-ag").state).toBe("ready");
-    expect(context.commands.calls.some(({ argv }) => argv.includes("nix@pc-ag"))).toBe(false);
+    const own = context.commands.calls.filter(({ argv }) => argv.join(" ").includes("pc-ag"));
+    expect(own.filter(({ argv }) => !anyPing(argv))).toEqual([]);
+  });
+
+  test("the deployment host built by its zone cache: taken into its own store", async () => {
+    const { context, hosts, presence } = setup([], "pc-ag");
+    expect(hosts.get("pc-ag").builder).toBe("srv-ag");
+
+    await publish(context, hosts, presence);
+
+    // Pulled here, no ssh; the pull missing it, pushed from the builder, no `--to`.
+    expect(hosts.get("pc-ag").state).toBe("ready");
+    const sent = context.commands.calls.map(({ argv }) => argv.join(" "));
+    const pull = sent.find((line) => line.includes(`nix build ${storePath("pc-ag")}`));
+    expect(pull).not.toContain("ssh");
+    const copy = sent.find((line) => line.includes(`copy`) && line.endsWith(storePath("pc-ag")));
+    expect(copy).toContain("--from ssh-ng://nix@srv-ag");
+    expect(copy).not.toContain("--to");
   });
 
   test("an offline host stays built, named, and its zone cache warned about", async () => {

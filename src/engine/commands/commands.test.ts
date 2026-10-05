@@ -92,7 +92,7 @@ describe("deploy identity", () => {
   });
 
   test("nix copy of the built path", () => {
-    expect(copyClosure("gw-ag", NEW, T).argv).toEqual([
+    expect(copyClosure({ host: "gw-ag", local: false }, NEW, T).argv).toEqual([
       ...AS_NIX,
       "timeout",
       "--kill-after=10",
@@ -105,6 +105,18 @@ describe("deploy identity", () => {
       "--no-check-sigs",
       "--to",
       "ssh-ng://nix@gw-ag",
+      NEW,
+    ]);
+  });
+
+  test("the deployment host takes a closure built elsewhere into its own store", () => {
+    const argv = copyClosure({ host: "gfx", local: true }, NEW, T, "ms-a2").argv;
+    expect(argv.slice(-6)).toEqual([
+      "copy",
+      "--substitute-on-destination",
+      "--no-check-sigs",
+      "--from",
+      "ssh-ng://nix@ms-a2",
       NEW,
     ]);
   });
@@ -194,7 +206,8 @@ describe("placement", () => {
 
   test("unvalidated host names or paths are programmer errors", () => {
     expect(() => onHost({ host: "a;reboot", local: false }, readOrigin(T), T)).toThrow();
-    expect(() => copyClosure("gw-ag", `${NEW} ${OLD}`, T)).toThrow();
+    expect(() => copyClosure({ host: "gw-ag", local: false }, `${NEW} ${OLD}`, T)).toThrow();
+    expect(() => copyClosure({ host: "pc-ag", local: true }, NEW, T)).toThrow();
     expect(() => setProfile("/tmp/system", T)).toThrow();
     expect(() => rollbackUnit("run 1", "test")).toThrow();
   });

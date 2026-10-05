@@ -24,14 +24,26 @@ const PING_ROUND = 15_000;
 
 function setup(
   commands: CommandScript[] = [],
-  options: { params?: Partial<RunParams>; answers?: Record<string, string>; local?: string } = {},
+  options: {
+    params?: Partial<RunParams>;
+    answers?: Record<string, string>;
+    local?: string;
+
+    /** The deployment host built its own closure, its elected builder aside. */
+    builtLocally?: boolean;
+  } = {},
 ) {
+  const { local, builtLocally } = options;
   const context = fakeRunContext({
     params: options.params,
     answers: options.answers,
     commands: [...commands, ...HAPPY],
+    ...(local === undefined ? {} : { hostname: local }),
   });
-  const selection = fleetSelection(options.local);
+  const elected = fleetSelection(local);
+  const builders = new Map(elected.builders);
+  if (local !== undefined && builtLocally) builders.set(local, local);
+  const selection = { ...elected, builders };
   const hosts = new HostTable(context, selection);
   for (const host of hosts.all()) {
     hosts.set(host.name, "building");
@@ -269,7 +281,10 @@ describe("test waves", () => {
   });
 
   test("deployment host: no copy, no ssh, no timer, no reconnection", async () => {
-    const { context, selection, hosts, presence, states } = setup([], { local: "pc-ag" });
+    const { context, selection, hosts, presence, states } = setup([], {
+      local: "pc-ag",
+      builtLocally: true,
+    });
 
     await testWaves(context, hosts, presence, selection);
 
@@ -282,6 +297,20 @@ describe("test waves", () => {
     const activation = local.find((line) => line.includes("rc=$?"));
     expect(activation?.startsWith("sudo -n timeout --kill-after=10 300 systemd-run")).toBe(true);
     expect(activation).not.toContain("--on-active");
+  });
+
+  test("deployment host built by its zone cache: taken into its own store before its test", async () => {
+    const { context, selection, hosts, presence, states } = setup([], { local: "pc-ag" });
+    expect(hosts.get("pc-ag").builder).toBe("srv-ag");
+
+    await testWaves(context, hosts, presence, selection);
+
+    expect(states()["pc-ag"]).toBe("tested");
+    const copy = context.commands.calls
+      .map((call) => call.argv.join(" "))
+      .find((line) => line.includes("nix copy") && line.endsWith(storePath("pc-ag")));
+    expect(copy).toContain("--from ssh-ng://nix@srv-ag");
+    expect(copy).not.toContain("--to");
   });
 
   test("abort after wave: the wave in progress ends, no other starts", async () => {

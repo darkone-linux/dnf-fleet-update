@@ -128,19 +128,22 @@ const sshEnv = (timeouts: Timeouts) => `NIX_SSHOPTS=${sshOptions(timeouts).join(
  * or not.
  *
  * `from`: the builder holding the closure, when it is not the local store
- * (spec § Exécution, « depuis le store qui détient le chemin »).
+ * (spec § Exécution, « depuis le store qui détient le chemin »). A local
+ * target takes it into its own store, through its daemon: no ssh to itself.
  */
 export function copyClosure(
-  host: string,
+  target: Target,
   path: string,
   timeouts: Timeouts,
   from?: string,
 ): CommandSpec {
-  assertSafe("host", host, HOSTNAME);
+  assertSafe("host", target.host, HOSTNAME);
   assertSafe("store path", path, STORE_PATH);
   if (from !== undefined) assertSafe("host", from, HOSTNAME);
+  if (target.local && from === undefined) throw new Error(`${target.host}: copy to its own store`);
 
   const source = from === undefined ? [] : ["--from", `ssh-ng://nix@${from}`];
+  const destination = target.local ? [] : ["--to", `ssh-ng://nix@${target.host}`];
   return asNix(
     [
       "env",
@@ -150,8 +153,7 @@ export function copyClosure(
       "--substitute-on-destination",
       "--no-check-sigs",
       ...source,
-      "--to",
-      `ssh-ng://nix@${host}`,
+      ...destination,
       path,
     ],
     timeouts.copy,

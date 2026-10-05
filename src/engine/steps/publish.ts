@@ -5,7 +5,7 @@
 // parallel, each capped by `--max-parallel`.
 
 import { emit, log, type RunContext } from "../context.ts";
-import { serveHost } from "../copy.ts";
+import { builtHere, serveHost } from "../copy.ts";
 import { failedBeforeActivation } from "../deploy.ts";
 import type { HostEntry, HostTable } from "../hosts.ts";
 import { pool } from "../pool.ts";
@@ -23,15 +23,14 @@ async function serve(
   if (path === undefined) throw new Error(`${name}: published without a built path`);
   hosts.set(name, "copying");
 
-  // The deployment host built it: nothing to move.
-  if (host.local) {
+  if (builtHere(host)) {
     hosts.set(name, "ready");
     return false;
   }
   const failure = await serveHost(
     context,
     hosts.fabric,
-    { target: { host: name, local: false }, path, builder: host.builder },
+    { target: { host: name, local: host.local }, path, builder: host.builder },
     ({ line }) => emit(context, { kind: "host.output", host: name, phase: "publish", line }),
   );
   if (context.flow.halt.aborted) return true;
