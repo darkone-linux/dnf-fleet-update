@@ -9,6 +9,31 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-10-05
+
+### Added
+
+- **engine**: Presence probe over the deploy ssh connection
+- **engine**: Searching state, offline after 3 failed probes in a row
+- **engine**: Report says who aborted the run and where hosts were left
+- **engine**: Roaming hosts build themselves, feed announces a push
+
+### Fixed
+
+- **engine**: Presence probe session bounded by the ssh delay
+- **engine**: Failed build reason names the derivation that failed
+- **engine**: No local fallback when a derivation failed on its builder
+- **engine**: Serve the deployment host a closure built by another store
+- **engine**: Space presence probes and retries, ping answered hosts less often
+
+### Security
+
+- **ai**: Mask the MCP bearer token in the run log
+
+### Changed
+
+- **engine**: A derivation failed by itself fails every host holding it
+
 ## [0.7.3] - 2026-09-25
 
 ### Added
@@ -238,7 +263,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.0...v0.7.1
