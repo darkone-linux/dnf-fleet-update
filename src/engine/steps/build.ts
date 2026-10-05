@@ -2,6 +2,7 @@
 // per host as soon as its derivation is known, presence pinged meanwhile.
 
 import type { HostState } from "../../model/events.ts";
+import { BuildFailures, type FailedBuild } from "../build-failures.ts";
 import { collect } from "../collect.ts";
 import {
   buildDerivation,
@@ -71,8 +72,17 @@ interface Built {
   durationMs: number;
 }
 
+/** Said as soon as nix reports it, before the build ends: hosts waiting on it stop. */
+type OnFailed = (failure: Omit<FailedBuild, "host">) => void;
+
 /** One `nix build`, here or on a builder: its log to the host, its reason on failure. */
-async function runBuild(context: RunContext, name: string, spec: CommandSpec): Promise<Built> {
+async function runBuild(
+  context: RunContext,
+  name: string,
+  spec: CommandSpec,
+  signal: AbortSignal,
+  record: OnFailed,
+): Promise<Built> {
   let lastError: string | undefined;
   let lastErrorLines: string[] | undefined;
 
@@ -83,7 +93,7 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
     emit(context, { kind: "host.output", host: name, phase: "build", line });
 
   const execution = await execute(context, spec, {
-    signal: context.flow.halt,
+    signal,
     retryable: true,
     onLine: ({ stream, line }) => {
       if (stream === "stdout") return;
@@ -105,6 +115,7 @@ async function runBuild(context: RunContext, name: string, spec: CommandSpec): P
           const drv = failedDerivation(entry.message);
           if (cause === undefined && drv !== undefined) {
             cause = { drv, note: lastError, lines: lastErrorLines };
+            record({ drv, note: lastError, excerpt: lastErrorLines });
           }
           for (const text of lastErrorLines) output(text);
           return;
@@ -139,6 +150,8 @@ async function delegate(
   builder: string,
   job: Job,
   seeder: SourceSeeder,
+  signal: AbortSignal,
+  record: OnFailed,
 ): Promise<Built | undefined> {
   const { timeouts } = context.params;
   const give = (note: string): undefined => {
@@ -148,14 +161,14 @@ async function delegate(
 
   // Before the copy: a source the builder holds is one the copy skips.
   await seeder.seed(builder, job.drvPath, name);
-  if (context.flow.halt.aborted) return undefined;
+  if (signal.aborted) return undefined;
 
   const copied = await execute(context, copyDerivation(builder, job.drvPath, timeouts), {
-    signal: context.flow.halt,
+    signal,
     retryable: true,
     onLine: ({ line }) => emit(context, { kind: "host.output", host: name, phase: "build", line }),
   });
-  if (context.flow.halt.aborted) return undefined;
+  if (signal.aborted) return undefined;
   if (!succeeded(copied.result)) {
     return give(`derivation not copied: ${describeFailure(copied)}`);
   }
@@ -165,8 +178,10 @@ async function delegate(
     context,
     name,
     onHost(target, buildDerivation(job.drvPath, name, timeouts), timeouts),
+    signal,
+    record,
   );
-  if (context.flow.halt.aborted || built.note === undefined) return built;
+  if (signal.aborted || built.note === undefined) return built;
 
   // The derivation failed, not the delegation: the same build fails here too.
   if (built.derivation !== undefined) return built;
@@ -190,6 +205,36 @@ async function buildJob(
   where: Where,
   job: Job,
   seeder: SourceSeeder,
+  failures: BuildFailures,
+): Promise<Built | undefined> {
+  const { name } = where;
+  const watch = await failures.watch(name, job.drvPath);
+  try {
+    const signal = AbortSignal.any([context.flow.halt, watch.signal]);
+    const record: OnFailed = (failure) => failures.record({ ...failure, host: name });
+    const built =
+      watch.failure === undefined
+        ? await buildWhere(context, where, job, seeder, signal, record)
+        : undefined;
+    if (context.flow.halt.aborted) return undefined;
+
+    // Its own outcome first: a success, or a derivation it saw fail itself.
+    const own = built !== undefined && (built.note === undefined || built.derivation !== undefined);
+    if (own || watch.failure === undefined) return built;
+    return inherit(context, name, watch.failure);
+  } finally {
+    watch.close();
+  }
+}
+
+/** Cut by `signal`: no fallback, `undefined` when no build had started. */
+async function buildWhere(
+  context: RunContext,
+  where: Where,
+  job: Job,
+  seeder: SourceSeeder,
+  signal: AbortSignal,
+  record: OnFailed,
 ): Promise<Built | undefined> {
   const { name } = where;
   const here = context.local.hostname();
@@ -203,19 +248,22 @@ async function buildJob(
   }
 
   if (where.builder !== here) {
-    built = await delegate(context, name, where.builder, job, seeder);
-    if (context.flow.halt.aborted) return undefined;
+    built = await delegate(context, name, where.builder, job, seeder, signal, record);
+    if (signal.aborted) return built;
 
     // Delegation failed (copy, ssh, killed build): the deployment machine takes
     // over, no host fails because of it (spec § Erreurs et réparations).
     if (built === undefined) where.builder = here;
   }
-  built ??= await runBuild(
-    context,
-    name,
-    buildHost(job.drvPath, context.run.outLink(name), context.params.timeouts),
-  );
-  return context.flow.halt.aborted ? undefined : built;
+  const spec = buildHost(job.drvPath, context.run.outLink(name), context.params.timeouts);
+  return built ?? (await runBuild(context, name, spec, signal, record));
+}
+
+/** A derivation of its closure failed for another host: the same reason, no build. */
+function inherit(context: RunContext, name: string, failure: FailedBuild): Built {
+  const drv = failure.drv.replace(/^\/nix\/store\/[0-9a-z]{32}-/, "");
+  log(context, "warn", `${drv} already failed for ${failure.host}, not built`, name);
+  return { note: failure.note, excerpt: failure.excerpt, derivation: failure.drv, durationMs: 0 };
 }
 
 async function buildOne(
@@ -224,6 +272,7 @@ async function buildOne(
   name: string,
   job: Job,
   seeder: SourceSeeder,
+  failures: BuildFailures,
 ): Promise<void> {
   const entry = hosts.get(name);
   const where: Where = {
@@ -231,7 +280,7 @@ async function buildOne(
     builder: entry.builder,
     ...(entry.online === undefined ? {} : { online: entry.online }),
   };
-  const built = await buildJob(context, where, job, seeder);
+  const built = await buildJob(context, where, job, seeder, failures);
   entry.builder = where.builder;
 
   // Halted: the build was cancelled, the host is left as it is.
@@ -256,6 +305,7 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
   const warnings = new Set<string>();
   const builds: Promise<void>[] = [];
   const seeder = sourceSeeder(context);
+  const failures = new BuildFailures(context);
   let done = 0;
   const settled = () => {
     done += 1;
@@ -295,13 +345,14 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
         settled();
         return;
       }
-      builds.push(buildOne(context, hosts, job.host, job, seeder).then(settled));
+      builds.push(buildOne(context, hosts, job.host, job, seeder, failures).then(settled));
     },
   });
 
   const failed = !context.flow.halt.aborted && !succeeded(evaluation.result);
   if (failed) log(context, "error", `evaluation failed: ${describeFailure(evaluation)}`);
   await Promise.all(builds);
+  await failures.settled();
 
   // Still building once every build settled: no line, the evaluation stopped before it.
   let missing = false;
@@ -368,7 +419,13 @@ export async function rebuildHost(
   if (typeof job === "string") return { note: `evaluation failed: ${job}` };
 
   const where: Where = { ...target };
-  const built = await buildJob(context, where, job, sourceSeeder(context));
+  const built = await buildJob(
+    context,
+    where,
+    job,
+    sourceSeeder(context),
+    new BuildFailures(context),
+  );
   if (built === undefined) return { note: "run stopping" };
   if (built.note !== undefined) {
     return {

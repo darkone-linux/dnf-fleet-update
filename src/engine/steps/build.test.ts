@@ -350,6 +350,45 @@ describe("build", () => {
     expect(hosts.get("pc-ag").builder).toBe("srv-ag");
   });
 
+  test("a derivation failed by itself: builds holding it stop, decided with it", async () => {
+    const holding = (argv: readonly string[]) =>
+      argv[1] === "--query" &&
+      ["gw-ag", "pc-ag"].some((host) => argv.includes(storePath(host, ".drv")));
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        {
+          match: holding,
+          output: [
+            { stream: "stdout", line: NIXPKGS_SOURCE.path },
+            { stream: "stdout", line: ANYIO },
+          ],
+        },
+        ownFailure("pc-ag", "builder"),
+
+        // Waits on the same derivation, as nix makes it wait on its lock.
+        { match: anywhere(`${storePath("gw-ag", ".drv")}^*`), gate: new Promise(() => {}) },
+        { match: anywhere("ssh-ng://") },
+        { match: anywhere(".drv^*") },
+      ],
+      { delegated: true },
+    );
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    expect(hosts.get("gw-ag").state).toBe("excluded");
+    expect(hosts.get("gw-ag").note).toBe(`Cannot build '${ANYIO}'.`);
+    expect(hosts.get("srv-ag").state).toBe("built");
+    const said = feed(context.events.events);
+    expect(said).toContain(
+      "warn gw-ag: python3.12-anyio-4.14.2.drv already failed for pc-ag, not built",
+    );
+    expect(said).toContain("warn excluded: gw-ag, pc-ag");
+    const sent = context.commands.calls.map(({ argv }) => argv.join(" "));
+    expect(sent.filter((line) => line.startsWith("nix build"))).toEqual([]);
+  });
+
   test("builder killed by a signal: built here instead, another machine may succeed", async () => {
     const { context, hosts, presence } = setup(
       [
@@ -531,6 +570,7 @@ describe("build", () => {
       evaluation(NAMES.map(evalLine)),
       ownFailure("pc-ag"),
       ownFailure("lt-cp"),
+      { match: ["nix-store", "--query", "--requisites"] },
     ]);
 
     await build(context, hosts, presence);
