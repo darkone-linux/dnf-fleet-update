@@ -69,6 +69,32 @@ describe("select", () => {
     expect(feed(run.events.events)[0]).toBe("warn --on: no host matches @nope");
   });
 
+  test("a microVM guest is left to its hypervisor, a warning when --on names it", async () => {
+    const guest = {
+      hostname: "vm-ag",
+      profile: "ai-space",
+      zone: "ag",
+      ip: "10.1.0.40",
+      features: { "microvm-guest": "srv-ag" },
+    };
+    const fleet = context({ commands: generatedScripts([...HOSTS_JSON, guest]) });
+
+    const selection = await select(fleet);
+
+    expect(selection?.hosts.map((host) => host.name)).not.toContain("vm-ag");
+    expect(feed(fleet.events.events).filter((line) => line.startsWith("warn"))).toEqual([]);
+
+    const named = context({
+      commands: generatedScripts([...HOSTS_JSON, guest]),
+      params: { on: "vm-ag" },
+    });
+    expect(await select(named)).toBeUndefined();
+    expect(feed(named.events.events)).toEqual([
+      "warn vm-ag: microVM guest, deployed with srv-ag",
+      "error no host selected",
+    ]);
+  });
+
   test("no current zone, non-interactive: waves by profile, all zones together", async () => {
     const run = context({ addresses: ["192.168.9.9"] });
 

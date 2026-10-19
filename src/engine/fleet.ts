@@ -28,6 +28,9 @@ export interface FleetHost {
 
   /** Fleet features declared on the host; `auto-build`, `roaming` elect it as its own builder. */
   features: string[];
+
+  /** Hypervisor of a microVM guest (`microvm-guest:<host>`), which deploys it. */
+  hypervisor?: string;
 }
 
 export interface FleetZone {
@@ -115,16 +118,20 @@ export function parseHosts(json: unknown): Result<FleetHost[]> {
   const parsed = z.array(hostSchema).safeParse(json);
   if (!parsed.success) return fail(`hosts.nix: ${z.prettifyError(parsed.error)}`);
 
-  const hosts = parsed.data.map((host) => ({
-    name: host.hostname,
-    profile: host.profile,
-    zone: host.zone,
-    ip: orUndefined(host.ip),
-    vpnIp: orUndefined(host.vpnIp),
-    arch: orUndefined(host.arch),
-    tags: host.colmena?.deployment?.tags ?? [],
-    features: Object.keys(host.features ?? {}),
-  }));
+  const hosts = parsed.data.map((host) => {
+    const hypervisor = host.features?.["microvm-guest"];
+    return {
+      name: host.hostname,
+      profile: host.profile,
+      zone: host.zone,
+      ip: orUndefined(host.ip),
+      vpnIp: orUndefined(host.vpnIp),
+      arch: orUndefined(host.arch),
+      tags: host.colmena?.deployment?.tags ?? [],
+      features: Object.keys(host.features ?? {}),
+      hypervisor: typeof hypervisor === "string" ? hypervisor : undefined,
+    };
+  });
 
   const seen = new Set<string>();
   for (const host of hosts) {

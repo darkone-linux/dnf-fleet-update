@@ -79,6 +79,12 @@ describe("hosts", () => {
     });
   });
 
+  test("a microvm-guest feature names the hypervisor", () => {
+    const guest = { hostname: "space1", profile: "ai-space", zone: "ag" };
+    const result = parseHosts([{ ...guest, features: { "microvm-guest": "gfx" } }, HOSTS[2]]);
+    expect(result.ok && result.value.map((host) => host.hypervisor)).toEqual(["gfx", undefined]);
+  });
+
   test("rejects a host name that could reach a shell or a Nix string", () => {
     // `$` + `{`: a Nix antiquotation, spelled apart to stay a plain string.
     for (const hostname of ["a;rm -rf /", `$${"{"}builtins.x}`, "-oProxyCommand", "x"]) {

@@ -179,6 +179,15 @@ async function choose(context: RunContext): Promise<Selection | undefined> {
     for (const term of selected.unmatched) log(context, "warn", `--on: no host matches ${term}`);
     hosts = selected.hosts;
   }
+
+  // A guest runs from its hypervisor's closure, which installs and restarts
+  // it: deployed alone, it would switch outside of it. Named → told where.
+  for (const host of hosts) {
+    if (host.hypervisor !== undefined && query !== undefined) {
+      log(context, "warn", `${host.name}: microVM guest, deployed with ${host.hypervisor}`);
+    }
+  }
+  hosts = hosts.filter((host) => host.hypervisor === undefined);
   if (hosts.length === 0) return failed("no host selected");
   for (const host of hosts) {
     emit(context, { kind: "host.add", host: host.name, profile: host.profile, zone: host.zone });
