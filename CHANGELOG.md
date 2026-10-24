@@ -9,6 +9,16 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-10-24
+
+### Fixed
+
+- **engine**: MicroVM guests left to their hypervisor, never deployed alone
+
+### Security
+
+- bump shell-quote to 1.11.0 (GHSA-pqg4-j6r4-53mv)
+
 ## [0.7.4] - 2026-10-05
 
 ### Added
@@ -263,7 +273,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.1...v0.7.2
