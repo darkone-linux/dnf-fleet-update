@@ -11,7 +11,7 @@ import {
   type UnitAction,
   unitAction,
 } from "../../engine/commands/host.ts";
-import { type PersistedHost, spentAttempts } from "../../model/persist.ts";
+import { type PersistedHost, spentAttempts, validatedSinceEdit } from "../../model/persist.ts";
 import { defineTool, Refused, type RegisteredTool, type ToolContext, ToolError } from "./types.ts";
 
 /** A file the model rewrites whole: past this it is not editing, it is generating. */
@@ -213,7 +213,7 @@ const validate = defineTool({
   name: "validate",
   level: "repair",
   description:
-    "Check an edit: runs the project's own clean-up, then re-evaluates and rebuilds this host alone. Costs no repair attempt, and changes nothing on the fleet — but the host is redeployed from what it builds, so call it once the code is right.",
+    "Check an edit: runs the project's own clean-up, then re-evaluates and rebuilds this host alone. Costs no repair attempt, and changes nothing on the fleet. Required before commit: the host is redeployed from what it builds, once committed.",
   input: z.strictObject({
     host: z.string().describe("host under repair, the only one rebuilt"),
   }),
@@ -243,7 +243,7 @@ const commit = defineTool({
   name: "commit",
   level: "repair",
   description:
-    "Commit what you edited, once validate has passed. The message is built for you as fix(<scope>): <subject>. In co-development dnf/ is committed first and the consumer lock realigned; dnf/ is a published framework, so its message names the module, never a host nor anything particular to this project. Costs no repair attempt.",
+    "Commit what you edited, once validate has passed on the last edit; nothing is redeployed uncommitted, and an uncommitted edit is discarded when the session ends. The message is built for you as fix(<scope>): <subject>. One commit per fix: a later commit for the same host amends it. In co-development dnf/ is committed first and the consumer lock realigned; dnf/ is a published framework, so its message names the module, never a host nor anything particular to this project. Costs no repair attempt.",
   input: z.strictObject({
     host: z.string().describe("host under repair"),
     scope: z
@@ -262,6 +262,11 @@ const commit = defineTool({
     if (context.halting()) refuse(context, host.name, label, "the run is stopping");
     if (host.state !== "ai-repairing") {
       refuse(context, host.name, label, `${host.name} is not under repair right now`);
+    }
+
+    // Committed is redeployed: an edit nobody built is never sealed.
+    if (!validatedSinceEdit(context.state(), host.name)) {
+      refuse(context, host.name, label, "the last edit is not validated: run validate first");
     }
 
     let written: string[];

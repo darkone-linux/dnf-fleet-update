@@ -149,6 +149,24 @@ describe("renderReport", () => {
     expect(report.markdown).toContain("| nlt | failed | build failed: x \\| y |");
   });
 
+  test("an amended fix is one commit, with its count", () => {
+    const amended = {
+      ...state,
+      commits: [{ repo: "dnf" as const, rev: "abcdef1234", message: "fix(x): y", amended: 2 }],
+    };
+    const { markdown } = renderReport({
+      runId: RUN_ID,
+      state: amended,
+      status: "done",
+      exitCode: 0,
+      durationMs: 1000,
+      warnings: [],
+      knownErrors: [],
+      analyses: [],
+    });
+    expect(markdown).toContain("- Commits: dnf/ abcdef1 fix(x): y (amended 2×)");
+  });
+
   test("markdown: header, steps, waves, hosts not deployed, hosts left in test, warnings", () => {
     const { markdown } = renderReport({
       runId: RUN_ID,

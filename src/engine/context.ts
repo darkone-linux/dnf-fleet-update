@@ -8,6 +8,7 @@ import type { RunParams } from "../model/params.ts";
 import type { PersistedState } from "../model/persist.ts";
 import type { RunFlow } from "./flow.ts";
 import type { KnownErrors } from "./known-errors.ts";
+import type { Turn } from "./pool.ts";
 import type {
   EngineContext,
   LocalHost,
@@ -65,6 +66,15 @@ export interface ResumeContext {
   filter?: string;
 }
 
+/** What one repair subject committed in this run (spec § réparation, Règle de commit). */
+export interface RepairSubject {
+  /** Full revision by tree: a further correction amends it while it is HEAD. */
+  revs: Partial<Record<"dnf" | "consumer", string>>;
+
+  /** Toplevel validated when last committed: the only path a redeploy takes, read once. */
+  path?: string;
+}
+
 export interface RunContext extends EngineContext {
   params: RunParams;
 
@@ -113,6 +123,12 @@ export interface RunContext extends EngineContext {
 
   /** Repair session under way, by host: its end cuts a `validate` still building. */
   repairing: Map<string, AbortSignal>;
+
+  /** Repair subjects of the run, by host: one commit each, amended (spec § Règle de commit). */
+  subjects: Map<string, RepairSubject>;
+
+  /** One repair session at a time: a commit takes the whole tree. */
+  repairTurn: Turn;
 
   /** `clock.now()` at the start of the run: `t` of every event counts from it. */
   startedAt: number;

@@ -1,5 +1,17 @@
 // Bounded parallelism of a wave (`--max-parallel`).
 
+/** Runs one task at a time, in call order; a task that rejects does not block the next. */
+export type Turn = <T>(task: () => Promise<T>) => Promise<T>;
+
+export function serial(): Turn {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (task) => {
+    const result = tail.then(task);
+    tail = result.catch(() => undefined);
+    return result;
+  };
+}
+
 /** Starts nothing more once `stop` fires; tasks already started run to their end. */
 export async function pool(
   names: readonly string[],

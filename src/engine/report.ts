@@ -310,7 +310,7 @@ export function renderReport(input: ReportInput): Report {
   ];
   const commits = state.commits.map(
     (commit) =>
-      `${commit.repo === "dnf" ? "dnf/" : "consumer"} ${commit.rev.slice(0, 7)} ${commit.message}`,
+      `${commit.repo === "dnf" ? "dnf/" : "consumer"} ${commit.rev.slice(0, 7)} ${commit.message}${commit.amended === undefined ? "" : ` (amended ${commit.amended}×)`}`,
   );
   const markdown = [
     "# Fleet Update Report",

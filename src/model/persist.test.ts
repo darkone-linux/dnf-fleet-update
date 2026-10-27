@@ -11,6 +11,7 @@ import {
   type PersistedState,
   persist,
   spentAttempts,
+  validatedSinceEdit,
 } from "./persist.ts";
 
 function fold(events: Event[]): PersistedState {
@@ -119,6 +120,46 @@ test("a refused action is kept, and costs no attempt", () => {
 });
 
 // Recorded streams stop at `ask`: the replayer closes it once answered.
+test("an amended commit replaces its line, and counts", () => {
+  const commit = (rev: string, amends?: string): Event => ({
+    kind: "commit",
+    repo: "consumer",
+    rev,
+    message: `fix(outline): try ${rev}`,
+    ...(amends === undefined ? {} : { amends }),
+    t: 0,
+  });
+  const state = fold([commit("c0"), commit("c1"), commit("c2", "c1"), commit("c3", "c2")]);
+
+  expect(state.commits).toEqual([
+    { repo: "consumer", rev: "c0", message: "fix(outline): try c0" },
+    { repo: "consumer", rev: "c3", message: "fix(outline): try c3", amended: 2 },
+  ]);
+});
+
+test("a commit waits for a validation of the last edit", () => {
+  const action = (host: string, label: string, outcome: "done" | "failed" = "done"): Event => ({
+    kind: "ai.action",
+    host,
+    action: label,
+    outcome,
+    t: 0,
+  });
+  const after = (...events: Event[]) => validatedSinceEdit(fold(events), "gfx");
+
+  expect(after()).toBe(true);
+  expect(after(action("gfx", "edit a.nix"))).toBe(false);
+  expect(after(action("gfx", "edit a.nix"), action("gfx", "validate gfx"))).toBe(true);
+  expect(
+    after(
+      action("gfx", "validate gfx"),
+      action("gfx", "edit a.nix"),
+      action("nlt", "validate nlt"),
+    ),
+  ).toBe(false);
+  expect(after(action("gfx", "edit a.nix"), action("gfx", "validate gfx", "failed"))).toBe(false);
+});
+
 test("closed questions are kept as decisions", () => {
   const state = fold([
     { t: 5, kind: "ask", id: "lost", question: "gfx lost", options: [] },

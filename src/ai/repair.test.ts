@@ -119,6 +119,110 @@ describe("repairHost", () => {
     expect(halting.context.commands.calls).toEqual([]);
   });
 
+  const BUILT = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-hcs";
+
+  test("a fix committed in the session is redeployed, from what was committed", async () => {
+    const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
+    const { context, hosts } = erroredHost([
+      {
+        match: ["claude"],
+        onRun: () => holder.context?.subjects.set("hcs", { revs: { consumer: "c1" }, path: BUILT }),
+      },
+    ]);
+    holder.context = context;
+
+    await repairHost(context, hosts, "hcs", "tested");
+
+    expect(hosts.get("hcs").state).toBe("built");
+    expect(hosts.get("hcs").path).toBe(BUILT);
+
+    // Read once: a later round starts without a path to redeploy.
+    expect(context.subjects.get("hcs")?.path).toBeUndefined();
+  });
+
+  test("validated but not committed: nothing is redeployed", async () => {
+    const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
+    const { context, hosts } = erroredHost([
+      { match: ["claude"], onRun: () => holder.context?.repaired.set("hcs", BUILT) },
+      stillFailed(["nginx.service"]),
+    ]);
+    holder.context = context;
+
+    await repairHost(context, hosts, "hcs", "tested");
+
+    expect(hosts.get("hcs").state).toBe("error");
+    expect(feed(context.events.events)).toContain(
+      "warn hcs: validated but not committed: not redeployed",
+    );
+  });
+
+  test("an edit left uncommitted is discarded: the next run needs a clean tree", async () => {
+    const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
+    const { context, hosts } = erroredHost([
+      {
+        match: ["claude"],
+        onRun: () =>
+          holder.context?.events.emit({
+            kind: "ai.action",
+            host: "hcs",
+            action: "edit usr/x.nix",
+            outcome: "done",
+            t: 3,
+          }),
+      },
+      {
+        match: (argv) => argv.includes("status"),
+        output: [{ stream: "stdout", line: " M usr/x.nix" }],
+      },
+      { match: (argv) => argv.includes("reset") },
+      { match: (argv) => argv.includes("clean") },
+      stillFailed(["nginx.service"]),
+    ]);
+    holder.context = context;
+
+    await repairHost(context, hosts, "hcs", "tested");
+
+    const git = context.commands.calls.filter((spec) => spec.argv[0] === "git");
+    expect(git.map((spec) => spec.argv.slice(3).join(" "))).toEqual([
+      "status --porcelain",
+      "reset --hard --quiet HEAD",
+      "clean -d --force --quiet",
+    ]);
+    expect(feed(context.events.events)).toContain(
+      "warn hcs: consumer: uncommitted repair edits discarded",
+    );
+  });
+
+  test("two hosts of a wave take turns: a commit takes the whole tree", async () => {
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { context, hosts } = erroredHost([
+      { match: ["claude"], gate: held, once: true },
+      ANSWER,
+      stillFailed([]),
+    ]);
+    for (const state of ["building", "built", "copying", "ready", "testing"] as HostState[]) {
+      hosts.set("gw-ag", state);
+    }
+    hosts.set("gw-ag", "error", { note: "some units failed" });
+    context.events.emit({ kind: "host.diagnosis", host: "gw-ag", units: ["kea.service"], t: 2 });
+
+    const first = repairHost(context, hosts, "hcs", "tested");
+    const second = repairHost(context, hosts, "gw-ag", "tested");
+
+    // One macrotask: every pending microtask runs first, no clock involved.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const sessions = () => context.commands.calls.filter((spec) => spec.argv[0] === "claude");
+    expect(sessions()).toHaveLength(1);
+    expect(hosts.get("gw-ag").state).toBe("error");
+
+    release();
+    await Promise.all([first, second]);
+    expect(sessions()).toHaveLength(2);
+  });
+
   test("no failed unit, no session: the action tool would have nothing to touch", async () => {
     const context = fakeRunContext({ commands: [ANSWER], params: { aiErrorAction: "repair" } });
     const selection = fleetSelection();

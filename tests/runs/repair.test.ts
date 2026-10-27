@@ -166,4 +166,12 @@ test("a fix that does not fix: attempts run out, the host lands back in error", 
     "3 repair attempts already spent on gw-cp",
   );
   expect(run.exitCode).toBe(0);
+
+  // One fix, one commit: each new round amends it (spec § Règle de commit).
+  expect(run.sim.commits.filter((commit) => commit.message.startsWith("fix("))).toEqual([
+    { repo: "consumer", message: "fix(outline): start outline after postgresql", amended: 2 },
+  ]);
+  expect(run.recorded?.report).toContain(
+    "fix(outline): start outline after postgresql (amended 2×)",
+  );
 });

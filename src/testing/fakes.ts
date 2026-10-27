@@ -10,6 +10,7 @@ import { AiSuggestions } from "../ai/suggestions.ts";
 import { AiGate, QuestionQueue, type RunContext } from "../engine/context.ts";
 import { RunFlow } from "../engine/flow.ts";
 import { KnownErrors, type Signature } from "../engine/known-errors.ts";
+import { serial } from "../engine/pool.ts";
 import {
   type Clock,
   type CommandResult,
@@ -514,6 +515,8 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     suggestions: new AiSuggestions(),
     repaired: new Map(),
     repairing: new Map(),
+    subjects: new Map(),
+    repairTurn: serial(),
     startedAt: 0,
   };
 }

@@ -49,6 +49,17 @@ export function spentAttempts(state: PersistedState, host: string): number {
   ).length;
 }
 
+/**
+ * `true` unless an edit of this host came after its last successful
+ * `validate`: what is committed must be what was built (spec § Règle de commit).
+ */
+export function validatedSinceEdit(state: PersistedState, host: string): boolean {
+  const done = state.actions.filter((action) => action.host === host && action.outcome === "done");
+  const edit = done.findLastIndex((action) => action.action.startsWith("edit "));
+  const validate = done.findLastIndex((action) => action.action.startsWith("validate "));
+  return edit < validate || edit === -1;
+}
+
 /** Deterministic collection of a failed host (spec § Erreurs et réparations). */
 export interface HostDiagnosis {
   /** Units the host could not start, as `systemctl` named them. */
@@ -111,7 +122,7 @@ export interface PersistedWave {
 export interface PersistedState {
   schema: typeof PERSIST_SCHEMA;
   run?: RunInfo;
-  commits: { repo: "dnf" | "consumer"; rev: string; message: string }[];
+  commits: { repo: "dnf" | "consumer"; rev: string; message: string; amended?: number }[];
 
   /** Revision built from, per repository: `--resume` reuses paths only if unchanged. */
   revisions: { dnf?: string; consumer?: string };
@@ -207,11 +218,22 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
     case "run.start":
       return { ...state, run: event.run };
 
-    case "commit":
+    case "commit": {
+      const { repo, rev, message, amends } = event;
+      const replaced = state.commits.find(
+        (commit) => commit.repo === repo && commit.rev === amends,
+      );
+      if (replaced === undefined) {
+        return { ...state, commits: [...state.commits, { repo, rev, message }] };
+      }
+
+      // Amended: the fix stays one line of the report, counted.
+      const amended = { repo, rev, message, amended: (replaced.amended ?? 0) + 1 };
       return {
         ...state,
-        commits: [...state.commits, { repo: event.repo, rev: event.rev, message: event.message }],
+        commits: state.commits.map((commit) => (commit === replaced ? amended : commit)),
       };
+    }
 
     case "revision":
       return { ...state, revisions: { ...state.revisions, [event.repo]: event.rev } };

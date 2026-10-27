@@ -4,8 +4,11 @@
 // It never blocks a deployment — a repair that fails, times out or spends its
 // attempts leaves the host where the deterministic repair left it.
 
+import { join } from "node:path";
 import { readFailedUnits } from "../engine/collect.ts";
+import { gitCleanUntracked, gitDiscard, gitStatus } from "../engine/commands/workspace.ts";
 import { emit, log, type RunContext } from "../engine/context.ts";
+import { execute, succeeded } from "../engine/exec.ts";
 import type { HostTable } from "../engine/hosts.ts";
 import type { HostState } from "../model/events.ts";
 import { ask, quiet } from "./analysis.ts";
@@ -25,18 +28,36 @@ export async function repairHost(
 ): Promise<void> {
   if (context.params.aiErrorAction !== "repair" || quiet(context)) return;
   const persisted = context.state().hosts.find((candidate) => candidate.name === name);
-  const units = persisted?.diagnosis?.units ?? [];
 
   // Nothing the action tool could touch: a session here would be paid for nothing.
-  if (persisted === undefined || units.length === 0) return;
+  if ((persisted?.diagnosis?.units ?? []).length === 0) return;
+
+  // One session at a time: a commit takes the whole tree (spec § Règle de commit).
+  await context.repairTurn(() => repairSession(context, hosts, name, recovered));
+}
+
+async function repairSession(
+  context: RunContext,
+  hosts: HostTable,
+  name: string,
+  recovered: HostState,
+): Promise<void> {
+  // Its turn came: the run may be leaving by now, the diagnosis may have grown.
+  const persisted = context.state().hosts.find((candidate) => candidate.name === name);
+  if (quiet(context) || persisted === undefined) return;
+  const units = persisted.diagnosis?.units ?? [];
 
   const { state: previous, note } = hosts.get(name);
   hosts.set(name, "ai-repairing", { note });
   const session = new AbortController();
   context.repairing.set(name, session.signal);
+
+  // Actions of this session alone: what a previous round validated is spent.
+  const before = context.state().actions.length;
+  const subject = context.subjects.get(name);
+  if (subject !== undefined) subject.path = undefined;
+  context.repaired.delete(name);
   try {
-    // Actions of this session alone: an edit of a previous round is spent.
-    const before = context.state().actions.length;
     const analysis = context.analyses.all().findLast((entry) => entry.host === name);
     await ask(context, {
       id: `repair-${name}`,
@@ -52,19 +73,19 @@ export async function repairHost(
 
     // Session over: a validation still building ends with it (spec § J10, Délai).
     session.abort();
+    await discardUncommitted(context, name, before);
     if (quiet(context)) return;
 
-    // Code repaired and validated: the host holds a new toplevel, and its wave
-    // serves it again. Consumed here, so a later round starts from nothing.
-    const rebuilt = context.repaired.get(name);
-    context.repaired.delete(name);
-
-    // A validation without an edit of this session rebuilt the same sources:
-    // redeploying it would spend a wave to change nothing.
-    if (rebuilt !== undefined && edited(context, name, before)) {
-      hosts.set(name, "built", { path: rebuilt });
+    // Committed in this session: the host holds a new toplevel, and its wave
+    // serves it again. Never an uncommitted one (spec § Règle de commit).
+    const committed = context.subjects.get(name)?.path;
+    if (committed !== undefined) {
+      hosts.set(name, "built", { path: committed });
       log(context, "info", "rebuilt by an AI repair, deploying it again", name);
       return;
+    }
+    if (context.repaired.has(name)) {
+      log(context, "warn", "validated but not committed: not redeployed", name);
     }
 
     // Read back rather than trust the session: the tool may have acted, or not.
@@ -80,21 +101,50 @@ export async function repairHost(
   } finally {
     session.abort();
     context.repairing.delete(name);
+    context.repaired.delete(name);
+    const done = context.subjects.get(name);
+    if (done !== undefined) done.path = undefined;
 
     // Aborted, or the session threw: a host never ends in repair.
     if (hosts.get(name).state === "ai-repairing") hosts.set(name, previous, { note });
   }
 }
 
-/** `true`: this session actually changed a file of the sources for that host. */
-function edited(context: RunContext, name: string, since: number): boolean {
-  return context
+/**
+ * Trees back to HEAD after a session that edited or validated (spec § Règle de
+ * commit): an uncommitted edit is no fix, and a dirty tree stops the next run.
+ * The diff of every edit stays in `logs/ai.log`.
+ */
+async function discardUncommitted(context: RunContext, name: string, since: number): Promise<void> {
+  const touched = context
     .state()
     .actions.slice(since)
     .some(
       (action) =>
-        action.host === name && action.outcome === "done" && action.action.startsWith("edit "),
+        action.host === name &&
+        action.outcome !== "refused" &&
+        (action.action.startsWith("edit ") || action.action.startsWith("validate ")),
     );
+  if (!touched) return;
+
+  const { timeouts } = context.params;
+  const trees = [
+    { label: "consumer", path: context.workspace },
+    ...(context.codev ? [{ label: "dnf/", path: join(context.workspace, "dnf") }] : []),
+  ];
+  for (const tree of trees) {
+    const status = await execute(context, gitStatus(tree.path, timeouts));
+    if (!succeeded(status.result) || status.stdout.length === 0) continue;
+
+    // Clean before the run's first edit (`edit_code` checks it): untracked is ours.
+    const reset = await execute(context, gitDiscard(tree.path, timeouts));
+    const removed = await execute(context, gitCleanUntracked(tree.path, timeouts));
+    if (succeeded(reset.result) && succeeded(removed.result)) {
+      log(context, "warn", `${tree.label}: uncommitted repair edits discarded`, name);
+    } else {
+      log(context, "error", `${tree.label}: uncommitted repair edits left, tree dirty`, name);
+    }
+  }
 }
 
 /** Recovered: the host rejoins the run, and the report says what it took. */

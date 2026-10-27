@@ -103,7 +103,15 @@ interface Base {
 
 export type Event =
   | (Base & { kind: "run.start"; run: RunInfo })
-  | (Base & { kind: "commit"; repo: "dnf" | "consumer"; rev: string; message: string })
+  | (Base & {
+      kind: "commit";
+      repo: "dnf" | "consumer";
+      rev: string;
+      message: string;
+
+      /** Revision this one replaces (`--amend`): a fix is one commit (spec § réparation, Règle de commit). */
+      amends?: string;
+    })
 
   // Revision each repository holds once the update is done: what the run
   // builds from, and what `--resume` compares its own trees against.

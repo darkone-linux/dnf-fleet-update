@@ -13,7 +13,7 @@ import {
   gitStatus,
   realignDnfLock,
 } from "../engine/commands/workspace.ts";
-import { ask, emit, log, type RunContext } from "../engine/context.ts";
+import { ask, emit, log, type RepairSubject, type RunContext } from "../engine/context.ts";
 import { describeFailure, execute, succeeded } from "../engine/exec.ts";
 import type { Excerpt, LogName } from "../engine/ports.ts";
 import { rebuildHost } from "../engine/steps/build.ts";
@@ -23,6 +23,8 @@ import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import { confine, readableRoots, repoOf, writable } from "./paths.ts";
 import { markSeen, parseSuggestion, renderSuggestion, suggestionPath } from "./suggestions.ts";
 import { Refused, type ToolContext, ToolError } from "./tools/types.ts";
+
+type Repo = "dnf" | "consumer";
 
 /** Log of the run holding every AI call, questions and tool calls alike. */
 const AI_LOG: LogName = { phase: "ai" };
@@ -63,26 +65,47 @@ async function dirty(context: RunContext, repo: string): Promise<boolean> {
   return execution.stdout.length > 0;
 }
 
-/** Adds, commits, reads the revision back. Hooks run: `--no-verify` is never passed. */
+/** Full revision of HEAD. */
+async function headOf(context: RunContext, repo: Repo, directory: string): Promise<string> {
+  const head = await execute(context, gitHead(directory, context.params.timeouts));
+  const rev = head.stdout[0]?.trim();
+  if (!succeeded(head.result) || !rev) throw new ToolError(`${repo}: revision not read`);
+  return rev;
+}
+
+/**
+ * Commits the tree for one repair subject (spec § réparation, Règle de commit):
+ * its first commit, or that commit amended while it is still HEAD. Hooks run:
+ * `--no-verify` is never passed. Returns the short revision, as said to the AI.
+ */
 async function commitTree(
   context: RunContext,
-  repo: "dnf" | "consumer",
+  subject: { name: string; revs: RepairSubject["revs"] },
+  repo: Repo,
   directory: string,
   message: string,
 ): Promise<string> {
   const { timeouts } = context.params;
-  for (const spec of [gitAddAll(directory, timeouts), gitCommit(directory, message, timeouts)]) {
+  const previous = subject.revs[repo];
+  const amend = previous !== undefined && (await headOf(context, repo, directory)) === previous;
+
+  // Another repair committed on top: rewriting it is not this fix's to do.
+  if (previous !== undefined && !amend) {
+    const note = `fix of ${subject.name} split over two ${repo} commits: another repair committed on top`;
+    emit(context, { kind: "note", host: subject.name, message: note });
+  }
+
+  const commit = gitCommit(directory, message, timeouts, amend);
+  for (const spec of [gitAddAll(directory, timeouts), commit]) {
     const execution = await execute(context, spec);
     if (!succeeded(execution.result)) {
       throw new ToolError(`${repo}: ${describeFailure(execution)}`);
     }
   }
-  const head = await execute(context, gitHead(directory, timeouts));
-  const rev = head.stdout[0]?.trim();
-  if (!succeeded(head.result) || !rev) throw new ToolError(`${repo}: revision not read`);
-
-  emit(context, { kind: "commit", repo, rev, message });
-  return rev.slice(0, 7);
+  const rev = await headOf(context, repo, directory);
+  subject.revs[repo] = rev;
+  emit(context, { kind: "commit", repo, rev, message, ...(amend ? { amends: previous } : {}) });
+  return `${rev.slice(0, 7)}${amend ? " (amended)" : ""}`;
 }
 
 export function toolContext(context: RunContext, state: () => PersistedState): ToolContext {
@@ -185,6 +208,9 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     async commitRepair(name, scope, subject) {
       hostOf(name);
       const { timeouts } = context.params;
+      const repairs = context.subjects.get(name) ?? { revs: {} };
+      context.subjects.set(name, repairs);
+      const target = { name, revs: repairs.revs };
       const message = commitMessage(scope, subject);
       const dnf = join(context.workspace, "dnf");
       const framework = context.codev && (await dirty(context, dnf));
@@ -204,17 +230,21 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
       // a dirty git tree, and it does so in silence (`steps/update.ts`).
       const written: string[] = [];
       if (framework) {
-        written.push(`dnf ${await commitTree(context, "dnf", dnf, message)}`);
+        written.push(`dnf ${await commitTree(context, target, "dnf", dnf, message)}`);
         const realigned = await execute(context, realignDnfLock(context.workspace, timeouts));
         if (!succeeded(realigned.result)) {
           throw new ToolError(`lock not realigned: ${describeFailure(realigned)}`);
         }
       }
       if (await dirty(context, context.workspace)) {
-        const rev = await commitTree(context, "consumer", context.workspace, message);
+        const rev = await commitTree(context, target, "consumer", context.workspace, message);
         written.push(`consumer ${rev}`);
       }
       if (written.length === 0) throw new ToolError("nothing to commit: no tree changed");
+
+      // What was validated is what is committed: the commit guard saw no edit since.
+      const validated = context.repaired.get(name);
+      if (validated !== undefined) repairs.path = validated;
 
       // Committed: what the trees now hold is no longer what the run started from.
       clean.clear();

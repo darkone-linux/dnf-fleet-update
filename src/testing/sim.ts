@@ -62,6 +62,7 @@ export type SimKind =
   | "diff"
   | "add"
   | "commit"
+  | "discard"
   | "rev-parse"
   | "flake-update"
   | "realign"
@@ -202,7 +203,10 @@ const ON_ACTIVE = /--on-active=(\d+)/;
 export class SimFleet implements CommandRunner {
   readonly commands: SimCommand[] = [];
   readonly hosts = new Map<string, HostSide>();
-  readonly commits: { repo: Repo; message: string }[] = [];
+  readonly commits: { repo: Repo; message: string; amended?: number }[] = [];
+
+  /** Every commit made, amends included: each one is a new revision. */
+  private made = 0;
 
   /** What `just send-msg` received: room and body (`--send-report`). */
   readonly messages: { room: string; body: string }[] = [];
@@ -363,6 +367,7 @@ export class SimFleet implements CommandRunner {
       if (verb === "diff") return { kind: "diff", detail: repo, at };
       if (verb === "add") return { kind: "add", detail: repo, at };
       if (verb === "commit") return { kind: "commit", detail: repo, at };
+      if (verb === "reset" || verb === "clean") return { kind: "discard", detail: repo, at };
       if (verb === "rev-parse") return { kind: "rev-parse", detail: repo, at };
     }
     if (program === "nix" && argv[1] === "flake" && argv[2] === "metadata") {
@@ -514,14 +519,22 @@ export class SimFleet implements CommandRunner {
       case "commit": {
         const repo = command.detail as Repo;
         const message = spec.argv[spec.argv.indexOf("-m") + 1] ?? "";
-        this.commits.push({ repo, message });
+        const last = this.commits.findLastIndex((commit) => commit.repo === repo);
+        const amended = this.commits[last];
+        if (spec.argv.includes("--amend") && amended !== undefined) {
+          this.commits[last] = { repo, message, amended: (amended.amended ?? 0) + 1 };
+        } else {
+          this.commits.push({ repo, message });
+        }
+        this.made += 1;
         this.pending[repo] = false;
         return ok();
       }
+      case "discard":
+        this.pending[command.detail as Repo] = false;
+        return ok();
       case "rev-parse":
-        out(
-          `${command.detail === "dnf" ? "d" : "c"}${String(this.commits.length).padStart(39, "0")}`,
-        );
+        out(`${command.detail === "dnf" ? "d" : "c"}${String(this.made).padStart(39, "0")}`);
         return ok();
       case "flake-update":
         if (this.options.updates?.[command.detail as Repo])

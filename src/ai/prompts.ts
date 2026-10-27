@@ -26,7 +26,8 @@ const MAY_ACT = [
   "- service_action on units this run saw fail, when restarting or resetting them can be enough;",
   "- otherwise, when the cause is in the code: find it (search_code, read_code), fix it with",
   "  edit_code (old and new replace one exact passage), check it with validate, seal it with",
-  "  commit. The host is redeployed from what validate builds, and no other host is.",
+  "  commit. The host is redeployed from what you committed, never from an uncommitted edit.",
+  "  A fix that does not hold is edited, validated and committed again: one commit per fix.",
   "You have three attempts; a check and a commit cost none, and the operator may decline any",
   "action. Stop as soon as nothing fails.",
 ];

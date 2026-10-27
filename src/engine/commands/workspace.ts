@@ -31,9 +31,31 @@ export function gitDiff(repo: string, path: string, timeouts: Timeouts): Command
   };
 }
 
-export function gitCommit(repo: string, message: string, timeouts: Timeouts): CommandSpec {
+/** `amend`: a repair fix that did not hold is corrected in its own commit. */
+export function gitCommit(
+  repo: string,
+  message: string,
+  timeouts: Timeouts,
+  amend = false,
+): CommandSpec {
   return {
-    argv: ["git", "-C", repo, "commit", "-m", message],
+    argv: ["git", "-C", repo, "commit", ...(amend ? ["--amend"] : []), "-m", message],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
+/** Tracked files back to HEAD, index included: an uncommitted repair is no fix. */
+export function gitDiscard(repo: string, timeouts: Timeouts): CommandSpec {
+  return {
+    argv: ["git", "-C", repo, "reset", "--hard", "--quiet", "HEAD"],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
+/** Untracked files removed; ignored ones (`var/deployments/`) and nested repos kept. */
+export function gitCleanUntracked(repo: string, timeouts: Timeouts): CommandSpec {
+  return {
+    argv: ["git", "-C", repo, "clean", "-d", "--force", "--quiet"],
     ...limits(timeouts.commit, timeouts),
   };
 }

@@ -17,6 +17,7 @@ import { abortedBy, type RunFlow } from "./flow.ts";
 import { HostTable } from "./hosts.ts";
 import { KnownErrors } from "./known-errors.ts";
 import { takeLock } from "./lock.ts";
+import { serial } from "./pool.ts";
 import type {
   Clock,
   CommandRunner,
@@ -292,6 +293,8 @@ export async function runFleetUpdate(
       suggestions: new AiSuggestions(),
       repaired: new Map(),
       repairing: new Map(),
+      subjects: new Map(),
+      repairTurn: serial(),
       startedAt,
     };
     emit(context, {

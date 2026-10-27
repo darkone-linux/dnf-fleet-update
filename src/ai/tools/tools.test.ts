@@ -786,6 +786,88 @@ describe("service_action", () => {
     ]);
   });
 
+  /** `gfx` edited then validated: a commit may seal it. */
+  const VALIDATED: EventInput[] = [
+    ...UNDER_REPAIR,
+    { kind: "ai.action", host: "gfx", action: "edit usr/x.nix", outcome: "done" },
+    { kind: "ai.action", host: "gfx", action: "validate gfx", outcome: "done", spends: false },
+  ];
+  const BUILT = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx";
+
+  /** Consumer alone: dirty, HEAD read as `head`, committed as `rev`. */
+  const consumerCommit = (head: string, rev: string) => [
+    {
+      match: (argv: readonly string[]) => argv.includes("status"),
+      output: [{ stream: "stdout" as const, line: " M usr/x.nix" }],
+      once: true,
+    },
+    {
+      match: (argv: readonly string[]) => argv.includes("rev-parse"),
+      output: [{ stream: "stdout" as const, line: head }],
+      once: true,
+    },
+    { match: (argv: readonly string[]) => argv.includes("add"), once: true },
+    { match: (argv: readonly string[]) => argv.includes("commit"), once: true },
+    {
+      match: (argv: readonly string[]) => argv.includes("rev-parse"),
+      output: [{ stream: "stdout" as const, line: rev }],
+      once: true,
+    },
+  ];
+  const FIX = { host: "gfx", scope: "nginx", subject: "bind nginx after acme" };
+
+  test("commit waits for a validation of the last edit, and costs no attempt", async () => {
+    const { context, tool } = tools({ commands: [{ match: ["git"] }] }, [
+      ...UNDER_REPAIR,
+      { kind: "ai.action", host: "gfx", action: "edit usr/x.nix", outcome: "done" },
+    ]);
+
+    await expect(call(tool, "repair", "commit", FIX)).rejects.toThrow(
+      "the last edit is not validated",
+    );
+    expect(context.commands.calls).toEqual([]);
+    expect(context.state().actions.at(-1)).toMatchObject({ outcome: "refused" });
+    expect(spentAttempts(context.state(), "gfx")).toBe(1);
+  });
+
+  test("a fix committed again amends its own commit while it is HEAD", async () => {
+    const { context, tool } = tools({ commands: consumerCommit("c1", "c2") }, [
+      { kind: "commit", repo: "consumer", rev: "c1", message: "fix(nginx): first try" },
+      ...VALIDATED,
+    ]);
+    context.subjects.set("gfx", { revs: { consumer: "c1" } });
+    context.repaired.set("gfx", BUILT);
+
+    const result = await call(tool, "repair", "commit", FIX);
+
+    expect(result.lines).toEqual(["committed: consumer c2 (amended)"]);
+    expect(context.commands.calls.find((spec) => spec.argv.includes("commit"))?.argv).toContain(
+      "--amend",
+    );
+    expect(context.state().commits).toEqual([
+      { repo: "consumer", rev: "c2", message: "fix(nginx): bind nginx after acme", amended: 1 },
+    ]);
+
+    // What was validated is what is now committed: the only path a redeploy takes.
+    expect(context.subjects.get("gfx")).toEqual({ revs: { consumer: "c2" }, path: BUILT });
+  });
+
+  test("another repair committed on top: a new commit, said in the report", async () => {
+    const { context, tool } = tools({ commands: consumerCommit("c9", "c10") }, VALIDATED);
+    context.subjects.set("gfx", { revs: { consumer: "c1" } });
+
+    await call(tool, "repair", "commit", FIX);
+
+    expect(context.commands.calls.find((spec) => spec.argv.includes("commit"))?.argv).not.toContain(
+      "--amend",
+    );
+    expect(context.state().notes).toContainEqual({
+      host: "gfx",
+      message: "fix of gfx split over two consumer commits: another repair committed on top",
+    });
+    expect(context.subjects.get("gfx")?.revs).toEqual({ consumer: "c10" });
+  });
+
   test("a framework commit naming a fleet host is refused, before anything is written", async () => {
     const { context, tool } = tools(
       {
