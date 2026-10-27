@@ -86,6 +86,18 @@ describe("repairHost", () => {
     expect(context.commands.calls[0]?.stdin).toContain("Failed units: nginx.service");
   });
 
+  test("the session has its own bound: a validate inside it builds for minutes", async () => {
+    const { context, hosts } = erroredHost([ANSWER, stillFailed([])]);
+    await repairHost(context, hosts, "hcs", "tested");
+
+    const { ai } = context.params;
+    expect(context.commands.calls[0]?.timeoutMs).toBe(ai.repairTimeoutSeconds * 1000);
+    expect(ai.repairTimeoutSeconds).toBeGreaterThan(ai.timeoutSeconds);
+
+    // Its end leaves nothing behind for the next session to inherit.
+    expect(context.repairing.size).toBe(0);
+  });
+
   test("a tool that fails leaves the host in error, run unaffected", async () => {
     const { context, hosts } = erroredHost([
       { match: ["claude"], exitCode: 1 },

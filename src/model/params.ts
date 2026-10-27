@@ -46,6 +46,9 @@ export interface Ai {
   /** Seconds before the tool is killed; a free question must not stall a wave. */
   timeoutSeconds: number;
 
+  /** Seconds of a repair session: `validate` rebuilds a host inside it (spec § réparation, J10). */
+  repairTimeoutSeconds: number;
+
   /** Log lines one tool call hands back, tail first: a `nix build` is verbose. */
   logLines: number;
 
@@ -160,6 +163,9 @@ export const DEFAULT_REPAIR: Repair = { settleSeconds: 10, aiAttempts: 3 };
  */
 export const DEFAULT_AI: Ai = {
   timeoutSeconds: 300,
+
+  // Builds of several minutes, three attempts: a safety bound, not an expected time.
+  repairTimeoutSeconds: 3600,
   logLines: 200,
   sourceLines: 400,
   budgetUsd: 2,

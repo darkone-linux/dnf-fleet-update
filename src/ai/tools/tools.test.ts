@@ -672,6 +672,45 @@ describe("service_action", () => {
     expect(context.state().actions.at(-1)).toMatchObject({ outcome: "done", spends: false });
   });
 
+  test("a validation outliving its session is cut, its path never kept", async () => {
+    const session = new AbortController();
+    const { context, tool } = tools(
+      {
+        commands: [
+          { match: ["just", "clean"] },
+          {
+            match: (argv) => argv[0] === "nix-eval-jobs",
+            output: [
+              {
+                stream: "stdout",
+                line: JSON.stringify({
+                  attr: "gfx",
+                  drvPath: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-gfx.drv",
+                  outputs: { out: "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx" },
+                }),
+              },
+            ],
+          },
+
+          // The build holds until the session ends, as a timed-out `claude` leaves it.
+          {
+            match: (argv) => argv[0] === "nix",
+            onRun: () => session.abort(),
+            gate: new Promise<void>(() => {}),
+          },
+        ],
+      },
+      UNDER_REPAIR,
+    );
+    context.repairing.set("gfx", session.signal);
+
+    await expect(call(tool, "repair", "validate", { host: "gfx" })).rejects.toThrow(
+      "repair session ended",
+    );
+    expect(context.repaired.size).toBe(0);
+    expect(context.flow.halt.aborted).toBe(false);
+  });
+
   test("a validation that fails is said, and still costs no attempt", async () => {
     const { context, tool } = tools(
       {

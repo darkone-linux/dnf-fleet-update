@@ -32,6 +32,8 @@ export async function repairHost(
 
   const { state: previous, note } = hosts.get(name);
   hosts.set(name, "ai-repairing", { note });
+  const session = new AbortController();
+  context.repairing.set(name, session.signal);
   try {
     // Actions of this session alone: an edit of a previous round is spent.
     const before = context.state().actions.length;
@@ -47,6 +49,9 @@ export async function repairHost(
       ),
       session: "repair",
     });
+
+    // Session over: a validation still building ends with it (spec § J10, Délai).
+    session.abort();
     if (quiet(context)) return;
 
     // Code repaired and validated: the host holds a new toplevel, and its wave
@@ -73,6 +78,9 @@ export async function repairHost(
     }
     recover(context, hosts, name, recovered);
   } finally {
+    session.abort();
+    context.repairing.delete(name);
+
     // Aborted, or the session threw: a host never ends in repair.
     if (hosts.get(name).state === "ai-repairing") hosts.set(name, previous, { note });
   }

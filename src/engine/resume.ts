@@ -94,6 +94,9 @@ const savedParams = z.object({
   ai: z
     .object({
       timeoutSeconds: seconds,
+
+      // Added after 0.7.5: an older state file resumes with the built-in bound.
+      repairTimeoutSeconds: seconds.default(DEFAULT_AI.repairTimeoutSeconds),
       logLines: count,
       sourceLines: count,
       budgetUsd: z.number().positive(),

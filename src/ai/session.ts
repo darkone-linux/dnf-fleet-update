@@ -21,6 +21,9 @@ export interface AiQuestion {
 
   /** Replaces the tool's own system prompt (spec § analyse, Prompts). */
   system?: string;
+
+  /** Seconds; default `ai.timeoutSeconds`. A repair session has its own (spec § réparation, J10). */
+  timeoutSeconds?: number;
 }
 
 /**
@@ -49,6 +52,7 @@ export async function askAi(
     target.value,
     {
       prompt,
+      timeoutSeconds: question.timeoutSeconds ?? context.params.ai.timeoutSeconds,
       ...(question.system === undefined ? {} : { system: question.system }),
       ...(question.tools === undefined ? {} : { tools: question.tools }),
     },

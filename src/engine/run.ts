@@ -291,6 +291,7 @@ export async function runFleetUpdate(
       suggestionFiles: ports.suggestions,
       suggestions: new AiSuggestions(),
       repaired: new Map(),
+      repairing: new Map(),
       startedAt,
     };
     emit(context, {

@@ -1,6 +1,7 @@
 // Reading `state.json` of a previous run: what is refused, what is taken back.
 
 import { describe, expect, test } from "bun:test";
+import { DEFAULT_AI } from "../model/params.ts";
 import { initialPersisted, type PersistedState, persist } from "../model/persist.ts";
 import { testParams } from "../testing/fakes.ts";
 import { storePath } from "../testing/fleet.ts";
@@ -79,6 +80,16 @@ describe("parseSavedState", () => {
       ok: false,
       error: "state.json: no run parameters to resume from",
     });
+  });
+
+  test("an older state without the repair bound resumes with the built-in one", () => {
+    const older = JSON.parse(saved([])) as { run: { params: { ai: Record<string, unknown> } } };
+    delete older.run.params.ai.repairTimeoutSeconds;
+
+    const state = parseSavedState("x", JSON.stringify(older));
+    expect(state.ok && state.value.params.ai.repairTimeoutSeconds).toBe(
+      DEFAULT_AI.repairTimeoutSeconds,
+    );
   });
 
   test("a store path outside the store is refused: it is fed back to nix", () => {

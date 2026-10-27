@@ -206,17 +206,18 @@ async function buildJob(
   job: Job,
   seeder: SourceSeeder,
   failures: BuildFailures,
+  stop: AbortSignal = context.flow.halt,
 ): Promise<Built | undefined> {
   const { name } = where;
   const watch = await failures.watch(name, job.drvPath);
   try {
-    const signal = AbortSignal.any([context.flow.halt, watch.signal]);
+    const signal = AbortSignal.any([stop, watch.signal]);
     const record: OnFailed = (failure) => failures.record({ ...failure, host: name });
     const built =
       watch.failure === undefined
         ? await buildWhere(context, where, job, seeder, signal, record)
         : undefined;
-    if (context.flow.halt.aborted) return undefined;
+    if (stop.aborted) return undefined;
 
     // Its own outcome first: a success, or a derivation it saw fail itself.
     const own = built !== undefined && (built.note === undefined || built.derivation !== undefined);
@@ -369,13 +370,17 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
 }
 
 /** One host evaluated alone: its job, or why the evaluation gave none. */
-async function evaluateOne(context: RunContext, name: string): Promise<Job | string> {
+async function evaluateOne(
+  context: RunContext,
+  name: string,
+  stop: AbortSignal,
+): Promise<Job | string> {
   let job: Job | undefined;
   let failure: string | undefined;
   const spec = evalHosts(context.workspace, [name], context.params.timeouts);
   const execution = await execute(context, spec, {
     log: { host: name, phase: "build" },
-    signal: context.flow.halt,
+    signal: stop,
     onLine: ({ stream, line }) => {
       if (stream === "stderr") return;
       const parsed = parseEvalJob(line);
@@ -400,22 +405,29 @@ export interface Rebuilt {
  * Validation of a repair (spec § réparation, J8): `just clean`, then this host
  * alone re-evaluated and rebuilt. Touches no host state — the caller decides
  * what the outcome means — and leaves every other host on the run's own paths.
+ * `session`: its end cuts the validation, like a halt (spec § J10, Délai).
  */
 export async function rebuildHost(
   context: RunContext,
   target: { name: string; builder: string; online?: boolean },
+  session?: AbortSignal,
 ): Promise<Rebuilt> {
   const { timeouts } = context.params;
+  const { halt } = context.flow;
+  const stop = session === undefined ? halt : AbortSignal.any([halt, session]);
+  const cut = (): Rebuilt => ({ note: halt.aborted ? "run stopping" : "repair session ended" });
+
   const cleaned = await execute(context, justClean(context.workspace, timeouts), {
     log: { host: target.name, phase: "repair" },
-    signal: context.flow.halt,
+    signal: stop,
   });
-  if (context.flow.halt.aborted) return { note: "run stopping" };
+  if (stop.aborted) return cut();
   if (!succeeded(cleaned.result)) {
     return { note: `just clean failed: ${describeFailure(cleaned)}`, excerpt: errorLines(cleaned) };
   }
 
-  const job = await evaluateOne(context, target.name);
+  const job = await evaluateOne(context, target.name, stop);
+  if (stop.aborted) return cut();
   if (typeof job === "string") return { note: `evaluation failed: ${job}` };
 
   const where: Where = { ...target };
@@ -425,8 +437,9 @@ export async function rebuildHost(
     job,
     sourceSeeder(context),
     new BuildFailures(context),
+    stop,
   );
-  if (built === undefined) return { note: "run stopping" };
+  if (built === undefined) return cut();
   if (built.note !== undefined) {
     return {
       note: `build failed: ${built.note}`,

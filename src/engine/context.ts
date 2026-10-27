@@ -111,6 +111,9 @@ export interface RunContext extends EngineContext {
   /** Toplevel a repair rebuilt, by host: the wave serves it on its next pass. */
   repaired: Map<string, string>;
 
+  /** Repair session under way, by host: its end cuts a `validate` still building. */
+  repairing: Map<string, AbortSignal>;
+
   /** `clock.now()` at the start of the run: `t` of every event counts from it. */
   startedAt: number;
 }

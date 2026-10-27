@@ -513,6 +513,7 @@ export function fakeRunContext(options: FakeRunOptions = {}): FakeRunContext {
     suggestionFiles: new MemorySuggestions(options.suggestions),
     suggestions: new AiSuggestions(),
     repaired: new Map(),
+    repairing: new Map(),
     startedAt: 0,
   };
 }

@@ -36,6 +36,9 @@ export interface AiCall {
   /** Replaces the tool's own system prompt; absent: the tool keeps its default. */
   system?: string;
   tools?: AiTools;
+
+  /** Seconds before the tool is killed; one MCP tool call gets as long. */
+  timeoutSeconds: number;
 }
 
 /** Endpoint of the run and the tool names its level publishes. */
@@ -48,6 +51,17 @@ export interface AiTools {
 
 const headers = (endpoint: ToolEndpoint) => ({ Authorization: `Bearer ${endpoint.token}` });
 
+/**
+ * Server entry shared by both tools. `timeout`: per-call bound in ms, the
+ * session's own — `validate` builds for minutes, past both clients' defaults.
+ */
+const server = (type: "http" | "remote", call: AiCall, tools: AiTools) => ({
+  type,
+  url: tools.endpoint.url,
+  headers: headers(tools.endpoint),
+  timeout: call.timeoutSeconds * 1000,
+});
+
 /** `OPENCODE_CONFIG_CONTENT`: an inline config outranks the operator's own. */
 function opencodeConfig(call: AiCall): string {
   const { tools, system } = call;
@@ -59,13 +73,7 @@ function opencodeConfig(call: AiCall): string {
     tools === undefined
       ? {}
       : {
-          mcp: {
-            [MCP_SERVER]: {
-              type: "remote",
-              url: tools.endpoint.url,
-              headers: headers(tools.endpoint),
-            },
-          },
+          mcp: { [MCP_SERVER]: server("remote", call, tools) },
         };
   const allowed = tools === undefined ? {} : { [`${MCP_SERVER}*`]: true };
 
@@ -106,15 +114,7 @@ function claudeArgv(target: AiTarget, ai: Ai, call: AiCall): [string, ...string[
   // Without `--mcp-config`, `--strict-mcp-config` leaves no server at all.
   argv.push("--strict-mcp-config");
   if (tools !== undefined) {
-    const servers = {
-      mcpServers: {
-        [MCP_SERVER]: {
-          type: "http",
-          url: tools.endpoint.url,
-          headers: headers(tools.endpoint),
-        },
-      },
-    };
+    const servers = { mcpServers: { [MCP_SERVER]: server("http", call, tools) } };
     argv.push("--mcp-config", JSON.stringify(servers), "--allowedTools", ...tools.names);
   }
   return argv;
@@ -131,7 +131,7 @@ function opencodeArgv(target: AiTarget): [string, ...string[]] {
 
 /** One question, one answer. The prompt travels on stdin, never in argv. */
 export function aiCommand(target: AiTarget, call: AiCall, ai: Ai, timeouts: Timeouts): CommandSpec {
-  const base = { stdin: call.prompt, ...limits(ai.timeoutSeconds, timeouts) };
+  const base = { stdin: call.prompt, ...limits(call.timeoutSeconds, timeouts) };
 
   // `--mcp-config` carries the bearer token in argv: never in the run log.
   const secrets = call.tools === undefined ? {} : { secrets: [call.tools.endpoint.token] };

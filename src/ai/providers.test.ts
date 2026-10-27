@@ -12,11 +12,17 @@ const TOOLS: AiTools = {
   names: ["mcp__fleet-update__deployment_state", "mcp__fleet-update__host_log"],
 };
 
-const command = (target: AiTarget, tools?: AiTools, system?: string) =>
+const command = (
+  target: AiTarget,
+  tools?: AiTools,
+  system?: string,
+  timeoutSeconds = DEFAULT_AI.timeoutSeconds,
+) =>
   aiCommand(
     target,
     {
       prompt: PROMPT,
+      timeoutSeconds,
       ...(tools === undefined ? {} : { tools }),
       ...(system === undefined ? {} : { system }),
     },
@@ -69,6 +75,7 @@ describe("claude", () => {
       type: "http",
       url: "http://127.0.0.1:4242/mcp",
       headers: { Authorization: "Bearer s3cr3t" },
+      timeout: DEFAULT_AI.timeoutSeconds * 1000,
     });
     expect(argv).toContain("--strict-mcp-config");
     expect(argv.slice(argv.indexOf("--allowedTools") + 1)).toEqual([...TOOLS.names]);
@@ -101,11 +108,12 @@ describe("opencode", () => {
     const spec = command({ tool: "opencode" }, TOOLS);
     const config = JSON.parse(spec.env?.OPENCODE_CONFIG_CONTENT ?? "{}");
 
-    // Shape `opencode mcp add --url --header` writes itself.
+    // Shape `opencode mcp add --url --header` writes itself, plus its call bound.
     expect(config.mcp["fleet-update"]).toEqual({
       type: "remote",
       url: "http://127.0.0.1:4242/mcp",
       headers: { Authorization: "Bearer s3cr3t" },
+      timeout: DEFAULT_AI.timeoutSeconds * 1000,
     });
     expect(config.agent["fleet-update"].tools).toMatchObject({
       "*": false,
@@ -142,5 +150,19 @@ describe("both", () => {
     const spec = command({ tool: "claude" });
     expect(spec.timeoutMs).toBe(DEFAULT_AI.timeoutSeconds * 1000);
     expect(spec.killGraceMs).toBe(DEFAULT_TIMEOUTS.killGrace * 1000);
+  });
+
+  test("one tool call is bounded by the session: a long validate is not cut short", () => {
+    const seconds = DEFAULT_AI.repairTimeoutSeconds;
+    const claude = command({ tool: "claude" }, TOOLS, undefined, seconds);
+    const opencode = command({ tool: "opencode" }, TOOLS, undefined, seconds);
+
+    expect(claude.timeoutMs).toBe(seconds * 1000);
+    expect(JSON.parse(after(claude.argv, "--mcp-config") ?? "{}")).toMatchObject({
+      mcpServers: { "fleet-update": { timeout: seconds * 1000 } },
+    });
+    expect(JSON.parse(opencode.env?.OPENCODE_CONFIG_CONTENT ?? "{}")).toMatchObject({
+      mcp: { "fleet-update": { timeout: seconds * 1000 } },
+    });
   });
 });

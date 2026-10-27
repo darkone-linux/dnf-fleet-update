@@ -60,6 +60,7 @@ export async function ask(
   signal?: AbortSignal,
 ): Promise<string[]> {
   const { id, summary, prompt, session } = question;
+  const { ai } = context.params;
   const tools: AiTools | undefined = await context.tools.start(context, context.state);
   return askAi(
     context,
@@ -68,6 +69,9 @@ export async function ask(
       summary,
       prompt,
       system: systemPrompt(toolLevel(context.params), session),
+
+      // A repair rebuilds inside its session: `validate` outlasts an answer.
+      timeoutSeconds: session === "repair" ? ai.repairTimeoutSeconds : ai.timeoutSeconds,
       ...(tools === undefined ? {} : { tools }),
     },
     signal,
