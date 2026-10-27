@@ -225,7 +225,7 @@ async function waves(
 
   const left = carried.filter(eligible);
   presence.untrack(left);
-  if (left.length > 0 && !flow.halt.aborted) log(context, "warn", leftBehind(context, phase, left));
+  if (left.length > 0 && !flow.halt.aborted) leaveBehind(context, hosts, phase, left);
   return true;
 }
 
@@ -237,11 +237,21 @@ function startingStates(context: RunContext, phase: Phase): HostState[] {
   return phase === "test" || context.params.skipTest ? ["ready", "built"] : ["tested"];
 }
 
-/** Hosts the step could not reach: where they are left says what to do with them. */
-function leftBehind(context: RunContext, phase: Phase, hosts: readonly string[]): string {
+/**
+ * Hosts the step could not reach: where they are left says what to do with
+ * them. Said once in the feed, and kept as each host's reason for the report.
+ */
+function leaveBehind(
+  context: RunContext,
+  hosts: HostTable,
+  phase: Phase,
+  names: readonly string[],
+): void {
   const outcome =
     phase === "test" ? "not tested" : context.params.skipTest ? "not switched" : "left in test";
-  return `offline, ${outcome}: ${hosts.join(", ")}`;
+  const reason = `offline, ${outcome}`;
+  log(context, "warn", `${reason}: ${names.join(", ")}`);
+  for (const name of names) hosts.note(name, reason);
 }
 
 export async function testWaves(
@@ -274,7 +284,7 @@ async function switchAtOnce(
 
   const members = candidates.filter((name) => hosts.get(name).online);
   const left = candidates.filter((name) => !hosts.get(name).online);
-  if (left.length > 0) log(context, "warn", leftBehind(context, "switch", left));
+  if (left.length > 0) leaveBehind(context, hosts, "switch", left);
   if (members.length === 0) return;
 
   log(context, "info", `switching ${members.length} tested hosts`);

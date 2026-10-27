@@ -149,6 +149,10 @@ describe("test waves", () => {
     });
     expect(states()).toMatchObject({ "srv-ag": "tested", "lt-cp": "built" });
     expect(feed(context.events.events)).toContain("warn offline, not tested: lt-cp");
+
+    // The same words as the host's reason: the report has no other source for it.
+    expect(hosts.get("lt-cp").note).toBe("offline, not tested");
+    expect(hosts.get("srv-ag").note).toBeUndefined();
   });
 
   test("units failed: error, the next waves go on", async () => {

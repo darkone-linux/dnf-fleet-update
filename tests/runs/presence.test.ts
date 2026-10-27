@@ -55,7 +55,7 @@ test("offline for the whole run: built, reported offline, the run is done", asyn
   ]);
   expect(run.ui.steps.test).toMatchObject({ status: "done", done: 5, total: 5 });
   expect(run.ui.end?.report?.[0]).toBe("5 deployed, 1 offline (lt-cp)");
-  expect(run.recorded?.report).toContain("| lt-cp | offline |  |");
+  expect(run.recorded?.report).toContain("| lt-cp | offline | offline, not tested |");
 });
 
 test("tested, offline at the switch: left in test, listed in the report", async () => {
@@ -71,6 +71,8 @@ test("tested, offline at the switch: left in test, listed in the report", async 
   expect(run.feed).toContain("warn offline, left in test: pc-ag");
   expect(run.ui.end?.report?.[0]).toBe("5 deployed, 1 left in test (pc-ag)");
   expect(run.recorded?.report).toContain("## Hosts left in test\n\n- pc-ag");
+  const persisted = run.recorded?.state?.hosts.find((host) => host.name === "pc-ag");
+  expect(persisted?.note).toBe("offline, left in test");
 });
 
 test("presence unknown until the first answer, an unreachable host reported once", async () => {
