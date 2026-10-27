@@ -369,33 +369,70 @@ describe("renderReport", () => {
     expect(markdown).toContain("| gw-ag | restart nginx.service | done |  |");
   });
 
-  test("a repair that committed splits the fleet, and the header says so", () => {
+  describe("a repair that committed", () => {
+    const FIX = "9f8e7d6c5b4a";
     const committed = [
-      {
-        t: 1,
-        kind: "ai.action" as const,
-        host: "gw-ag",
-        action: "edit usr/x.nix",
-        outcome: "done" as const,
-      },
+      { t: 1, kind: "revision" as const, repo: "consumer" as const, rev: "0a1b2c3d4e5f" },
       {
         t: 2,
-        kind: "ai.action" as const,
-        host: "gw-ag",
-        action: "commit gw-ag",
-        outcome: "done" as const,
-        spends: false,
+        kind: "commit" as const,
+        repo: "consumer" as const,
+        rev: FIX,
+        message: "fix(outline): start outline after postgresql",
+        subject: "gw-ag",
       },
     ].reduce(persist, state);
-    const { facts, markdown } = renderReport({ ...BASE, state: committed });
+    const realigned = persist(committed, {
+      t: 3,
+      kind: "revision",
+      repo: "consumer",
+      rev: FIX,
+    });
+    const STALE = "a repair committed after the last alignment, hosts not rebuilt on it";
 
-    expect(facts).toContain(
-      "Repaired in flight: gw-ag — the fleet runs two revisions until the next run",
-    );
-    expect(markdown).toContain("- Repaired in flight: gw-ag");
+    test("aligned on it: said once in the header, nothing to raise", () => {
+      const { facts, lines, incident } = renderReport({ ...BASE, state: realigned });
 
-    // Nothing committed: nothing said.
-    expect(renderReport({ ...BASE, state }).facts).toHaveLength(3);
+      expect(facts).toContain("Repaired by commit: gw-ag, fleet aligned on it");
+      expect(lines).not.toContain("fleet on two revisions");
+      expect(incident).not.toContain("## Fleet on two revisions");
+
+      // The update's own commit is no repair: nothing said.
+      expect(renderReport({ ...BASE, state }).facts).toHaveLength(3);
+    });
+
+    test("committed after the last alignment: the header and the incidents room say so", () => {
+      const { facts, lines, incident } = renderReport({ ...BASE, state: committed });
+
+      expect(facts).toContain(`Repaired by commit: gw-ag, fleet on two revisions — ${STALE}`);
+      expect(lines).toContain("fleet on two revisions");
+      expect(incident?.endsWith(`## Fleet on two revisions\n\n- ${STALE}\n`)).toBe(true);
+    });
+
+    test("a host left behind is named, until a path built at HEAD takes it back", () => {
+      const behind = persist(realigned, {
+        t: 4,
+        kind: "host.unaligned",
+        host: "hcs",
+        why: "offline at the final pass",
+      });
+      const { facts, incident } = renderReport({ ...BASE, state: behind });
+
+      const reason = "not aligned: hcs (offline at the final pass)";
+      expect(facts).toContain(`Repaired by commit: gw-ag, fleet on two revisions — ${reason}`);
+      expect(incident).toContain(`## Fleet on two revisions\n\n- ${reason}\n`);
+
+      const rebuilt = persist(behind, {
+        t: 5,
+        kind: "host.state",
+        host: "hcs",
+        state: "built",
+        path: "/nix/store/x",
+      });
+      expect(renderReport({ ...BASE, state: rebuilt }).facts).toContain(
+        "Repaired by commit: gw-ag, fleet aligned on it",
+      );
+    });
   });
 
   test("no AI analysis: no section, no room summary", () => {

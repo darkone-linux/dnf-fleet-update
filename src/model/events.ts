@@ -111,6 +111,9 @@ export type Event =
 
       /** Revision this one replaces (`--amend`): a fix is one commit (spec § réparation, Règle de commit). */
       amends?: string;
+
+      /** Host whose repair committed it; absent on the update's own commit. */
+      subject?: string;
     })
 
   // Revision each repository holds once the update is done: what the run
@@ -167,6 +170,9 @@ export type Event =
   // Deterministic collection of a failed host (spec § Erreurs et réparations):
   // what it could not start, and the error that got it there.
   | (Base & { kind: "host.diagnosis"; host: string; units: string[]; excerpt?: string[] })
+  // Left off the revision a repair committed (spec § réparation, Alignement du
+  // parc): its next built path, at HEAD, takes it back.
+  | (Base & { kind: "host.unaligned"; host: string; why: string })
   // What the report must say beyond a host state (spec § Rapport): activation
   // order after a restart, unlock not re-tested. `host`: absent when general.
   | (Base & { kind: "note"; host?: string; message: string })

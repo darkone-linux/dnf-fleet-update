@@ -27,8 +27,8 @@ describe("HostTable", () => {
       { t: 0, kind: "host.state", host: "hcs", state: "built", path: storePath("hcs") },
     ]);
     expect(hosts.get("hcs").path).toBe(storePath("hcs"));
-    expect(() => hosts.set("hcs", "deployed")).toThrow(
-      "illegal transition of hcs: built -> deployed",
+    expect(() => hosts.set("hcs", "switching")).toThrow(
+      "illegal transition of hcs: built -> switching",
     );
   });
 

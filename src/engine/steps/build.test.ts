@@ -760,10 +760,13 @@ describe("build", () => {
 
       expect(aligned).toBe(false);
       expect(hosts.get("hcs")).toMatchObject({ state: "built", path: storePath("hcs") });
-      expect(context.state().notes).toContainEqual({
-        host: "hcs",
-        message: `not aligned on the repaired revision: Cannot build '${ANYIO}'.`,
-      });
+      expect(context.events.events).toContainEqual(
+        expect.objectContaining({
+          kind: "host.unaligned",
+          host: "hcs",
+          why: `Cannot build '${ANYIO}'.`,
+        }),
+      );
 
       // Not one revision: a resume must not take these paths for HEAD's.
       expect(context.events.events.some((event) => event.kind === "revision")).toBe(false);

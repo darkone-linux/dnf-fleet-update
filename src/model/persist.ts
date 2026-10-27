@@ -102,6 +102,9 @@ export interface PersistedHost {
 
   /** Absent until something failed on it and the collection ran. */
   diagnosis?: HostDiagnosis;
+
+  /** Why it holds a path of before the last repair commit (spec § Alignement du parc). */
+  unaligned?: string;
 }
 
 /** `t` in milliseconds since the run start, like the stream. */
@@ -122,7 +125,15 @@ export interface PersistedWave {
 export interface PersistedState {
   schema: typeof PERSIST_SCHEMA;
   run?: RunInfo;
-  commits: { repo: "dnf" | "consumer"; rev: string; message: string; amended?: number }[];
+  commits: {
+    repo: "dnf" | "consumer";
+    rev: string;
+    message: string;
+    amended?: number;
+
+    /** Host whose repair committed it. */
+    subject?: string;
+  }[];
 
   /** Revision built from, per repository: `--resume` reuses paths only if unchanged. */
   revisions: { dnf?: string; consumer?: string };
@@ -219,16 +230,15 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
       return { ...state, run: event.run };
 
     case "commit": {
-      const { repo, rev, message, amends } = event;
+      const { repo, rev, message, amends, subject } = event;
+      const commit = { repo, rev, message, ...(subject === undefined ? {} : { subject }) };
       const replaced = state.commits.find(
-        (commit) => commit.repo === repo && commit.rev === amends,
+        (candidate) => candidate.repo === repo && candidate.rev === amends,
       );
-      if (replaced === undefined) {
-        return { ...state, commits: [...state.commits, { repo, rev, message }] };
-      }
+      if (replaced === undefined) return { ...state, commits: [...state.commits, commit] };
 
       // Amended: the fix stays one line of the report, counted.
-      const amended = { repo, rev, message, amended: (replaced.amended ?? 0) + 1 };
+      const amended = { ...commit, amended: (replaced.amended ?? 0) + 1 };
       return {
         ...state,
         commits: state.commits.map((commit) => (commit === replaced ? amended : commit)),
@@ -306,6 +316,10 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
         known: event.known,
       };
       if (event.path !== undefined) patch.path = event.path;
+
+      // Built at HEAD: whatever left the host behind is over. A path given back
+      // on another state is the one it runs, not a new one.
+      if (event.state === "built" && event.path !== undefined) patch.unaligned = undefined;
       if (event.builder !== undefined) patch.builder = event.builder;
       if (event.origin !== undefined) patch.origin = event.origin;
       return { ...state, hosts: patchHost(state, event.host, patch) };
@@ -318,6 +332,9 @@ export function persist(previous: PersistedState, event: Event): PersistedState 
           diagnosis: { units: event.units, excerpt: event.excerpt },
         }),
       };
+
+    case "host.unaligned":
+      return { ...state, hosts: patchHost(state, event.host, { unaligned: event.why }) };
 
     case "host.copy":
       return {

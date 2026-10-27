@@ -126,14 +126,16 @@ test("an amended commit replaces its line, and counts", () => {
     repo: "consumer",
     rev,
     message: `fix(outline): try ${rev}`,
+    subject: "gw-cp",
     ...(amends === undefined ? {} : { amends }),
     t: 0,
   });
   const state = fold([commit("c0"), commit("c1"), commit("c2", "c1"), commit("c3", "c2")]);
 
+  const subject = "gw-cp";
   expect(state.commits).toEqual([
-    { repo: "consumer", rev: "c0", message: "fix(outline): try c0" },
-    { repo: "consumer", rev: "c3", message: "fix(outline): try c3", amended: 2 },
+    { repo: "consumer", rev: "c0", message: "fix(outline): try c0", subject },
+    { repo: "consumer", rev: "c3", message: "fix(outline): try c3", subject, amended: 2 },
   ]);
 });
 

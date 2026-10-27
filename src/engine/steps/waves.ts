@@ -53,14 +53,28 @@ const commitMark = (context: RunContext) =>
     .commits.map((commit) => commit.rev)
     .join(" ");
 
+/** What an activated host runs before an alignment rebuilt it, per host. */
+type Held = Map<string, { state: HostState; path: string | undefined }>;
+
 /**
  * A repair committed during the wave (spec § réparation, Alignement du parc):
  * hosts whose path the fix changed are rebuilt, `built` again. A later wave
  * serves its own; the final pass serves those this step already served.
  */
-async function realign(context: RunContext, hosts: HostTable, mark: string): Promise<void> {
+async function realign(
+  context: RunContext,
+  hosts: HostTable,
+  mark: string,
+  held: Held,
+): Promise<void> {
   if (commitMark(context) === mark || context.flow.halt.aborted) return;
   const names = hosts.all().flatMap((host) => (SERVING.includes(host.state) ? [host.name] : []));
+
+  // Activated ones only: a host rebuilt by an earlier pass still runs what it held then.
+  for (const name of names) {
+    const { state, path } = hosts.get(name);
+    if (state === "tested" || state === "deployed") held.set(name, { state, path });
+  }
   await align(context, hosts, new BuildFailures(context), { names, keep: true });
 }
 
@@ -75,6 +89,7 @@ async function finalPass(
   presence: Presence,
   phase: Phase,
   served: Iterable<string>,
+  held: Held,
   index: number,
 ): Promise<boolean> {
   const again = [...served].filter((name) => hosts.get(name).state === "built");
@@ -83,6 +98,15 @@ async function finalPass(
   const members = again.filter((name) => hosts.get(name).online);
   const offline = again.filter((name) => !hosts.get(name).online);
   if (offline.length > 0) log(context, "warn", `offline, not aligned: ${offline.join(", ")}`);
+
+  // Not served again: it keeps the generation it runs, never `built` it was not given.
+  for (const name of offline) {
+    const before = held.get(name);
+    if (before !== undefined) {
+      hosts.set(name, before.state, before.path === undefined ? {} : { path: before.path });
+    }
+    emit(context, { kind: "host.unaligned", host: name, why: "offline at the final pass" });
+  }
   if (members.length === 0) return false;
 
   log(context, "info", `aligned, serving again: ${members.join(", ")}`);
@@ -160,6 +184,7 @@ async function waves(
   let ran = 0;
   let carried: string[] = [];
   const served = new Set<string>();
+  const held: Held = new Map();
   for (const [position, planned] of selection.waves.entries()) {
     if (flow.ending !== undefined) break;
     const candidates = [...carried, ...planned].filter(eligible);
@@ -179,7 +204,7 @@ async function waves(
           members,
         });
         for (const name of members) served.add(name);
-        await realign(context, hosts, mark);
+        await realign(context, hosts, mark, held);
       }
     }
     emit(context, {
@@ -192,7 +217,7 @@ async function waves(
 
   if (
     flow.ending === undefined &&
-    (await finalPass(context, hosts, presence, phase, served, ran + 1))
+    (await finalPass(context, hosts, presence, phase, served, held, ran + 1))
   ) {
     ran += 1;
     emit(context, { kind: "step.progress", step: phase, done: ran, total: ran });
@@ -268,8 +293,11 @@ async function switchAtOnce(
   }
 
   // No wave to serve a repaired host again: the final pass does, aligned with it.
-  await realign(context, hosts, mark);
-  if (flow.ending === undefined) await finalPass(context, hosts, presence, "switch", members, 1);
+  const held: Held = new Map();
+  await realign(context, hosts, mark, held);
+  if (flow.ending === undefined) {
+    await finalPass(context, hosts, presence, "switch", members, held, 1);
+  }
 }
 
 /**

@@ -233,23 +233,52 @@ function suggestions(entries: readonly SuggestionEntry[]): string[] {
   return ["", "## Suggestions", "", ...shown.map(line)];
 }
 
+/** Where the fleet stands once a repair committed (spec § réparation, Alignement du parc). */
+interface Alignment {
+  /** Hosts whose repair committed, in order. */
+  repaired: string[];
+
+  /** `name (why)`: hosts left on a path of before the last repair commit. */
+  behind: string[];
+
+  /** A repair committed after the last alignment: every host may be behind it. */
+  stale: boolean;
+}
+
 /**
- * Hosts a repair commit sent out on new code (spec § réparation, Ce que ça
- * fait au reste du run). Said in the header, so the alert room carries it too:
- * the fleet is split across two revisions until the next run.
+ * `undefined` without a repair commit. Aligned: each repository's last commit
+ * is the revision the run last aligned on, and no host was left behind.
  */
-function repairedInFlight(actions: readonly AiAction[]): string | undefined {
-  const hosts = [
-    ...new Set(
-      actions.flatMap((entry) =>
-        entry.outcome === "done" && entry.action.startsWith("commit ") && entry.host !== undefined
-          ? [entry.host]
-          : [],
-      ),
-    ),
+function alignment(state: PersistedState): Alignment | undefined {
+  const repaired = [...new Set(state.commits.flatMap((commit) => commit.subject ?? []))];
+  if (repaired.length === 0) return undefined;
+  const behind = state.hosts.flatMap((host) =>
+    host.unaligned === undefined ? [] : [`${host.name} (${host.unaligned})`],
+  );
+  const stale = (["dnf", "consumer"] as const).some((repo) => {
+    const last = state.commits.findLast((commit) => commit.repo === repo);
+    return last !== undefined && last.rev !== state.revisions[repo];
+  });
+  return { repaired, behind, stale };
+}
+
+const aligned = (fleet: Alignment) => fleet.behind.length === 0 && !fleet.stale;
+
+/** Why the fleet runs two revisions, one entry per reason. */
+function splitReasons(fleet: Alignment): string[] {
+  return [
+    ...(fleet.behind.length > 0 ? [`not aligned: ${fleet.behind.join(", ")}`] : []),
+    ...(fleet.stale
+      ? ["a repair committed after the last alignment, hosts not rebuilt on it"]
+      : []),
   ];
-  if (hosts.length === 0) return undefined;
-  return `Repaired in flight: ${hosts.join(", ")} — the fleet runs two revisions until the next run`;
+}
+
+/** Header line, hence the summary of every room: aligned or not, in plain words. */
+function alignmentFact(fleet: Alignment): string {
+  const repaired = `Repaired by commit: ${fleet.repaired.join(", ")}`;
+  if (aligned(fleet)) return `${repaired}, fleet aligned on it`;
+  return `${repaired}, fleet on two revisions — ${splitReasons(fleet).join("; ")}`;
 }
 
 /**
@@ -257,7 +286,11 @@ function repairedInFlight(actions: readonly AiAction[]): string | undefined {
  * out, and, after a stop, hosts left in `test` — a reboot takes those back to
  * their previous generation. `undefined`: nothing to raise.
  */
-function incidentMessage(state: PersistedState, status: ReportInput["status"]): string | undefined {
+function incidentMessage(
+  state: PersistedState,
+  status: ReportInput["status"],
+  fleet: Alignment | undefined,
+): string | undefined {
   const declared = state.run?.params?.criticalProfiles ?? DEFAULTS.criticalProfiles;
   const critical = new Set(declared.split(":"));
   const concerned = state.hosts.filter(
@@ -269,17 +302,22 @@ function incidentMessage(state: PersistedState, status: ReportInput["status"]): 
     status === "done"
       ? []
       : state.hosts.filter((host) => host.status === "tested" || host.status === "error");
-  if (concerned.length === 0 && inTest.length === 0) return undefined;
+  const split = fleet === undefined || aligned(fleet) ? [] : splitReasons(fleet);
+  if (concerned.length === 0 && inTest.length === 0 && split.length === 0) return undefined;
 
-  const parts: string[] = [];
+  const sections: string[][] = [];
   if (concerned.length > 0) {
-    parts.push("## Critical hosts not deployed", "", ...concerned.map(incidentLine));
+    sections.push(["## Critical hosts not deployed", "", ...concerned.map(incidentLine)]);
   }
   if (inTest.length > 0) {
-    if (parts.length > 0) parts.push("");
-    parts.push("## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`));
+    sections.push(["## Hosts left in test", "", ...inTest.map((host) => `- ${host.name}`)]);
   }
-  return `${parts.join("\n")}\n`;
+
+  // Hosts that must move together may not have (spec § Alignement du parc).
+  if (split.length > 0) {
+    sections.push(["## Fleet on two revisions", "", ...split.map((reason) => `- ${reason}`)]);
+  }
+  return `${sections.map((section) => section.join("\n")).join("\n\n")}\n`;
 }
 
 export function renderReport(input: ReportInput): Report {
@@ -293,20 +331,21 @@ export function renderReport(input: ReportInput): Report {
       : status === "aborted"
         ? `run aborted${cause}`
         : undefined;
+  const fleet = alignment(state);
   const lines = [summary(hosts), `duration ${formatDuration(durationMs)}`];
+  if (fleet !== undefined && !aligned(fleet)) lines.push("fleet on two revisions");
   if (ending) lines.push(ending);
 
   const run = state.run;
   const started = startedAt(runId);
   const duration = formatDuration(durationMs);
-  const repaired = repairedInFlight(state.actions);
   const facts = [
     started === undefined
       ? `Duration: ${duration}`
       : `Started at ${started}, duration: ${duration}`,
     `Options: ${mainOptions(run)}`,
     `Hosts: ${summary(hosts, true)}`,
-    ...(repaired === undefined ? [] : [repaired]),
+    ...(fleet === undefined ? [] : [alignmentFact(fleet)]),
   ];
   const commits = state.commits.map(
     (commit) =>
@@ -421,7 +460,7 @@ export function renderReport(input: ReportInput): Report {
   if (warnings.length > 0) {
     markdown.push("", "## Evaluation warnings", "", ...warnings.map((warning) => `- ${warning}`));
   }
-  const incident = incidentMessage(state, status);
+  const incident = incidentMessage(state, status, fleet);
   return {
     lines,
     facts: ending === undefined ? facts : [...facts, capitalize(ending)],

@@ -35,6 +35,12 @@ export interface HostBehaviour {
   evalError?: string;
   buildError?: string;
 
+  /**
+   * Its `buildError` lies in the code: gone once an edit is in the tree,
+   * pending or committed as a fix, and its path changes with it.
+   */
+  buildFixedByEdit?: boolean;
+
   /** A repair commit changes its toplevel: evaluated after one, its path differs. */
   changedByFix?: boolean;
   copyExit?: number;
@@ -216,6 +222,12 @@ export class SimFleet implements CommandRunner {
 
   /** Every commit made, amends included: each one is a new revision. */
   private made = 0;
+
+  /** HEAD of each repository, as the count of commits when it moved. */
+  private readonly heads: Record<Repo, number> = { consumer: 0, dnf: 0 };
+
+  /** An AI edit is in the tree, not committed yet. */
+  private edited = false;
 
   /** What `just send-msg` received: room and body (`--send-report`). */
   readonly messages: { room: string; body: string }[] = [];
@@ -520,6 +532,7 @@ export class SimFleet implements CommandRunner {
       // Only issued right after a write: in this world the tree is dirty from here.
       case "diff": {
         this.pending[command.detail as Repo] = true;
+        this.edited = true;
         out(`+++ b/${spec.argv.at(-1) ?? "file"}`);
         return ok();
       }
@@ -536,15 +549,20 @@ export class SimFleet implements CommandRunner {
           this.commits.push({ repo, message });
         }
         this.made += 1;
+        this.heads[repo] = this.made;
         this.pending[repo] = false;
+        this.edited = false;
         return ok();
       }
       case "discard":
         this.pending[command.detail as Repo] = false;
+        this.edited = false;
         return ok();
-      case "rev-parse":
-        out(`${command.detail === "dnf" ? "d" : "c"}${String(this.made).padStart(39, "0")}`);
+      case "rev-parse": {
+        const repo = command.detail as Repo;
+        out(`${repo === "dnf" ? "d" : "c"}${String(this.heads[repo]).padStart(39, "0")}`);
         return ok();
+      }
       case "flake-update":
         if (this.options.updates?.[command.detail as Repo])
           this.pending[command.detail as Repo] = true;
@@ -646,8 +664,9 @@ export class SimFleet implements CommandRunner {
       err(`ssh: connect to host ${builder} port 22: No route to host`);
       return exit(255);
     }
-    const error = this.behaviour(name).buildError;
-    if (error !== undefined) {
+    const behaviour = this.behaviour(name);
+    const error = behaviour.buildError;
+    if (error !== undefined && !(behaviour.buildFixedByEdit === true && this.fixed(name))) {
       err(`@nix ${JSON.stringify({ action: "msg", level: 0, msg: `error: ${error}` })}`);
       return exit(1);
     }
@@ -663,12 +682,12 @@ export class SimFleet implements CommandRunner {
     return this.fixed(name) ? fixedPath(name) : storePath(name);
   }
 
-  /** Its toplevel changed once a repair committed. */
+  /** Its toplevel changed once a repair committed, or as soon as an edit fixed its build. */
   private fixed(name: string): boolean {
-    return (
-      this.behaviour(name).changedByFix === true &&
-      this.commits.some((commit) => commit.message.startsWith("fix("))
-    );
+    const behaviour = this.behaviour(name);
+    const committed = this.commits.some((commit) => commit.message.startsWith("fix("));
+    if (behaviour.buildFixedByEdit === true) return committed || this.edited;
+    return behaviour.changedByFix === true && committed;
   }
 
   private onHost(

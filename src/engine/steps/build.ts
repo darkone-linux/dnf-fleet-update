@@ -432,11 +432,7 @@ export async function align(
   const behind = (name: string, why: string) => {
     left.push(name);
     log(context, "warn", `not aligned: ${why}`, name);
-    emit(context, {
-      kind: "note",
-      host: name,
-      message: `not aligned on the repaired revision: ${why}`,
-    });
+    emit(context, { kind: "host.unaligned", host: name, why });
   };
   const restart = (entry: HostEntry) => {
     hosts.set(entry.name, "building");

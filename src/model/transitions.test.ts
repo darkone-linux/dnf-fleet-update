@@ -38,6 +38,10 @@ describe("spec rows", () => {
       ["tested", "building", "failed"],
       ["deployed", "building", "built"],
       ["failed", "building", "built"],
+
+      // Missed by the final pass: back to the generation it runs.
+      ["tested", "building", "built", "tested"],
+      ["deployed", "building", "built", "deployed"],
     ],
     "forced rollback": [
       ["tested", "reverted"],

@@ -2,6 +2,7 @@
 // one works, and the host rejoins the deployment.
 
 import { expect, test } from "bun:test";
+import { storePath } from "../../src/testing/fleet.ts";
 import { simulateRun } from "../../src/testing/runs.ts";
 import { fixedPath } from "../../src/testing/sim.ts";
 
@@ -182,6 +183,33 @@ test("a fix that changes other hosts: the fleet is realigned on it, served ones 
   expect(state?.revisions.consumer).toBe(state?.commits.at(-1)?.rev);
 });
 
+test("a host the final pass cannot reach: the fleet is on two revisions, the alert names it", async () => {
+  // hcs drops off the network once the fix is committed: tested on the old path only.
+  let up = true;
+  const run = await simulateRun({
+    argv: [...REPAIR, "--send-report"],
+    behaviours: { ...NEEDS_CODE, hcs: { changedByFix: true, reachable: () => up } },
+    hooks: () => [{ kind: "commit", run: () => (up = false) }],
+    ai: ["outline starts before its database; ordering belongs in the module.", ...FIX],
+  });
+
+  expect(run.feed).toContain("warn offline, not aligned: hcs");
+
+  // Back to what it runs: tested on its old path, left in test by the switch.
+  expect(run.statuses).toMatchObject({ "gw-cp": "deployed", hcs: "tested" });
+  expect(run.recorded?.state?.hosts.find((host) => host.name === "hcs")?.path).toBe(
+    storePath("hcs"),
+  );
+  expect(run.feed).toContain("warn offline, left in test: hcs");
+
+  const reason = "not aligned: hcs (offline at the final pass)";
+  expect(run.recorded?.report).toContain(
+    `- Repaired by commit: gw-cp, fleet on two revisions — ${reason}`,
+  );
+  const incident = run.sim.messages.find((message) => message.room === "incidents");
+  expect(incident?.body).toContain(`## Fleet on two revisions\n\n- ${reason}`);
+});
+
 test("a fix that does not fix: attempts run out, the host lands back in error", async () => {
   const run = await simulateRun({
     argv: REPAIR,
@@ -208,4 +236,124 @@ test("a fix that does not fix: attempts run out, the host lands back in error", 
   expect(run.recorded?.report).toContain(
     "fix(outline): start outline after postgresql (amended 2×)",
   );
+});
+
+/** One derivation of `dnf/` fails its own tests: every host holding it fails to build. */
+const POSTHOG = `/nix/store/${"p".repeat(32)}-python3.14-posthog-7.71.0.drv`;
+const BROKEN = {
+  buildError: `Cannot build '${POSTHOG}'.\nReason: builder failed with exit code 1.`,
+  buildFixedByEdit: true,
+};
+const BUILD_FIX = (host: string) => [
+  {
+    call: "edit_code",
+    args: {
+      host,
+      path: "dnf/lib/overlays/posthog.nix",
+      content: '{ disabledTests = [ "test_user_defined_flush_at" ]; }\n',
+    },
+  },
+  { call: "validate", args: { host } },
+  {
+    call: "commit",
+    args: { host, scope: "posthog", subject: "skip the tests that race the clock" },
+  },
+];
+
+const aiMarks = (run: Awaited<ReturnType<typeof simulateRun>>, host: string) =>
+  run.events.flatMap((event) =>
+    event.kind === "host.state" && event.host === host && event.state.startsWith("ai")
+      ? [event.state]
+      : [],
+  );
+
+test("a failed build: repaired once for its group, the fleet aligned on the fix, all deployed", async () => {
+  const run = await simulateRun({
+    argv: REPAIR,
+    codev: true,
+    behaviours: {
+      "srv-ag": BROKEN,
+      "pc-ag": BROKEN,
+      "lt-cp": BROKEN,
+      hcs: { changedByFix: true },
+    },
+    ai: [
+      "posthog's own tests race the clock; disable them in the overlay.",
+      ...BUILD_FIX("srv-ag"),
+    ],
+  });
+
+  expect(run.exitCode).toBe(0);
+  expect(Object.values(run.statuses).every((status) => status === "deployed")).toBe(true);
+
+  // One analysis, one repair for the three: through srv-ag, first to build it.
+  for (const host of ["srv-ag", "pc-ag", "lt-cp"]) {
+    expect(aiMarks(run, host)).toEqual(["ai-analysing", "ai-repairing"]);
+  }
+  expect(run.feed).toContain("ok srv-ag: build fixed and committed by an AI repair");
+
+  // The pair of co-development, one subject: dnf/ then the consumer lock.
+  expect(run.sim.commits).toEqual([
+    { repo: "dnf", message: "fix(posthog): skip the tests that race the clock" },
+    { repo: "consumer", message: "fix(posthog): skip the tests that race the clock" },
+  ]);
+
+  // Aligned at HEAD: the group and hcs, whose path the fix changed too.
+  expect(run.feed).toContain("ok aligned: 4 changed, 2 unchanged");
+  const paths = Object.fromEntries(
+    (run.recorded?.state?.hosts ?? []).map((host) => [host.name, host.path]),
+  );
+  expect(paths).toMatchObject({
+    hcs: fixedPath("hcs"),
+    "srv-ag": fixedPath("srv-ag"),
+    "lt-cp": fixedPath("lt-cp"),
+  });
+  const tests = (host: string) =>
+    run.sim.host(host).history.filter((line) => line.startsWith("test "));
+  expect(tests("hcs")).toEqual(["test 0"]);
+
+  // No decision left to take: nothing failed once aligned.
+  expect(run.feed.join("\n")).not.toContain("excluded");
+  const state = run.recorded?.state;
+  expect(state?.revisions.consumer).toBe(state?.commits.at(-1)?.rev);
+  expect(state?.revisions.dnf).toBe(state?.commits.findLast((c) => c.repo === "dnf")?.rev);
+  expect(run.recorded?.report).toContain("- Repaired by commit: srv-ag, fleet aligned on it");
+});
+
+test("every host broken: the repair comes before « no host built »", async () => {
+  const names = ["hcs", "gw-ag", "srv-ag", "pc-ag", "gw-cp", "lt-cp"];
+  const run = await simulateRun({
+    argv: REPAIR,
+    codev: true,
+    behaviours: Object.fromEntries(names.map((name) => [name, BROKEN])),
+    ai: [...BUILD_FIX("hcs")],
+  });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.feed).not.toContain("error no host built");
+  expect(run.feed).toContain("ok aligned: 6 changed, 0 unchanged");
+  expect(Object.values(run.statuses).every((status) => status === "deployed")).toBe(true);
+});
+
+test("a build fix that does not validate: nothing committed, the group decided as before", async () => {
+  const run = await simulateRun({
+    argv: REPAIR,
+    codev: true,
+    behaviours: {
+      "pc-ag": { buildError: BROKEN.buildError },
+      "lt-cp": { buildError: BROKEN.buildError },
+    },
+    ai: [...BUILD_FIX("pc-ag")],
+  });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toMatchObject({ "pc-ag": "excluded", "lt-cp": "excluded", hcs: "deployed" });
+  expect(run.sim.commits).toEqual([]);
+
+  // Uncommitted: the tree back to HEAD, nothing aligned, no repair to report.
+  expect(run.feed).toContain("warn pc-ag: dnf/: uncommitted repair edits discarded");
+  expect(run.feed.some((line) => line.includes("aligning"))).toBe(false);
+  expect(run.recorded?.report).not.toContain("Repaired by commit");
+  const commit = run.recorded?.state?.actions.find((entry) => entry.action.startsWith("commit"));
+  expect(commit?.outcome).toBe("refused");
 });

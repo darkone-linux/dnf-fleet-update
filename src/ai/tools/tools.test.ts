@@ -845,7 +845,13 @@ describe("service_action", () => {
       "--amend",
     );
     expect(context.state().commits).toEqual([
-      { repo: "consumer", rev: "c2", message: "fix(nginx): bind nginx after acme", amended: 1 },
+      {
+        repo: "consumer",
+        rev: "c2",
+        message: "fix(nginx): bind nginx after acme",
+        subject: "gfx",
+        amended: 1,
+      },
     ]);
 
     // What was validated is what is now committed: the only path a redeploy takes.

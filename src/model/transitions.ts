@@ -9,7 +9,9 @@ import type { HostState } from "./events.ts";
 const NEXT: Record<HostState, readonly HostState[]> = {
   pending: ["building", "excluded"],
   building: ["built", "failed", "excluded"],
-  built: ["copying", "building", "excluded"],
+  // `tested`, `deployed`: rebuilt by an alignment, missed by the final pass;
+  // back to the generation it runs (spec § réparation, Alignement du parc).
+  built: ["copying", "building", "tested", "deployed", "excluded"],
 
   // `testing`/`switching`: a host served just before its wave activates without
   // passing through `ready` — publication left it behind, unreachable.

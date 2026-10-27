@@ -104,7 +104,8 @@ async function commitTree(
   }
   const rev = await headOf(context, repo, directory);
   subject.revs[repo] = rev;
-  emit(context, { kind: "commit", repo, rev, message, ...(amend ? { amends: previous } : {}) });
+  const amends = amend ? { amends: previous } : {};
+  emit(context, { kind: "commit", repo, rev, message, subject: subject.name, ...amends });
   return `${rev.slice(0, 7)}${amend ? " (amended)" : ""}`;
 }
 

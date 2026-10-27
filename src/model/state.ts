@@ -157,6 +157,7 @@ function apply(state: RunState, event: Event): RunState {
     // Counters, collection and report notes: the feed says what matters here.
     case "host.copy":
     case "host.diagnosis":
+    case "host.unaligned":
     case "note":
     // Counted by `persist.ts`; the engine says it at the feed with a `log`.
     case "ai.action":
