@@ -391,31 +391,77 @@ async function evaluateAndBuild(
 /** Out of the run: an alignment leaves them where they are. */
 const OUT_OF_RUN: readonly HostState[] = ["excluded", "reverted"];
 
+/** End of the build: every host still in the run, failed ones included. */
+export function inRun(hosts: HostTable): string[] {
+  return hosts.all().flatMap((host) => (OUT_OF_RUN.includes(host.state) ? [] : [host.name]));
+}
+
+export interface AlignScope {
+  /** Hosts re-evaluated at HEAD. */
+  names: readonly string[];
+
+  /**
+   * In the waves: a host holds an activated generation, so a rebuild that
+   * fails keeps it where it is, on its old path, said not aligned. At the end
+   * of the build it fails instead, and the usual decision follows.
+   */
+  keep: boolean;
+}
+
 /**
- * Alignment pass (spec § réparation, Alignement du parc): every host still in
- * the run re-evaluated at HEAD, a path that changed rebuilt, the rest left as
- * it is. `true`: the run holds one revision, HEAD, recorded as `revision`;
- * `false`: some host kept a path of before the fix.
+ * Alignment pass (spec § réparation, Alignement du parc): the hosts re-evaluated
+ * at HEAD, a path that changed rebuilt, the rest left as it is. `true`: the run
+ * holds one revision, HEAD, recorded as `revision`; `false`: some host kept a
+ * path of before the fix.
  */
 export async function align(
   context: RunContext,
   hosts: HostTable,
   failures: BuildFailures,
+  scope: AlignScope,
 ): Promise<boolean> {
   const { flow, params } = context;
-  const names = hosts.all().flatMap((host) => (OUT_OF_RUN.includes(host.state) ? [] : [host.name]));
+  const { names, keep } = scope;
   log(context, "info", `aligning ${names.length} hosts on the repaired revision`);
 
   const seeder = sourceSeeder(context);
   const builds: Promise<void>[] = [];
   const changed: string[] = [];
+  const left: string[] = [];
   const evaluated = new Set<string>();
+  const behind = (name: string, why: string) => {
+    left.push(name);
+    log(context, "warn", `not aligned: ${why}`, name);
+    emit(context, {
+      kind: "note",
+      host: name,
+      message: `not aligned on the repaired revision: ${why}`,
+    });
+  };
   const restart = (entry: HostEntry) => {
     hosts.set(entry.name, "building");
     entry.buildCause = undefined;
     entry.knownError = undefined;
     changed.push(entry.name);
   };
+
+  // Built beside its generation: the host changes state only once it holds the new path.
+  const aside = async (entry: HostEntry, job: Job) => {
+    const where: Where = {
+      name: entry.name,
+      builder: entry.builder,
+      ...(entry.online === undefined ? {} : { online: entry.online }),
+    };
+    const built = await buildJob(context, where, job, seeder, failures);
+    if (built === undefined) return;
+    if (built.note !== undefined) return behind(entry.name, built.note);
+    entry.builder = where.builder;
+    entry.drv = job.drvPath;
+    hosts.set(entry.name, "building");
+    hosts.set(entry.name, "built", { path: built.path ?? job.outPath, builder: where.builder });
+    changed.push(entry.name);
+  };
+
   const evaluation = await execute(context, evalHosts(context.workspace, names, params.timeouts), {
     log: { phase: "build" },
     signal: flow.halt,
@@ -426,8 +472,9 @@ export async function align(
       evaluated.add(job.host);
       const entry = hosts.get(job.host);
       if (job.kind === "error") {
-        if (entry.state === "failed") return;
         const note = errorSummary(job.message);
+        if (keep) return behind(entry.name, `evaluation failed: ${note}`);
+        if (entry.state === "failed") return;
         restart(entry);
         hosts.set(entry.name, "failed", { note });
         entry.buildCause = { kind: "evaluation" };
@@ -438,6 +485,10 @@ export async function align(
       // Same output, or the same derivation failed already: nothing to build again.
       const failedAlready = entry.state === "failed" && entry.drv === job.drvPath;
       if (entry.path === job.outPath || failedAlready) return;
+      if (keep) {
+        builds.push(aside(entry, job));
+        return;
+      }
       restart(entry);
       entry.drv = job.drvPath;
       builds.push(buildOne(context, hosts, job.host, job, seeder, failures));
@@ -453,8 +504,9 @@ export async function align(
     log(context, "error", `alignment: evaluation failed: ${why}`);
     return false;
   }
-  const unchanged = names.length - changed.length;
+  const unchanged = names.length - changed.length - left.length;
   log(context, "ok", `aligned: ${changed.length} changed, ${unchanged} unchanged`);
+  if (left.length > 0) return false;
   await readRevisions(context);
   return true;
 }
@@ -593,7 +645,9 @@ export async function build(
     const fixed = await handOffBuilds(context, hosts);
 
     // A fix committed: the whole run moves to it, never part of it (spec § Alignement du parc).
-    if (fixed && !flow.halt.aborted) await align(context, hosts, failures.carried());
+    if (fixed && !flow.halt.aborted) {
+      await align(context, hosts, failures.carried(), { names: inRun(hosts), keep: false });
+    }
   }
   if (context.signal.aborted) return undefined;
 

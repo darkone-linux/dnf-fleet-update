@@ -16,9 +16,10 @@ import {
   SOURCE_SCRIPTS,
   storePath,
 } from "../../testing/fleet.ts";
+import { BuildFailures } from "../build-failures.ts";
 import { HostTable } from "../hosts.ts";
 import { Presence } from "../presence.ts";
-import { build } from "./build.ts";
+import { align, build } from "./build.ts";
 
 const NAMES = ["hcs", "gw-ag", "srv-ag", "pc-ag", "gw-cp", "lt-cp"];
 
@@ -734,6 +735,38 @@ describe("build", () => {
       // The run is on HEAD now: a resume may reuse what the alignment built.
       const revisions = run.context.events.events.filter((event) => event.kind === "revision");
       expect(revisions.at(-1)).toMatchObject({ repo: "consumer", rev: "c1" });
+    });
+
+    test("in the waves, a rebuild that fails keeps the host on its path, said not aligned", async () => {
+      const others = NAMES.filter((name) => name !== "hcs");
+      const { context, hosts } = setup([
+        evaluation([...others.map(evalLine), fixedLine("hcs")]),
+        {
+          match: ["nix", "build", `${storePath("hcs-fixed", ".drv")}^*`],
+          exitCode: 1,
+          output: [cannotBuild(ANYIO, "builder failed with exit code 1")],
+        },
+        { match: ["nix-store", "--query", "--requisites"] },
+      ]);
+      for (const name of NAMES) {
+        hosts.set(name, "building");
+        hosts.set(name, "built", { path: storePath(name) });
+      }
+
+      const aligned = await align(context, hosts, new BuildFailures(context), {
+        names: NAMES,
+        keep: true,
+      });
+
+      expect(aligned).toBe(false);
+      expect(hosts.get("hcs")).toMatchObject({ state: "built", path: storePath("hcs") });
+      expect(context.state().notes).toContainEqual({
+        host: "hcs",
+        message: `not aligned on the repaired revision: Cannot build '${ANYIO}'.`,
+      });
+
+      // Not one revision: a resume must not take these paths for HEAD's.
+      expect(context.events.events.some((event) => event.kind === "revision")).toBe(false);
     });
 
     test("a fix beside the failed derivation: nothing built again, decided as before", async () => {

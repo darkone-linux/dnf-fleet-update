@@ -23,11 +23,20 @@ import {
   storePath,
 } from "./fleet.ts";
 
+/** Path of `name` once a repair changed it: same name, another hash. */
+export const fixedPath = (name: string, suffix = "") =>
+  storePath(name, suffix)
+    .replace("/nix/store/", "/nix/store/f")
+    .replace(/(\/nix\/store\/.{32})./, "$1");
+
 export interface HostBehaviour {
   /** Answers ping and ssh; a function reads the fake clock (ms). Default: always. */
   reachable?: boolean | ((now: number) => boolean);
   evalError?: string;
   buildError?: string;
+
+  /** A repair commit changes its toplevel: evaluated after one, its path differs. */
+  changedByFix?: boolean;
   copyExit?: number;
 
   /** What the failed copy prints: a line the signature table may recognise. */
@@ -616,11 +625,12 @@ export class SimFleet implements CommandRunner {
         out(JSON.stringify({ attr: name, error }));
         continue;
       }
+      const fixed = this.fixed(name);
       out(
         JSON.stringify({
           attr: name,
-          drvPath: storePath(name, ".drv"),
-          outputs: { out: storePath(name) },
+          drvPath: fixed ? fixedPath(name, ".drv") : storePath(name, ".drv"),
+          outputs: { out: fixed ? fixedPath(name) : storePath(name) },
         }),
       );
     }
@@ -644,8 +654,21 @@ export class SimFleet implements CommandRunner {
 
     // The result stays in the builder's store: what its zone then pulls from.
     if (builder !== undefined) this.holding.add(builder);
-    out(storePath(name));
+    out(this.toplevel(name));
     return ok(1000);
+  }
+
+  /** What evaluation, build and activation give for `name` at this point of the run. */
+  private toplevel(name: string): string {
+    return this.fixed(name) ? fixedPath(name) : storePath(name);
+  }
+
+  /** Its toplevel changed once a repair committed. */
+  private fixed(name: string): boolean {
+    return (
+      this.behaviour(name).changedByFix === true &&
+      this.commits.some((commit) => commit.message.startsWith("fix("))
+    );
   }
 
   private onHost(
@@ -739,7 +762,7 @@ export class SimFleet implements CommandRunner {
           behaviour.activation?.[phase] ??
           0;
         if (code === 0) side.failedUnits.clear();
-        const target = storePath(name);
+        const target = this.toplevel(name);
         if (code === 0 || code === 4) side.system = target;
         side.history.push(`${phase} ${code}`);
         if (command.detail !== undefined) {

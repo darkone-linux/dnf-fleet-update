@@ -254,7 +254,7 @@ function invariants(outcome: RunOutcome, lock: FakeLock): string[] {
   for (const host of killed ? [] : (recorded?.state?.hosts ?? [])) {
     const side = sim.hosts.get(host.name);
     if (side === undefined) continue;
-    const target = storePath(host.name);
+    const target = host.path ?? storePath(host.name);
     switch (host.state) {
       case "deployed":
         check(side.system === target && side.profile === target, `${host.name}: deployed`);

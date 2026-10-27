@@ -3,6 +3,7 @@
 
 import { expect, test } from "bun:test";
 import { simulateRun } from "../../src/testing/runs.ts";
+import { fixedPath } from "../../src/testing/sim.ts";
 
 /** `gw-cp` activates with a failed unit; only the second restart brings it back. */
 const RESISTS = {
@@ -146,6 +147,39 @@ test("a fix in the code: the host is rebuilt, redeployed, and ends deployed", as
     actions.filter((action) => action.spends !== false && action.outcome === "done"),
   ).toHaveLength(1);
   expect(run.recorded?.report).toContain("| gw-cp | edit usr/modules/outline.nix | done |");
+});
+
+test("a fix that changes other hosts: the fleet is realigned on it, served ones again", async () => {
+  const run = await simulateRun({
+    argv: REPAIR,
+    behaviours: {
+      ...NEEDS_CODE,
+      hcs: { changedByFix: true },
+      "lt-cp": { changedByFix: true },
+    },
+    ai: ["outline starts before its database; ordering belongs in the module.", ...FIX],
+  });
+
+  expect(run.exitCode).toBe(0);
+  expect(run.statuses).toMatchObject({ hcs: "deployed", "lt-cp": "deployed", "gw-cp": "deployed" });
+
+  // Rebuilt at HEAD: hcs, served before the fix, tested again in a final pass;
+  // lt-cp, in a later wave, tested once with its new path.
+  expect(run.feed).toContain("ok aligned: 2 changed, 4 unchanged");
+  expect(run.feed).toContain("info aligned, serving again: hcs");
+  const tests = (host: string) =>
+    run.sim.host(host).history.filter((line) => line.startsWith("test "));
+  expect(tests("hcs")).toEqual(["test 0", "test 0"]);
+  expect(tests("lt-cp")).toEqual(["test 0"]);
+  const paths = Object.fromEntries(
+    (run.recorded?.state?.hosts ?? []).map((host) => [host.name, host.path]),
+  );
+  expect(paths).toMatchObject({ hcs: fixedPath("hcs"), "lt-cp": fixedPath("lt-cp") });
+
+  // One revision for the whole fleet: the one the fix committed.
+  const state = run.recorded?.state;
+  expect(state?.commits.at(-1)?.message).toBe("fix(outline): start outline after postgresql");
+  expect(state?.revisions.consumer).toBe(state?.commits.at(-1)?.rev);
 });
 
 test("a fix that does not fix: attempts run out, the host lands back in error", async () => {

@@ -1,6 +1,7 @@
 // Steps 4 and 5, test then switch by waves (spec § Étapes, § Vagues, § Présence).
 
 import type { HostState } from "../../model/events.ts";
+import { BuildFailures } from "../build-failures.ts";
 import { COMMAND_NOT_FOUND, maintenance, onHost, type Phase } from "../commands/host.ts";
 import { ask, emit, log, type RunContext, YES_NO } from "../context.ts";
 import { deployHost } from "../deploy.ts";
@@ -8,6 +9,7 @@ import { describeFailure, execute, succeeded } from "../exec.ts";
 import type { HostTable } from "../hosts.ts";
 import { pool } from "../pool.ts";
 import type { Presence } from "../presence.ts";
+import { align } from "./build.ts";
 import type { Selection } from "./select.ts";
 import { endStep } from "./step.ts";
 
@@ -39,6 +41,57 @@ async function silence(
       log(context, "warn", `dnf-maintenance ${state} failed: ${describeFailure(execution)}`, name);
     }),
   );
+}
+
+/** Holding a generation of this run, served or about to be: what an alignment rebuilds. */
+const SERVING: readonly HostState[] = ["built", "ready", "tested", "deployed"];
+
+/** Changes with every repair commit, amends included: compared around a wave. */
+const commitMark = (context: RunContext) =>
+  context
+    .state()
+    .commits.map((commit) => commit.rev)
+    .join(" ");
+
+/**
+ * A repair committed during the wave (spec § réparation, Alignement du parc):
+ * hosts whose path the fix changed are rebuilt, `built` again. A later wave
+ * serves its own; the final pass serves those this step already served.
+ */
+async function realign(context: RunContext, hosts: HostTable, mark: string): Promise<void> {
+  if (commitMark(context) === mark || context.flow.halt.aborted) return;
+  const names = hosts.all().flatMap((host) => (SERVING.includes(host.state) ? [host.name] : []));
+  await align(context, hosts, new BuildFailures(context), { names, keep: true });
+}
+
+/**
+ * Last pass of a step: hosts it served before an alignment rebuilt them, served
+ * once more in the same phase. No alignment after it: a repair committed here
+ * leaves the fleet on two revisions, and says so.
+ */
+async function finalPass(
+  context: RunContext,
+  hosts: HostTable,
+  presence: Presence,
+  phase: Phase,
+  served: Iterable<string>,
+  index: number,
+): Promise<boolean> {
+  const again = [...served].filter((name) => hosts.get(name).state === "built");
+  if (again.length === 0 || context.flow.halt.aborted) return false;
+  await presence.check(again);
+  const members = again.filter((name) => hosts.get(name).online);
+  const offline = again.filter((name) => !hosts.get(name).online);
+  if (offline.length > 0) log(context, "warn", `offline, not aligned: ${offline.join(", ")}`);
+  if (members.length === 0) return false;
+
+  log(context, "info", `aligned, serving again: ${members.join(", ")}`);
+  const mark = commitMark(context);
+  await runWave(context, hosts, presence, phase, { index, total: index, members });
+  if (commitMark(context) !== mark) {
+    log(context, "warn", "a repair committed in the final pass: the fleet is not aligned on it");
+  }
+  return true;
 }
 
 async function runWave(
@@ -106,6 +159,7 @@ async function waves(
 
   let ran = 0;
   let carried: string[] = [];
+  const served = new Set<string>();
   for (const [position, planned] of selection.waves.entries()) {
     if (flow.ending !== undefined) break;
     const candidates = [...carried, ...planned].filter(eligible);
@@ -118,11 +172,14 @@ async function waves(
         log(context, "warn", `offline, retried next wave: ${carried.join(", ")}`);
       if (members.length > 0) {
         ran += 1;
+        const mark = commitMark(context);
         await runWave(context, hosts, presence, phase, {
           index: ran,
           total: ran + ahead(position + 1),
           members,
         });
+        for (const name of members) served.add(name);
+        await realign(context, hosts, mark);
       }
     }
     emit(context, {
@@ -131,6 +188,14 @@ async function waves(
       done: ran,
       total: ran + ahead(position + 1),
     });
+  }
+
+  if (
+    flow.ending === undefined &&
+    (await finalPass(context, hosts, presence, phase, served, ran + 1))
+  ) {
+    ran += 1;
+    emit(context, { kind: "step.progress", step: phase, done: ran, total: ran });
   }
 
   const left = carried.filter(eligible);
@@ -190,6 +255,7 @@ async function switchAtOnce(
   log(context, "info", `switching ${members.length} tested hosts`);
   for (const name of members) hosts.get(name).waveStartedAt = context.clock.now();
   let done = 0;
+  const mark = commitMark(context);
   await silence(context, hosts, members, true);
   try {
     await pool(members, context.params.maxParallel, flow.halt, async (name) => {
@@ -200,6 +266,10 @@ async function switchAtOnce(
   } finally {
     await silence(context, hosts, members, false);
   }
+
+  // No wave to serve a repaired host again: the final pass does, aligned with it.
+  await realign(context, hosts, mark);
+  if (flow.ending === undefined) await finalPass(context, hosts, presence, "switch", members, 1);
 }
 
 /**
