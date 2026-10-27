@@ -604,6 +604,60 @@ describe("build", () => {
     expect(states.slice(-3)).toEqual(["ai-analysing", "failed", "excluded"]);
   });
 
+  test("--ai-error-action repair: the group gets a session that may fix the code", async () => {
+    const fixed = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-pc-ag";
+    const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        ownFailure("pc-ag"),
+        ownFailure("lt-cp"),
+        { match: ["nix-store", "--query", "--requisites"] },
+        { match: ["claude"], once: true, output: [{ stream: "stdout", line: "anyio tests." }] },
+
+        // The session commits a validated fix, as the commit tool records it.
+        {
+          match: ["claude"],
+          onRun: () =>
+            holder.context?.subjects.set("pc-ag", { revs: { consumer: "c1" }, path: fixed }),
+        },
+      ],
+      { params: { aiErrorAction: "repair" } },
+    );
+    holder.context = context;
+    for (const { name, profile, zone } of hosts.all()) {
+      context.events.emit({ kind: "host.add", host: name, profile, zone, t: 0 });
+    }
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    const sessions = context.commands.calls.filter(({ argv }) => argv[0] === "claude");
+    expect(sessions).toHaveLength(2);
+    const repair = sessions[1];
+    const system = repair?.argv[repair.argv.indexOf("--system-prompt") + 1];
+    expect(system).toContain("You may fix the code behind this failed build");
+    expect(system).not.toContain("service_action");
+    expect(repair?.stdin).toContain("Your analysis of this build:\nanyio tests.");
+    expect(repair?.timeoutMs).toBe(context.params.ai.repairTimeoutSeconds * 1000);
+    expect(feed(context.events.events)).toContain(
+      "ok pc-ag: build fixed and committed by an AI repair",
+    );
+
+    // The whole group repaired at once, then back to its failure: never left in repair.
+    const states = context.events.events.flatMap((event) =>
+      event.kind === "host.state" && event.host === "lt-cp" ? [event.state] : [],
+    );
+    expect(states.slice(-5)).toEqual([
+      "ai-analysing",
+      "failed",
+      "ai-repairing",
+      "failed",
+      "excluded",
+    ]);
+    expect(context.subjects.get("pc-ag")?.path).toBeUndefined();
+  });
+
   test("nothing is handed over without --ai-error-action, nor for a failed evaluation", async () => {
     const quiet = setup([
       evaluation(NAMES.map(evalLine)),

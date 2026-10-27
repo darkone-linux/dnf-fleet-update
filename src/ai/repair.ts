@@ -12,7 +12,7 @@ import { execute, succeeded } from "../engine/exec.ts";
 import type { HostTable } from "../engine/hosts.ts";
 import type { HostState } from "../model/events.ts";
 import { ask, quiet } from "./analysis.ts";
-import { repairPrompt } from "./prompts.ts";
+import { buildRepairPrompt, repairPrompt } from "./prompts.ts";
 
 /**
  * Hands one host to the AI with the action tool published, in `ai-repairing`.
@@ -54,9 +54,7 @@ async function repairSession(
 
   // Actions of this session alone: what a previous round validated is spent.
   const before = context.state().actions.length;
-  const subject = context.subjects.get(name);
-  if (subject !== undefined) subject.path = undefined;
-  context.repaired.delete(name);
+  forget(context, name);
   try {
     const analysis = context.analyses.all().findLast((entry) => entry.host === name);
     await ask(context, {
@@ -101,13 +99,83 @@ async function repairSession(
   } finally {
     session.abort();
     context.repairing.delete(name);
-    context.repaired.delete(name);
-    const done = context.subjects.get(name);
-    if (done !== undefined) done.path = undefined;
+    forget(context, name);
 
     // Aborted, or the session threw: a host never ends in repair.
     if (hosts.get(name).state === "ai-repairing") hosts.set(name, previous, { note });
   }
+}
+
+/**
+ * Repair of a failed build (spec § réparation, J10): one session for the group,
+ * through the host whose own build met the failure. `true`: a fix was
+ * committed. The group goes back to `failed` whatever it did — a committed fix
+ * reaches the hosts by the alignment, never by this session.
+ */
+export async function repairGroup(
+  context: RunContext,
+  hosts: HostTable,
+  group: { hosts: readonly string[]; representative: string },
+): Promise<boolean> {
+  if (context.params.aiErrorAction !== "repair" || quiet(context)) return false;
+
+  // One session at a time: a commit takes the whole tree (spec § Règle de commit).
+  return context.repairTurn(() => groupSession(context, hosts, group));
+}
+
+async function groupSession(
+  context: RunContext,
+  hosts: HostTable,
+  group: { hosts: readonly string[]; representative: string },
+): Promise<boolean> {
+  const name = group.representative;
+  const persisted = context.state().hosts.find((candidate) => candidate.name === name);
+  if (quiet(context) || persisted === undefined) return false;
+
+  const notes = new Map(group.hosts.map((host) => [host, hosts.get(host).note]));
+  for (const [host, note] of notes) hosts.set(host, "ai-repairing", { note });
+  const session = new AbortController();
+  context.repairing.set(name, session.signal);
+  const before = context.state().actions.length;
+  forget(context, name);
+  try {
+    const analysis = context.analyses.all().findLast((entry) => entry.host === name);
+    await ask(context, {
+      id: `repair-${name}`,
+      summary: `repairing the build of ${group.hosts.join(", ")}`,
+      prompt: buildRepairPrompt(
+        context.state(),
+        persisted,
+        group.hosts,
+        analysis?.lines ?? [],
+        context.params.aiContext,
+      ),
+      session: "build-repair",
+    });
+
+    // Session over: a validation still building ends with it (spec § J10, Délai).
+    session.abort();
+    await discardUncommitted(context, name, before);
+    const fixed = context.subjects.get(name)?.path !== undefined;
+    if (fixed) log(context, "ok", "build fixed and committed by an AI repair", name);
+    return fixed;
+  } finally {
+    session.abort();
+    context.repairing.delete(name);
+    forget(context, name);
+
+    // A host never ends in repair: back to its failure, reason kept.
+    for (const [host, note] of notes) {
+      if (hosts.get(host).state === "ai-repairing") hosts.set(host, "failed", { note });
+    }
+  }
+}
+
+/** What a session validated and committed is read once: a later one starts from nothing. */
+function forget(context: RunContext, name: string): void {
+  context.repaired.delete(name);
+  const subject = context.subjects.get(name);
+  if (subject !== undefined) subject.path = undefined;
 }
 
 /**

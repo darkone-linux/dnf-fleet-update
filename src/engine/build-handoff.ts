@@ -2,6 +2,7 @@
 // reason, before the build step decides anything.
 
 import { analyseGroup, quiet } from "../ai/analysis.ts";
+import { repairGroup } from "../ai/repair.ts";
 import type { RunContext } from "./context.ts";
 import type { HostEntry, HostTable } from "./hosts.ts";
 
@@ -38,13 +39,17 @@ export function buildGroups(hosts: readonly HostEntry[]): BuildGroup[] {
 }
 
 /**
- * End of the build, `--ai-error-action` ≠ `none`: each group analysed, one
- * after the other. Never blocks the build: the decision follows as before.
+ * End of the build, `--ai-error-action` ≠ `none`: each group analysed, then
+ * repaired at `repair`, one after the other. Never blocks the build: the
+ * decision follows as before. `true`: at least one fix was committed.
  */
-export async function handOffBuilds(context: RunContext, hosts: HostTable): Promise<void> {
-  if (context.params.aiErrorAction === "none") return;
+export async function handOffBuilds(context: RunContext, hosts: HostTable): Promise<boolean> {
+  if (context.params.aiErrorAction === "none") return false;
+  let fixed = false;
   for (const group of buildGroups(hosts.all())) {
-    if (quiet(context)) return;
+    if (quiet(context)) return fixed;
     await analyseGroup(context, hosts, group);
+    if (await repairGroup(context, hosts, group)) fixed = true;
   }
+  return fixed;
 }

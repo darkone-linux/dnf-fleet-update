@@ -6,6 +6,7 @@
 import type { RunContext } from "../engine/context.ts";
 import type { HostTable } from "../engine/hosts.ts";
 import {
+  ACTING,
   buildPrompt,
   freePrompt,
   hostPrompt,
@@ -57,7 +58,7 @@ export interface AiQuestion {
   summary: string;
   prompt: string;
 
-  /** Default `analysis`; `repair` is the only one told it may act (spec § réparation). */
+  /** Default `analysis`; `repair` and `build-repair` alone are told they may act (spec § réparation). */
   session?: SessionKind;
 }
 
@@ -79,7 +80,10 @@ export async function ask(
       system: systemPrompt(toolLevel(context.params), session),
 
       // A repair rebuilds inside its session: `validate` outlasts an answer.
-      timeoutSeconds: session === "repair" ? ai.repairTimeoutSeconds : ai.timeoutSeconds,
+      timeoutSeconds:
+        session !== undefined && ACTING.includes(session)
+          ? ai.repairTimeoutSeconds
+          : ai.timeoutSeconds,
       ...(tools === undefined ? {} : { tools }),
     },
     signal,

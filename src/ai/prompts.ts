@@ -12,7 +12,10 @@ const ROLE = ["You are diagnosing a NixOS fleet deployment run by fleet-update."
 const READ_ONLY = ["You are read-only: you observe and explain, you never change anything."];
 
 /** Kind of session: what it may do, and the answer it owes. */
-export type SessionKind = "analysis" | "repair" | "suggestions";
+export type SessionKind = "analysis" | "repair" | "build-repair" | "suggestions";
+
+/** Sessions allowed to act: their own bound, `validate` rebuilds inside them. */
+export const ACTING: readonly SessionKind[] = ["repair", "build-repair"];
 
 /** End-of-run review: files notes for a human, touches nothing (spec § Suggestions). */
 const MAY_SUGGEST = [
@@ -30,6 +33,19 @@ const MAY_ACT = [
   "  A fix that does not hold is edited, validated and committed again: one commit per fix.",
   "You have three attempts; a check and a commit cost none, and the operator may decline any",
   "action. Stop as soon as nothing fails.",
+];
+
+/** Repair of a failed build: one way, the code (spec § réparation, J10). */
+const MAY_FIX_BUILD = [
+  "You may fix the code behind this failed build, for every host it broke: find the cause",
+  "(search_code, read_code), fix it with edit_code (old and new replace one exact passage),",
+  "check it with validate, seal it with commit. Read the conventions of the tree you edit",
+  "(its AGENTS.md) first: a disabled test or a workaround is often registered elsewhere.",
+  "validate rebuilds the host named below; the hosts your commit changes are rebuilt from it",
+  "after you. Nothing is built from an uncommitted edit: a fix that does not hold is edited,",
+  "validated and committed again, one commit per fix.",
+  "You have three attempts; a check and a commit cost none, and the operator may decline any",
+  "action. Stop once validate passes and the fix is committed.",
 ];
 
 const CONDUCT = [
@@ -69,6 +85,7 @@ const SUGGEST_SHAPE = [
 const ROLE_OF: Record<SessionKind, { may: readonly string[]; shape: readonly string[] }> = {
   analysis: { may: READ_ONLY, shape: SHAPE },
   repair: { may: MAY_ACT, shape: ACT_SHAPE },
+  "build-repair": { may: MAY_FIX_BUILD, shape: ACT_SHAPE },
   suggestions: { may: MAY_SUGGEST, shape: SUGGEST_SHAPE },
 };
 
@@ -208,6 +225,32 @@ export function repairPrompt(
     "else a fix of the code the cause lies in.",
     ...editable(state),
     "If nothing you may do here would help, act on nothing and say why.",
+  ].join("\n");
+}
+
+/**
+ * Repair of a failed build (spec § réparation, J10), seeded by the analysis of
+ * its group: the host whose build met the failure, and the hosts it broke.
+ */
+export function buildRepairPrompt(
+  state: PersistedState,
+  host: PersistedHost,
+  hosts: readonly string[],
+  analysis: readonly string[],
+  context?: string,
+): string {
+  const others = hosts.filter((name) => name !== host.name);
+  return [
+    ...runSeed(state),
+    ...contextSeed(context),
+    "",
+    ...hostSeed(host),
+    ...(others.length > 0 ? [`Same failure on: ${others.join(", ")}`] : []),
+    ...(analysis.length > 0 ? ["", "Your analysis of this build:", ...analysis] : []),
+    "",
+    `Fix the code so that ${host.name} builds again: edit, validate ${host.name}, commit.`,
+    ...editable(state),
+    "If the cause lies outside what you may edit, edit nothing and say why.",
   ].join("\n");
 }
 
