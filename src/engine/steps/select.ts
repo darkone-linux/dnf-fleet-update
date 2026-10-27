@@ -48,7 +48,7 @@ type Revisions = SavedState["revisions"];
  * Revision of each repository once the update is done: recorded for the report
  * and for a later `--resume`. Unread revision is a warning, not a failure.
  */
-async function readRevisions(context: RunContext): Promise<Revisions> {
+export async function readRevisions(context: RunContext): Promise<Revisions> {
   const { timeouts } = context.params;
   const repos: { repo: "dnf" | "consumer"; directory: string }[] = [
     { repo: "consumer", directory: context.workspace },

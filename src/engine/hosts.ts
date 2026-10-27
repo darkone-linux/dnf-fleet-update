@@ -61,6 +61,9 @@ export interface HostEntry {
 
   /** Set when its build failed in a way a fix of the code may cure. */
   buildCause?: BuildCause;
+
+  /** Derivation of its last evaluation: an alignment rebuilds it only if it changed. */
+  drv?: string;
 }
 
 /** Activated during the run, reachable, not reverted yet: what a forced rollback brings back. */

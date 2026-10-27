@@ -621,6 +621,9 @@ describe("build", () => {
           onRun: () =>
             holder.context?.subjects.set("pc-ag", { revs: { consumer: "c1" }, path: fixed }),
         },
+
+        // Its alignment: the fix changed nothing of the failed derivation.
+        { match: ["git"], output: [{ stream: "stdout", line: "c1" }] },
       ],
       { params: { aiErrorAction: "repair" } },
     );
@@ -656,6 +659,97 @@ describe("build", () => {
       "excluded",
     ]);
     expect(context.subjects.get("pc-ag")?.path).toBeUndefined();
+  });
+
+  describe("alignment", () => {
+    /** `nix-eval-jobs` line of `host` after a fix changed its derivation. */
+    const fixedLine = (host: string) =>
+      JSON.stringify({
+        attr: host,
+        drvPath: storePath(`${host}-fixed`, ".drv"),
+        outputs: { out: storePath(`${host}-fixed`) },
+      });
+
+    /** pc-ag and lt-cp broken by `ANYIO`, a fix committed, then `after` evaluated. */
+    function repaired(after: string[], closure: string[] = []) {
+      const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
+      const run = setup(
+        [
+          { ...evaluation(NAMES.map(evalLine)), once: true },
+          ownFailure("pc-ag"),
+          ownFailure("lt-cp"),
+          { match: ["nix-store", "--query", "--requisites"], once: true },
+          { match: ["nix-store", "--query", "--requisites"], once: true },
+          {
+            match: ["nix-store", "--query", "--requisites"],
+            output: closure.map((line) => ({ stream: "stdout" as const, line })),
+          },
+          { match: ["claude"], once: true, output: [{ stream: "stdout", line: "anyio." }] },
+          {
+            match: ["claude"],
+            onRun: () =>
+              holder.context?.subjects.set("pc-ag", { revs: { consumer: "c1" }, path: "/x" }),
+          },
+          evaluation(after),
+          { match: ["git"], output: [{ stream: "stdout", line: "c1" }] },
+        ],
+        { params: { aiErrorAction: "repair" } },
+      );
+      holder.context = run.context;
+      for (const { name, profile, zone } of run.hosts.all()) {
+        run.context.events.emit({ kind: "host.add", host: name, profile, zone, t: 0 });
+      }
+      return run;
+    }
+
+    const built = (context: ReturnType<typeof fakeRunContext>) =>
+      context.commands.calls.flatMap(({ argv }) =>
+        argv[0] === "nix" && argv[1] === "build" ? [argv[2]] : [],
+      );
+
+    test("a fix committed: what it changed is rebuilt, the rest untouched, one revision", async () => {
+      const after = ["hcs", "gw-ag", "srv-ag", "gw-cp"].map(evalLine);
+      const run = repaired([...after, fixedLine("pc-ag"), fixedLine("lt-cp")]);
+
+      await build(run.context, run.hosts, run.presence);
+      await run.presence.stop();
+
+      expect(run.states()).toMatchObject({ "pc-ag": "built", "lt-cp": "built", hcs: "built" });
+      expect(run.hosts.get("pc-ag").path).toBe(storePath("pc-ag-fixed"));
+      const sent = built(run.context);
+      expect(sent).toEqual(
+        expect.arrayContaining([
+          `${storePath("pc-ag-fixed", ".drv")}^*`,
+          `${storePath("lt-cp-fixed", ".drv")}^*`,
+        ]),
+      );
+
+      // Unchanged: built once, by the first pass only.
+      expect(sent.filter((drv) => drv === `${storePath("hcs", ".drv")}^*`)).toHaveLength(1);
+
+      const said = feed(run.context.events.events);
+      expect(said).toContain("ok aligned: 2 changed, 4 unchanged");
+      expect(said).not.toContain("warn excluded: pc-ag, lt-cp");
+
+      // The run is on HEAD now: a resume may reuse what the alignment built.
+      const revisions = run.context.events.events.filter((event) => event.kind === "revision");
+      expect(revisions.at(-1)).toMatchObject({ repo: "consumer", rev: "c1" });
+    });
+
+    test("a fix beside the failed derivation: nothing built again, decided as before", async () => {
+      const unchanged = NAMES.filter((name) => name !== "pc-ag").map(evalLine);
+      const run = repaired([...unchanged, fixedLine("pc-ag")], [ANYIO]);
+
+      await build(run.context, run.hosts, run.presence);
+      await run.presence.stop();
+
+      // pc-ag's toplevel changed but still holds the derivation that failed: inherited.
+      expect(run.states()).toMatchObject({ "pc-ag": "excluded", "lt-cp": "excluded" });
+      expect(feed(run.context.events.events)).toContain(
+        "warn pc-ag: python3.12-anyio-4.14.2.drv already failed for pc-ag, not built",
+      );
+      expect(feed(run.context.events.events)).toContain("ok aligned: 1 changed, 5 unchanged");
+    });
   });
 
   test("nothing is handed over without --ai-error-action, nor for a failed evaluation", async () => {

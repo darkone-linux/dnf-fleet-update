@@ -30,6 +30,7 @@ import {
 } from "../nix-output.ts";
 import type { CommandSpec } from "../ports.ts";
 import type { Presence } from "../presence.ts";
+import { readRevisions } from "./select.ts";
 import { endStep } from "./step.ts";
 
 export interface BuildOutcome {
@@ -312,14 +313,17 @@ async function buildOne(
   }
 }
 
-async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<BuildOutcome> {
+async function evaluateAndBuild(
+  context: RunContext,
+  hosts: HostTable,
+  failures: BuildFailures,
+): Promise<BuildOutcome> {
   // `--resume`: a host whose built path was reused is already `built`.
   const names = hosts.all().flatMap((host) => (host.state === "pending" ? [host.name] : []));
   const total = names.length;
   const warnings = new Set<string>();
   const builds: Promise<void>[] = [];
   const seeder = sourceSeeder(context);
-  const failures = new BuildFailures(context);
   let done = 0;
   const settled = () => {
     done += 1;
@@ -360,6 +364,7 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
         settled();
         return;
       }
+      hosts.get(job.host).drv = job.drvPath;
       builds.push(buildOne(context, hosts, job.host, job, seeder, failures).then(settled));
     },
   });
@@ -381,6 +386,77 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
     }
   }
   return { warnings: [...warnings], evaluated: total, evaluationFailed: failed && missing };
+}
+
+/** Out of the run: an alignment leaves them where they are. */
+const OUT_OF_RUN: readonly HostState[] = ["excluded", "reverted"];
+
+/**
+ * Alignment pass (spec § réparation, Alignement du parc): every host still in
+ * the run re-evaluated at HEAD, a path that changed rebuilt, the rest left as
+ * it is. `true`: the run holds one revision, HEAD, recorded as `revision`;
+ * `false`: some host kept a path of before the fix.
+ */
+export async function align(
+  context: RunContext,
+  hosts: HostTable,
+  failures: BuildFailures,
+): Promise<boolean> {
+  const { flow, params } = context;
+  const names = hosts.all().flatMap((host) => (OUT_OF_RUN.includes(host.state) ? [] : [host.name]));
+  log(context, "info", `aligning ${names.length} hosts on the repaired revision`);
+
+  const seeder = sourceSeeder(context);
+  const builds: Promise<void>[] = [];
+  const changed: string[] = [];
+  const evaluated = new Set<string>();
+  const restart = (entry: HostEntry) => {
+    hosts.set(entry.name, "building");
+    entry.buildCause = undefined;
+    entry.knownError = undefined;
+    changed.push(entry.name);
+  };
+  const evaluation = await execute(context, evalHosts(context.workspace, names, params.timeouts), {
+    log: { phase: "build" },
+    signal: flow.halt,
+    onLine: ({ stream, line }) => {
+      if (stream === "stderr") return;
+      const job = parseEvalJob(line);
+      if (job.kind === "invalid" || !names.includes(job.host)) return;
+      evaluated.add(job.host);
+      const entry = hosts.get(job.host);
+      if (job.kind === "error") {
+        if (entry.state === "failed") return;
+        const note = errorSummary(job.message);
+        restart(entry);
+        hosts.set(entry.name, "failed", { note });
+        entry.buildCause = { kind: "evaluation" };
+        log(context, "error", `evaluation failed: ${note}`, entry.name);
+        return;
+      }
+
+      // Same output, or the same derivation failed already: nothing to build again.
+      const failedAlready = entry.state === "failed" && entry.drv === job.drvPath;
+      if (entry.path === job.outPath || failedAlready) return;
+      restart(entry);
+      entry.drv = job.drvPath;
+      builds.push(buildOne(context, hosts, job.host, job, seeder, failures));
+    },
+  });
+  await Promise.all(builds);
+  await failures.settled();
+  if (flow.halt.aborted) return false;
+
+  // A host left unevaluated keeps its old path: the run is not on one revision.
+  if (!succeeded(evaluation.result) || evaluated.size < names.length) {
+    const why = succeeded(evaluation.result) ? "no result" : describeFailure(evaluation);
+    log(context, "error", `alignment: evaluation failed: ${why}`);
+    return false;
+  }
+  const unchanged = names.length - changed.length;
+  log(context, "ok", `aligned: ${changed.length} changed, ${unchanged} unchanged`);
+  await readRevisions(context);
+  return true;
 }
 
 /** One host evaluated alone: its job, or why the evaluation gave none. */
@@ -492,7 +568,8 @@ export async function build(
   presence.track(hosts.all().map((host) => host.name));
   presence.start();
 
-  const outcome = await evaluateAndBuild(context, hosts);
+  const failures = new BuildFailures(context);
+  const outcome = await evaluateAndBuild(context, hosts, failures);
   if (context.signal.aborted) return undefined;
 
   const all = hosts.all();
@@ -512,7 +589,12 @@ export async function build(
 
   // Before any decision, and before "no host built": the case a repair helps
   // most (spec § réparation, J10). A failed evaluation leaves nothing to attribute.
-  if (!outcome.evaluationFailed && !flow.halt.aborted) await handOffBuilds(context, hosts);
+  if (!outcome.evaluationFailed && !flow.halt.aborted) {
+    const fixed = await handOffBuilds(context, hosts);
+
+    // A fix committed: the whole run moves to it, never part of it (spec § Alignement du parc).
+    if (fixed && !flow.halt.aborted) await align(context, hosts, failures.carried());
+  }
   if (context.signal.aborted) return undefined;
 
   // Nothing to deploy: one stop rather than a question per host. Failed as a

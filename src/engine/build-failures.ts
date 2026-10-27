@@ -12,6 +12,9 @@ export interface FailedBuild {
 
   /** Host whose build met it first. */
   host: string;
+
+  /** Met in an earlier pass: its own host inherits it too, rather than building it again. */
+  earlier?: boolean;
   note: string;
   excerpt: string[];
 }
@@ -35,6 +38,13 @@ export class BuildFailures {
 
   constructor(private readonly context: RunContext) {}
 
+  /** For a new pass over the same run (spec § Alignement du parc): what failed stays failed. */
+  carried(): BuildFailures {
+    const next = new BuildFailures(this.context);
+    for (const failure of this.failed.values()) next.record({ ...failure, earlier: true });
+    return next;
+  }
+
   /** The first failure of a derivation is kept: a later one says nothing new. */
   record(failure: FailedBuild): void {
     if (this.failed.has(failure.drv)) return;
@@ -52,7 +62,8 @@ export class BuildFailures {
     const controller = new AbortController();
     let failure: FailedBuild | undefined;
     const check: Check = async (candidate) => {
-      if (candidate.host === host || controller.signal.aborted) return;
+      const own = candidate.host === host && candidate.earlier !== true;
+      if (own || controller.signal.aborted) return;
       const closure = await this.closureOf(drvPath);
       if (!closure.has(candidate.drv) || controller.signal.aborted) return;
       failure = candidate;

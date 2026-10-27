@@ -32,6 +32,13 @@ describe("spec rows", () => {
       ["error", "tested"],
       ["error", "deployed"],
     ],
+    alignment: [
+      ["built", "building", "built"],
+      ["ready", "building", "built"],
+      ["tested", "building", "failed"],
+      ["deployed", "building", "built"],
+      ["failed", "building", "built"],
+    ],
     "forced rollback": [
       ["tested", "reverted"],
       ["error", "reverted"],

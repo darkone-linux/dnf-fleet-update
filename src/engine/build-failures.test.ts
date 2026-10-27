@@ -73,6 +73,22 @@ describe("build failures", () => {
     expect(queries()).toEqual([]);
   });
 
+  test("carried to a new pass: its own host inherits it too, rather than building it", async () => {
+    const scripts: CommandScript[] = [
+      {
+        match: ["nix-store", "--query", "--requisites"],
+        output: [{ stream: "stdout", line: ANYIO }],
+      },
+    ];
+    const context = fakeRunContext({ commands: scripts });
+    const first = new BuildFailures(context);
+    first.record(FAILURE);
+
+    const watch = await first.carried().watch("pc-ag", storePath("pc-ag", ".drv"));
+
+    expect(watch.failure).toEqual({ ...FAILURE, earlier: true });
+  });
+
   test("each closure read once, however many failures", async () => {
     const { failures, queries } = setup([]);
     const watch = await failures.watch("lt-cp", storePath("lt-cp", ".drv"));
