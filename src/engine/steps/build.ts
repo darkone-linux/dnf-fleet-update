@@ -3,6 +3,7 @@
 
 import type { HostState } from "../../model/events.ts";
 import { BuildFailures, type FailedBuild } from "../build-failures.ts";
+import { handOffBuilds } from "../build-handoff.ts";
 import { collect } from "../collect.ts";
 import {
   buildDerivation,
@@ -69,6 +70,9 @@ interface Built {
 
   /** Derivation that failed by itself, behind the reason: it fails the same anywhere. */
   derivation?: string;
+
+  /** Failure taken from another host's build: no trace of its own. */
+  inherited?: boolean;
   durationMs: number;
 }
 
@@ -264,7 +268,13 @@ async function buildWhere(
 function inherit(context: RunContext, name: string, failure: FailedBuild): Built {
   const drv = failure.drv.replace(/^\/nix\/store\/[0-9a-z]{32}-/, "");
   log(context, "warn", `${drv} already failed for ${failure.host}, not built`, name);
-  return { note: failure.note, excerpt: failure.excerpt, derivation: failure.drv, durationMs: 0 };
+  return {
+    note: failure.note,
+    excerpt: failure.excerpt,
+    derivation: failure.drv,
+    inherited: true,
+    durationMs: 0,
+  };
 }
 
 async function buildOne(
@@ -292,6 +302,9 @@ async function buildOne(
   } else {
     hosts.set(name, "failed", { note: built.note });
     entry.knownError = built.known;
+    if (built.derivation !== undefined) {
+      entry.buildCause = { kind: "derivation", drv: built.derivation, own: !built.inherited };
+    }
     log(context, "error", `build failed: ${built.note}`, name);
 
     // Nothing was activated: the excerpt is all the diagnosis can hold.
@@ -342,6 +355,7 @@ async function evaluateAndBuild(context: RunContext, hosts: HostTable): Promise<
         }
         const note = errorSummary(job.message);
         hosts.set(job.host, "failed", { note });
+        hosts.get(job.host).buildCause = { kind: "evaluation" };
         log(context, "error", `evaluation failed: ${note}`, job.host);
         settled();
         return;
@@ -496,6 +510,11 @@ export async function build(
     for (const warning of warnings) log(context, "warn", warning);
   }
 
+  // Before any decision, and before "no host built": the case a repair helps
+  // most (spec § réparation, J10). A failed evaluation leaves nothing to attribute.
+  if (!outcome.evaluationFailed && !flow.halt.aborted) await handOffBuilds(context, hosts);
+  if (context.signal.aborted) return undefined;
+
   // Nothing to deploy: one stop rather than a question per host. Failed as a
   // whole, the evaluation already said why.
   const deployable = all.filter((host) => HOLDS_ITS_PATH.includes(host.state)).length;
@@ -506,7 +525,8 @@ export async function build(
   // `--build-only`: no test and no switch to protect, nothing to decide. Failed
   // hosts stay `failed`, with their reason, in the report.
   if (!params.buildOnly) {
-    for (const group of byReason(failed)) await decideFailure(context, hosts, group);
+    const left = all.filter((host) => host.state === "failed");
+    for (const group of byReason(left)) await decideFailure(context, hosts, group);
   }
   if (toBuild > 0) endStep(context, "build", !flow.halt.aborted);
 

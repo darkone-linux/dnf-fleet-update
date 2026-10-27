@@ -199,7 +199,7 @@ function diagnostics(hosts: readonly PersistedHost[]): string[] {
 function aiAnalysis(analyses: readonly Analysis[]): string[] {
   const blocks = analyses.flatMap((analysis) => [
     "",
-    `### ${analysis.host ?? "Run summary"}`,
+    `### ${analysis.hosts?.join(", ") ?? analysis.host ?? "Run summary"}`,
     "",
     ...analysis.lines,
   ]);

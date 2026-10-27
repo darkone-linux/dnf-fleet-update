@@ -132,6 +132,30 @@ export function hostPrompt(state: PersistedState, host: PersistedHost, context?:
   ].join("\n");
 }
 
+/**
+ * Analysis of a failed build (spec § réparation, J10): the host whose own
+ * build met the failure, and the others it broke without a trace of their own.
+ */
+export function buildPrompt(
+  state: PersistedState,
+  host: PersistedHost,
+  hosts: readonly string[],
+  context?: string,
+): string {
+  const others = hosts.filter((name) => name !== host.name);
+  return [
+    ...runSeed(state),
+    ...contextSeed(context),
+    "",
+    ...hostSeed(host),
+    ...(others.length > 0
+      ? [`Same failure, inherited without a build log of their own: ${others.join(", ")}`]
+      : []),
+    "",
+    `Explain why the build of ${host.name} failed, and where in the code the fix lies.`,
+  ].join("\n");
+}
+
 /** End of run: what is worth saying about the whole deployment. */
 export function runPrompt(state: PersistedState, context?: string): string {
   const troubled = state.hosts.filter(

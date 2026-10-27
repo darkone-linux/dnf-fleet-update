@@ -569,6 +569,61 @@ describe("build", () => {
     expect(feed(context.events.events)).toContain("warn excluded: srv-ag, pc-ag, lt-cp");
   });
 
+  test("a failed build is analysed once for every host it broke, before its decision", async () => {
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        ownFailure("pc-ag"),
+        ownFailure("lt-cp"),
+        { match: ["nix-store", "--query", "--requisites"] },
+        { match: ["claude"], output: [{ stream: "stdout", line: "anyio TLS tests fail." }] },
+      ],
+      { params: { aiErrorAction: "analysis" } },
+    );
+
+    // What the select step says of every host: the prompt is built from the fold.
+    for (const { name, profile, zone } of hosts.all()) {
+      context.events.emit({ kind: "host.add", host: name, profile, zone, t: 0 });
+    }
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    const sessions = context.commands.calls.filter(({ argv }) => argv[0] === "claude");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.stdin).toContain("Host: pc-ag");
+    expect(sessions[0]?.stdin).toContain("inherited without a build log of their own: lt-cp");
+    expect(context.analyses.all()).toEqual([
+      { host: "pc-ag", hosts: ["pc-ag", "lt-cp"], lines: ["anyio TLS tests fail."] },
+    ]);
+
+    // Analysed, then decided as before: the analysis changes no fate.
+    const states = context.events.events.flatMap((event) =>
+      event.kind === "host.state" && event.host === "lt-cp" ? [event.state] : [],
+    );
+    expect(states.slice(-3)).toEqual(["ai-analysing", "failed", "excluded"]);
+  });
+
+  test("nothing is handed over without --ai-error-action, nor for a failed evaluation", async () => {
+    const quiet = setup([
+      evaluation(NAMES.map(evalLine)),
+      ownFailure("pc-ag"),
+      { match: ["nix-store", "--query", "--requisites"] },
+    ]);
+    await build(quiet.context, quiet.hosts, quiet.presence);
+    await quiet.presence.stop();
+
+    const whole = setup([{ match: ["nix-eval-jobs"], exitCode: 1 }], {
+      params: { aiErrorAction: "repair" },
+    });
+    await build(whole.context, whole.hosts, whole.presence);
+    await whole.presence.stop();
+
+    for (const { context } of [quiet, whole]) {
+      expect(context.commands.calls.some(({ argv }) => argv[0] === "claude")).toBe(false);
+    }
+  });
+
   test("a dependency failed by itself: the reason names it, the hosts it broke decided once", async () => {
     const { context, hosts, presence, states } = setup([
       evaluation(NAMES.map(evalLine)),

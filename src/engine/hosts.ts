@@ -9,6 +9,20 @@ import type { Fabric } from "./fabric.ts";
 import type { KnownError } from "./known-errors.ts";
 import type { Selection } from "./steps/select.ts";
 
+/**
+ * A build failure the code may hold the cause of (spec § réparation, J10):
+ * a derivation failed by itself, or this host's own evaluation.
+ */
+export type BuildCause =
+  | {
+      kind: "derivation";
+      drv: string;
+
+      /** Met by this host's own build: its log holds the trace, not an inherited one. */
+      own: boolean;
+    }
+  | { kind: "evaluation" };
+
 export interface HostEntry {
   name: string;
   profile: string;
@@ -44,6 +58,9 @@ export interface HostEntry {
 
   /** Trap recognised behind its failure: decides instead of the question. */
   knownError?: KnownError;
+
+  /** Set when its build failed in a way a fix of the code may cure. */
+  buildCause?: BuildCause;
 }
 
 /** Activated during the run, reachable, not reverted yet: what a forced rollback brings back. */

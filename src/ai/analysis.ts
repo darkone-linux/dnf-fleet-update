@@ -6,6 +6,7 @@
 import type { RunContext } from "../engine/context.ts";
 import type { HostTable } from "../engine/hosts.ts";
 import {
+  buildPrompt,
   freePrompt,
   hostPrompt,
   runPrompt,
@@ -22,6 +23,9 @@ import { runWarnings } from "./warnings.ts";
 export interface Analysis {
   /** Absent on the end-of-run summary. */
   host?: string;
+
+  /** A failed build: every host it broke, `host` the one whose log was read. */
+  hosts?: string[];
   lines: string[];
 }
 
@@ -29,9 +33,13 @@ export interface Analysis {
 export class AiAnalyses {
   private readonly entries: Analysis[] = [];
 
-  add(lines: readonly string[], host?: string): void {
+  add(lines: readonly string[], host?: string, hosts?: readonly string[]): void {
     if (lines.length === 0) return;
-    this.entries.push({ ...(host === undefined ? {} : { host }), lines: [...lines] });
+    this.entries.push({
+      ...(host === undefined ? {} : { host }),
+      ...(hosts === undefined ? {} : { hosts: [...hosts] }),
+      lines: [...lines],
+    });
   }
 
   all(): readonly Analysis[] {
@@ -116,6 +124,36 @@ export async function analyseHost(
     context.analyses.add(answer, name);
   } finally {
     if (mark && hosts.get(name).state === "ai-analysing") hosts.set(name, previous, { note });
+  }
+}
+
+/**
+ * Analysis of a failed build (spec § réparation, J10): one session for every
+ * host the failure broke, read through the host whose own build met it. All
+ * of them `ai-analysing` meanwhile, back to `failed` with their reason after.
+ */
+export async function analyseGroup(
+  context: RunContext,
+  hosts: HostTable,
+  group: { hosts: readonly string[]; representative: string },
+): Promise<void> {
+  if (quiet(context)) return;
+  const persisted = context.state().hosts.find((host) => host.name === group.representative);
+  if (persisted === undefined) return;
+
+  const notes = new Map(group.hosts.map((name) => [name, hosts.get(name).note]));
+  for (const [name, note] of notes) hosts.set(name, "ai-analysing", { note });
+  try {
+    const answer = await ask(context, {
+      id: `analysis-${group.representative}`,
+      summary: `analysing the build of ${group.hosts.join(", ")}`,
+      prompt: buildPrompt(context.state(), persisted, group.hosts, context.params.aiContext),
+    });
+    context.analyses.add(answer, group.representative, group.hosts);
+  } finally {
+    for (const [name, note] of notes) {
+      if (hosts.get(name).state === "ai-analysing") hosts.set(name, "failed", { note });
+    }
   }
 }
 

@@ -149,6 +149,20 @@ describe("renderReport", () => {
     expect(report.markdown).toContain("| nlt | failed | build failed: x \\| y |");
   });
 
+  test("a failed build analysed once is titled by every host it broke", () => {
+    const { markdown } = renderReport({
+      runId: RUN_ID,
+      state,
+      status: "done",
+      exitCode: 0,
+      durationMs: 1000,
+      warnings: [],
+      knownErrors: [],
+      analyses: [{ host: "pc-ag", hosts: ["pc-ag", "lt-cp"], lines: ["anyio TLS tests fail."] }],
+    });
+    expect(markdown).toContain("## AI analysis\n\n### pc-ag, lt-cp\n\nanyio TLS tests fail.");
+  });
+
   test("an amended fix is one commit, with its count", () => {
     const amended = {
       ...state,
