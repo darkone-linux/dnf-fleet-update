@@ -36,7 +36,7 @@ profiles and zones come from your configuration, nothing is hardcoded.
   deterministic evidence (`systemctl status`, `journalctl`, build logs). It
   reaches them through an MCP server the run serves on loopback, and the level
   you asked for is the list of tools it is shown — no free shell, no free SSH,
-  every call traced. Repair is being built, see [Status](#status).
+  every call traced. At `repair` it fixes what it found, see [AI](#ai).
 - 🖥️ **A terminal interface built for reading.** A feed of what happened,
   panels for what needs attention, and the state of every step and host at a
   glance. Open any host's logs without losing the overview.
@@ -50,7 +50,8 @@ profiles and zones come from your configuration, nothing is hardcoded.
 from the DNF consumer project it runs in, and reports to the Matrix alert rooms.
 On `main`, the whole AI contract is in place: the AI analyses a failure through
 its own guarded tools, acts on the units that fell, and — when nothing else
-helps — fixes the code, validates it and redeploys that host alone.
+helps — fixes the code, after an activation or a failed build, commits the fix
+and aligns the whole fleet on it.
 
 ```bash
 nix develop            # or: nix-shell
@@ -149,7 +150,7 @@ it is not shown, it cannot ask for:
 |---|---|
 | `passive` | deployment state, host diagnosis, build and activation logs, the run's warnings grouped |
 | `active` / `analysis` | + read, search and list the code (consumer, `dnf/`), host units and journals (user units included), read-only |
-| `repair` | + one action on the units this run saw fall, and the code that describes them |
+| `repair` | + one action on the units this run saw fall; edit, validate and commit the code |
 
 The built-in tools of `claude` and `opencode` are denied, and so is the project
 context they would otherwise pick up (`CLAUDE.md`, user settings). A path leaves
@@ -160,20 +161,38 @@ At `repair` the AI gets a second session on a failed host, in state `AI repair`.
 It may act on services — `systemctl start`, `stop`, `restart`, `reset-failed`,
 on **the units this run saw fall** — and, when that cannot help, edit a file
 of the sources (one exact passage replaced, or the whole file), validate it
-(`just clean`, then a rebuild of **that host alone**) and commit it as
+(`just clean`, then a rebuild of **that host**) and commit it as
 `fix(<scope>): <subject>`, the scope naming what the fix touches. A `dnf/`
 commit is published: one naming a fleet host is refused. The host is then served once
 more by its own wave. Three attempts per host: an attempt is a *change*, so a
 validation and a commit cost none. Refusals cost none either, a confirmation is
-asked before each action when interactive, and nothing at all happens once the
-run is stopping.
-
-A repair that commits leaves the fleet on **two revisions** until the next run —
-only the repaired host is rebuilt. The report header and the Matrix message say
-so (`Repaired in flight: …`), and `--resume` then rebuilds everything rather
-than redeploy paths built before the fix. Writes never reach `usr/secrets/`,
+asked before each service action and each edit when interactive, and nothing at all
+happens once the run is stopping. Writes never reach `usr/secrets/`,
 `var/generated/`, `etc/config.yaml` or a lock; outside co-development `dnf/` is
 a store path and is refused.
+
+**Nothing is redeployed uncommitted.** `commit` is refused until the last edit
+is validated, so what ships is what was built. Fixing a fix **amends** its
+`fix(…)` commit while it is still HEAD — one commit per fix, never the
+`chore(update)` nor a human commit. Repair sessions run one at a time (a commit
+takes the whole tree), and an edit left uncommitted when a session ends is
+discarded, its diff kept in `logs/ai.log`.
+
+**A failed build is repaired too**, at the end of the build and before its
+usual decision, while built hosts wait. Hosts broken by the same failure form
+one group: one analysis, then one repair session through the host that built
+the failing derivation. A committed fix rebuilds the group; nothing committed,
+and the group is excluded or the run stopped as before. A known `stop` or
+`exclude` signature decides alone, and `--build-only` repairs as well.
+
+**One revision for the whole fleet.** After every repair commit the run
+re-evaluates its hosts at HEAD and rebuilds only those whose path changed: a
+later wave serves its own, hosts the step already served are served again in a
+final pass. A host that cannot follow — rebuild failed, unreachable for the
+final pass — keeps the generation it runs; the report header then says
+`fleet on two revisions` and names it, and so does the incidents room.
+`--resume` reuses aligned paths, and rebuilds everything if the run stopped
+before aligning.
 
 Every tool *call* leaves a feed line (`AI reads usr/modules/nginx.nix`) and a
 line in `logs/ai.log`; every tool *action* is counted into `state.json` and the
