@@ -6,18 +6,17 @@
 import type { RunContext } from "../engine/context.ts";
 import type { HostTable } from "../engine/hosts.ts";
 import {
-  ACTING,
   buildPrompt,
   freePrompt,
   hostPrompt,
   runPrompt,
-  type SessionKind,
   suggestionsPrompt,
   systemPrompt,
 } from "./prompts.ts";
-import type { AiTools } from "./providers.ts";
+import { type AiTools, forSession } from "./providers.ts";
 import { askAi } from "./session.ts";
 import { toolLevel } from "./tools/registry.ts";
+import { ACTING, type SessionKind } from "./tools/types.ts";
 import { runWarnings } from "./warnings.ts";
 
 /** What the AI concluded, kept for the report (spec § Rapport et Matrix). */
@@ -68,9 +67,10 @@ export async function ask(
   question: AiQuestion,
   signal?: AbortSignal,
 ): Promise<string[]> {
-  const { id, summary, prompt, session } = question;
+  const { id, summary, prompt, session = "analysis" } = question;
   const { ai } = context.params;
-  const tools: AiTools | undefined = await context.tools.start(context, context.state);
+  const run: AiTools | undefined = await context.tools.start(context, context.state);
+  const tools = run === undefined ? undefined : forSession(run, session);
   return askAi(
     context,
     {
@@ -80,10 +80,7 @@ export async function ask(
       system: systemPrompt(toolLevel(context.params), session, context.params.repair.aiAttempts),
 
       // A repair rebuilds inside its session: `validate` outlasts an answer.
-      timeoutSeconds:
-        session !== undefined && ACTING.includes(session)
-          ? ai.repairTimeoutSeconds
-          : ai.timeoutSeconds,
+      timeoutSeconds: ACTING.includes(session) ? ai.repairTimeoutSeconds : ai.timeoutSeconds,
       ...(tools === undefined ? {} : { tools }),
     },
     signal,

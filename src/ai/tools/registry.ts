@@ -10,7 +10,13 @@ import { logTools } from "./logs.ts";
 import { repairTools } from "./repair.ts";
 import { stateTools } from "./state.ts";
 import { suggestionTools } from "./suggestions.ts";
-import { highest, type RegisteredTool, reaches, type ToolLevel } from "./types.ts";
+import {
+  highest,
+  type RegisteredTool,
+  reaches,
+  type SessionKind,
+  type ToolLevel,
+} from "./types.ts";
 
 export const TOOLS: readonly RegisteredTool[] = [
   ...stateTools,
@@ -40,11 +46,22 @@ export function toolLevel(params: RunParams): ToolLevel | undefined {
   return highest(granted);
 }
 
-/** What `tools/list` publishes: the filter *is* the non-escalation rule. */
-export function toolsFor(level: ToolLevel): RegisteredTool[] {
-  return TOOLS.filter((tool) => reaches(level, tool.level));
+/**
+ * What `tools/list` publishes: the level filter *is* the non-escalation rule;
+ * `session` narrows it to the tools that session may use.
+ */
+export function toolsFor(level: ToolLevel, session?: SessionKind): RegisteredTool[] {
+  return TOOLS.filter(
+    (tool) =>
+      reaches(level, tool.level) &&
+      (session === undefined || tool.sessions === undefined || tool.sessions.includes(session)),
+  );
 }
 
-export function toolByName(level: ToolLevel, name: string): RegisteredTool | undefined {
-  return toolsFor(level).find((tool) => tool.name === name);
+export function toolByName(
+  level: ToolLevel,
+  name: string,
+  session?: SessionKind,
+): RegisteredTool | undefined {
+  return toolsFor(level, session).find((tool) => tool.name === name);
 }

@@ -62,6 +62,20 @@ describe("LoopbackToolServer", () => {
     expect((await fetch(url.replace("/mcp", "/other"), { headers })).status).toBe(404);
   });
 
+  test("a session is the last segment of the path, handed to the handler", async () => {
+    const seen: (string | undefined)[] = [];
+    const { url, token } = await server.start((message, session) => {
+      seen.push(session);
+      return echo(message);
+    });
+
+    expect((await post(`${url}/repair`, token, { id: 1 })).status).toBe(200);
+    expect((await post(url, token, { id: 2 })).status).toBe(200);
+    expect(seen).toEqual(["repair", undefined]);
+    expect((await post(`${url}/repair/x`, token, { id: 3 })).status).toBe(404);
+    expect((await post(`${url}/Repair`, token, { id: 4 })).status).toBe(404);
+  });
+
   test("a body that is not JSON is a parse error, not a crash", async () => {
     const { url, token } = await server.start(echo);
     const response = await fetch(url, {

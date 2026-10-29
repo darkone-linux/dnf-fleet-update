@@ -4,10 +4,13 @@
 // body is passed through untouched: meaning belongs to `ai/rpc.ts`.
 
 import { randomBytes } from "node:crypto";
-import type { ToolEndpoint, ToolServer } from "../engine/ports.ts";
+import type { ToolEndpoint, ToolHandler, ToolServer } from "../engine/ports.ts";
 
-/** Path both executables are pointed at. */
+/** Path both executables are pointed at, `/<session>` appended. */
 const PATH = "/mcp";
+
+/** `/mcp` or `/mcp/<session>`; anything else is not ours. */
+const ROUTE = /^\/mcp(?:\/([a-z-]+))?$/;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -18,7 +21,7 @@ const json = (body: unknown, status = 200) =>
 export class LoopbackToolServer implements ToolServer {
   private server?: ReturnType<typeof Bun.serve>;
 
-  async start(handle: (message: unknown) => Promise<unknown | undefined>): Promise<ToolEndpoint> {
+  async start(handle: ToolHandler): Promise<ToolEndpoint> {
     await this.stop();
     const token = randomBytes(24).toString("hex");
     const expected = `Bearer ${token}`;
@@ -27,8 +30,8 @@ export class LoopbackToolServer implements ToolServer {
       hostname: "127.0.0.1",
       port: 0,
       fetch: async (request) => {
-        const url = new URL(request.url);
-        if (url.pathname !== PATH) return new Response("not found", { status: 404 });
+        const route = ROUTE.exec(new URL(request.url).pathname);
+        if (route === null) return new Response("not found", { status: 404 });
 
         // Loopback is not a permission: a local process of another user would
         // reach the port all the same.
@@ -48,7 +51,7 @@ export class LoopbackToolServer implements ToolServer {
             400,
           );
         }
-        const reply = await handle(message);
+        const reply = await handle(message, route[1]);
 
         // A notification is answered by an acknowledgement without a body.
         return reply === undefined ? new Response(null, { status: 202 }) : json(reply);

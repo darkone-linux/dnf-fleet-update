@@ -113,6 +113,7 @@ describe("askAi", () => {
       ...QUESTION,
       tools: {
         endpoint: { url: "http://127.0.0.1:1/mcp", token: "tok" },
+        level: "passive",
         names: ["mcp__fleet-update__deployment_state"],
       },
     });

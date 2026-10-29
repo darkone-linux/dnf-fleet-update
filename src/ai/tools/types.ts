@@ -15,6 +15,14 @@ import type { Suggestion } from "../suggestions.ts";
 
 export const TOOL_LEVELS = ["passive", "active", "repair"] as const;
 
+/** Kind of AI session: what it may do, and the answer it owes. */
+export const SESSION_KINDS = ["analysis", "repair", "build-repair", "suggestions"] as const;
+
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
+/** Sessions allowed to act: their own bound, `validate` rebuilds inside them. */
+export const ACTING: readonly SessionKind[] = ["repair", "build-repair"];
+
 export type ToolLevel = (typeof TOOL_LEVELS)[number];
 
 const RANK: Record<ToolLevel, number> = { passive: 0, active: 1, repair: 2 };
@@ -137,6 +145,9 @@ export interface AiTool<A> {
   name: string;
   level: ToolLevel;
 
+  /** Sessions it is published to; absent: every one. A tool shown is a tool that may work. */
+  sessions?: readonly SessionKind[];
+
   /** What the model reads to choose this tool. */
   description: string;
   input: z.ZodType<A>;
@@ -150,6 +161,7 @@ export interface AiTool<A> {
 export interface RegisteredTool {
   readonly name: string;
   readonly level: ToolLevel;
+  readonly sessions?: readonly SessionKind[];
   readonly description: string;
 
   /** Published by `tools/list`, derived from the zod schema. */
@@ -169,6 +181,7 @@ export function defineTool<A>(tool: AiTool<A>): RegisteredTool {
   return {
     name: tool.name,
     level: tool.level,
+    ...(tool.sessions === undefined ? {} : { sessions: tool.sessions }),
     description: tool.description,
     schema: z.toJSONSchema(tool.input),
 

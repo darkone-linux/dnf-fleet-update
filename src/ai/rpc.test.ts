@@ -133,7 +133,7 @@ describe("tools/call", () => {
     expect(response).toEqual({
       jsonrpc: "2.0",
       id: 7,
-      error: { code: -32602, message: "no tool named read_code at this level" },
+      error: { code: -32602, message: "no tool named read_code in this session" },
     });
   });
 

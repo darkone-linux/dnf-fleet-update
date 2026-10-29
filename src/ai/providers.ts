@@ -8,7 +8,8 @@ import { limits } from "../engine/commands/limits.ts";
 import type { CommandSpec, ToolEndpoint } from "../engine/ports.ts";
 import type { Ai, Timeouts } from "../model/params.ts";
 import type { AiTarget } from "./model.ts";
-import { MCP_SERVER } from "./tools/registry.ts";
+import { MCP_SERVER, qualified, toolsFor } from "./tools/registry.ts";
+import type { SessionKind, ToolLevel } from "./tools/types.ts";
 
 /** Named by the inline config below, so `--agent` has something to select. */
 const OPENCODE_AGENT = "fleet-update";
@@ -41,12 +42,28 @@ export interface AiCall {
   timeoutSeconds: number;
 }
 
-/** Endpoint of the run and the tool names its level publishes. */
+/** Endpoint of the run, or of one session, and the tool names it publishes. */
 export interface AiTools {
   endpoint: ToolEndpoint;
 
+  /** Granted by the options: a session narrows its tools, never raises them. */
+  level: ToolLevel;
+
   /** Qualified names, as `registry.qualified` builds them. */
   names: readonly string[];
+}
+
+/**
+ * Tools of one session: its own path on the endpoint, its own list. `tools/list`
+ * and the dispatch read the path, so a session never sees a tool it may not use.
+ */
+export function forSession(tools: AiTools, session: SessionKind): AiTools {
+  const url = `${tools.endpoint.url}/${session}`;
+  return {
+    endpoint: { ...tools.endpoint, url },
+    level: tools.level,
+    names: toolsFor(tools.level, session).map(qualified),
+  };
 }
 
 const headers = (endpoint: ToolEndpoint) => ({ Authorization: `Bearer ${endpoint.token}` });

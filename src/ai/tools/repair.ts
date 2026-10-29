@@ -17,7 +17,14 @@ import {
   spentAttempts,
   validatedSinceEdit,
 } from "../../model/persist.ts";
-import { defineTool, Refused, type RegisteredTool, type ToolContext, ToolError } from "./types.ts";
+import {
+  ACTING,
+  defineTool,
+  Refused,
+  type RegisteredTool,
+  type ToolContext,
+  ToolError,
+} from "./types.ts";
 
 /** A file the model rewrites whole: past this it is not editing, it is generating. */
 const MAX_LINES = 2000;
@@ -72,6 +79,7 @@ const VERB: Record<UnitAction, string> = {
 const serviceAction = defineTool({
   name: "service_action",
   level: "repair",
+  sessions: ACTING,
   description:
     "Act on units of a host with systemctl: start, stop, restart or reset-failed. Only units this run saw fail are allowed, and each accepted call spends one of the host's repair attempts. Returns what the command printed, then the units still failed.",
   input: z.strictObject({
@@ -168,6 +176,7 @@ async function edited(
 const editCode = defineTool({
   name: "edit_code",
   level: "repair",
+  sessions: ACTING,
   description:
     "Change a file of the deployment sources: replace one exact passage (old, new), or write the whole file (content) to create or redo it. Only while a host is under repair, only inside the project (and dnf/ in co-development), and never a lock, generated data or the fleet declaration. Returns the diff. The first edit after a validate (or a service action, or the start) spends one of the host's repair attempts; the edits that follow it up to the next validate belong to that attempt, so edit every file one fix needs before validating. The host is then rebuilt from it, and it alone.",
   input: z.strictObject({
@@ -235,6 +244,7 @@ const editCode = defineTool({
 const validate = defineTool({
   name: "validate",
   level: "repair",
+  sessions: ACTING,
   description:
     "Check an edit: runs the project's own clean-up, stages the trees, then re-evaluates this host alone from the working trees (dnf/ included in co-development, uncommitted edits and new files seen) and rebuilds it. Says when the edits leave its derivation unchanged. Costs no repair attempt, and changes nothing on the fleet. Required before commit: the host is redeployed from what it builds, once committed.",
   input: z.strictObject({
@@ -271,6 +281,7 @@ const validate = defineTool({
 const commit = defineTool({
   name: "commit",
   level: "repair",
+  sessions: ACTING,
   description:
     "Commit what you edited, once validate has passed on the last edit; nothing is redeployed uncommitted, and an uncommitted edit is discarded when the session ends. The message is built for you as fix(<scope>): <subject>. One commit per fix: a later commit for the same host amends it. In co-development dnf/ is committed first and the consumer lock realigned; dnf/ is a published framework, so its message names the module, never a host nor anything particular to this project. Costs no repair attempt.",
   input: z.strictObject({

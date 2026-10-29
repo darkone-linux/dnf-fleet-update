@@ -6,17 +6,11 @@
 
 import { DEFAULT_REPAIR } from "../model/params.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
-import { reaches, type ToolLevel } from "./tools/types.ts";
+import { reaches, type SessionKind, type ToolLevel } from "./tools/types.ts";
 
 const ROLE = ["You are diagnosing a NixOS fleet deployment run by fleet-update."];
 
 const READ_ONLY = ["You are read-only: you observe and explain, you never change anything."];
-
-/** Kind of session: what it may do, and the answer it owes. */
-export type SessionKind = "analysis" | "repair" | "build-repair" | "suggestions";
-
-/** Sessions allowed to act: their own bound, `validate` rebuilds inside them. */
-export const ACTING: readonly SessionKind[] = ["repair", "build-repair"];
 
 /** End-of-run review: files notes for a human, touches nothing (spec § Suggestions). */
 const MAY_SUGGEST = [

@@ -1,7 +1,7 @@
 // Improvement suggestions, filed by the end-of-run review (spec § analyse,
 // Suggestions d'amélioration).
 //
-// Published at `active`, refused outside that review: a host analysis
+// Published at `active`, to the review session alone: a host analysis
 // explains, it does not file.
 
 import { z } from "zod";
@@ -14,6 +14,7 @@ const MAX_BODY_LINES = 60;
 const knownSuggestions = defineTool({
   name: "known_suggestions",
   level: "active",
+  sessions: ["suggestions"],
   description: `Suggestions already filed by earlier runs, in ${SUGGESTIONS_DIR}/: slug, status (open, or ignored by the operator), runs seen, last run, title. A body is read with read_code.`,
   input: z.strictObject({}),
   summary: () => "reads the known suggestions",
@@ -32,6 +33,7 @@ const knownSuggestions = defineTool({
 const suggest = defineTool({
   name: "suggest",
   level: "active",
+  sessions: ["suggestions"],
   description:
     "File one improvement suggestion for a human: a new slug creates its file; a known slug (open or ignored) only marks it seen by this run, its text kept. Changes neither the code nor the fleet.",
   input: z.strictObject({

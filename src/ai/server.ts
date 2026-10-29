@@ -9,6 +9,11 @@ import { toolContext } from "./context.ts";
 import type { AiTools } from "./providers.ts";
 import { dispatch } from "./rpc.ts";
 import { qualified, toolLevel, toolsFor } from "./tools/registry.ts";
+import { SESSION_KINDS, type SessionKind } from "./tools/types.ts";
+
+/** Path segment of a request; absent or unknown: the narrowest session, analysis. */
+const sessionKind = (segment: string | undefined): SessionKind =>
+  SESSION_KINDS.find((kind) => kind === segment) ?? "analysis";
 
 export class AiToolSession {
   private opening?: Promise<AiTools | undefined>;
@@ -31,12 +36,14 @@ export class AiToolSession {
     const level = toolLevel(context.params);
     if (level === undefined) return undefined;
 
-    const tools = toolsFor(level);
-    const served = { tools, context: toolContext(context, state), version: version(state) };
+    const served = { context: toolContext(context, state), version: version(state) };
+    const tools = (session: SessionKind) => toolsFor(level, session);
     try {
-      const endpoint = await context.toolServer.start((message) => dispatch(message, served));
+      const endpoint = await context.toolServer.start((message, segment) =>
+        dispatch(message, { ...served, tools: tools(sessionKind(segment)) }),
+      );
       this.open = true;
-      return { endpoint, names: tools.map(qualified) };
+      return { endpoint, level, names: toolsFor(level).map(qualified) };
     } catch {
       // A port that will not bind is not a reason to fail a deployment.
       disableAi(context, "the tool server could not be started");

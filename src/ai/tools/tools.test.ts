@@ -5,6 +5,7 @@ import type { EventInput } from "../../engine/context.ts";
 import { spentAttempts } from "../../model/persist.ts";
 import { type CommandScript, type FakeRunOptions, fakeRunContext } from "../../testing/fakes.ts";
 import { toolContext } from "../context.ts";
+import { forSession } from "../providers.ts";
 import { qualified, TOOLS, toolByName, toolLevel, toolsFor } from "./registry.ts";
 import { type ToolContext, ToolError, type ToolResult } from "./types.ts";
 
@@ -70,6 +71,41 @@ describe("registry", () => {
     ]);
     expect(toolByName("passive", "read_code")).toBeUndefined();
     expect(toolByName("active", "service_action")).toBeUndefined();
+  });
+
+  test("a session sees the tools it may use, its own path carrying it", () => {
+    const names = (session: Parameters<typeof toolsFor>[1]) =>
+      toolsFor("repair", session).map((tool) => tool.name);
+    const reading = toolsFor("active")
+      .map((tool) => tool.name)
+      .filter((name) => !["known_suggestions", "suggest"].includes(name));
+
+    expect(names("analysis")).toEqual(reading);
+    expect(names("suggestions")).toEqual([...reading, "known_suggestions", "suggest"]);
+    for (const acting of ["repair", "build-repair"] as const) {
+      expect(names(acting)).toEqual([
+        ...reading,
+        "service_action",
+        "edit_code",
+        "validate",
+        "commit",
+      ]);
+    }
+
+    // A session narrows the level, never raises it.
+    expect(toolsFor("passive", "repair").map((tool) => tool.name)).toEqual(
+      toolsFor("passive").map((tool) => tool.name),
+    );
+
+    const run = {
+      endpoint: { url: "http://127.0.0.1:9/mcp", token: "t" },
+      level: "active" as const,
+      names: [],
+    };
+    const review = forSession(run, "suggestions");
+    expect(review.endpoint).toEqual({ url: "http://127.0.0.1:9/mcp/suggestions", token: "t" });
+    expect(review.names).toContain("mcp__fleet-update__suggest");
+    expect(forSession(run, "analysis").names).not.toContain("mcp__fleet-update__suggest");
   });
 
   test("the level is the higher of the two option axes", () => {

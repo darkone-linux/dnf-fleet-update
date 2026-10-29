@@ -42,16 +42,12 @@ test("the AI restarts what the group restart could not, and the host is deployed
   expect(marks).toEqual(["ai-analysing", "ai-repairing"]);
 
   // The script is replayed by both sessions; only the repair one may act, and
-  // the state guard — not the prompt — is what says so.
+  // the analysis session is not even shown the tool — not a prompt, its path.
   expect(run.recorded?.state?.actions).toEqual([
-    {
-      host: "gw-cp",
-      action: "restart outline.service",
-      outcome: "refused",
-      detail: "gw-cp is not under repair right now (state ai-analysing)",
-    },
     { host: "gw-cp", action: "restart outline.service", outcome: "done" },
   ]);
+  const lines = run.events.flatMap((event) => (event.kind === "ai.line" ? [event.line] : []));
+  expect(lines).toContain("service_action refused: no tool named service_action in this session");
   expect(run.feed).toContain("ok gw-cp: AI repair recovered the host");
   expect(run.recorded?.report).toContain(
     "## Notes\n\n- gw-cp: recovered by an AI repair: restart outline.service",

@@ -36,7 +36,7 @@ const callParams = z.object({
 const initializeParams = z.object({ protocolVersion: z.string().optional() }).loose();
 
 export interface RpcServer {
-  /** Tools published to this run, already filtered by level. */
+  /** Tools published to this session, already filtered by level and session. */
   tools: readonly RegisteredTool[];
   context: ToolContext;
 
@@ -64,7 +64,7 @@ async function callTool(id: RpcId, params: unknown, server: RpcServer): Promise<
 
   const tool = server.tools.find((candidate) => candidate.name === parsed.data.name);
   if (tool === undefined) {
-    return error(id, INVALID_PARAMS, `no tool named ${parsed.data.name} at this level`);
+    return error(id, INVALID_PARAMS, `no tool named ${parsed.data.name} in this session`);
   }
   try {
     const result = await tool.call(server.context, parsed.data.arguments);

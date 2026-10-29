@@ -12,6 +12,7 @@ import type {
   CommandSpec,
   OutputLine,
   RunOptions,
+  ToolHandler,
 } from "../engine/ports.ts";
 import type { FakeClock } from "./fakes.ts";
 import {
@@ -188,6 +189,13 @@ const PUBLIC_CACHE = "https://cache.nixos.org";
 
 type Repo = "consumer" | "dnf";
 
+/** Session the AI tool was pointed at: last segment of the URL in its MCP config. */
+function sessionOf(spec: CommandSpec): string | undefined {
+  const flag = spec.argv.indexOf("--mcp-config");
+  const config = flag === -1 ? spec.env?.OPENCODE_CONFIG_CONTENT : spec.argv[flag + 1];
+  return /\/mcp\/([a-z-]+)"/.exec(config ?? "")?.[1];
+}
+
 /** Reads a `tools/call` response: the text of a refusal, `undefined` when it worked. */
 function toolRefusal(response: unknown): string | undefined {
   if (typeof response !== "object" || response === null) return undefined;
@@ -293,7 +301,7 @@ export class SimFleet implements CommandRunner {
    * MCP dispatch of the run, set by `simulateRun`: a scripted tool call then
    * travels the real JSON-RPC path, with the real guards.
    */
-  tools?: (message: unknown) => Promise<unknown | undefined>;
+  tools?: ToolHandler;
 
   async run(spec: CommandSpec, options: RunOptions = {}): Promise<CommandResult> {
     const { signal, onLine } = options;
@@ -498,8 +506,9 @@ export class SimFleet implements CommandRunner {
    * run's own MCP dispatch: guards, validation and level filter are the real
    * ones. A refusal comes back as a line, the way a model would report it.
    */
-  private async aiAnswer(out: (line: string) => void): Promise<CommandResult> {
+  private async aiAnswer(spec: CommandSpec, out: (line: string) => void): Promise<CommandResult> {
     const script = this.options.ai ?? ["The build is fetching gnome-shell."];
+    const session = sessionOf(spec);
     let id = 0;
     for (const step of script) {
       if (typeof step === "string") {
@@ -507,12 +516,15 @@ export class SimFleet implements CommandRunner {
         continue;
       }
       id += 1;
-      const response = await this.tools?.({
-        jsonrpc: "2.0",
-        id,
-        method: "tools/call",
-        params: { name: step.call, arguments: step.args },
-      });
+      const response = await this.tools?.(
+        {
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: { name: step.call, arguments: step.args },
+        },
+        session,
+      );
       const refusal = toolRefusal(response);
       if (refusal !== undefined) out(`${step.call} refused: ${refusal}`);
     }
@@ -623,7 +635,7 @@ export class SimFleet implements CommandRunner {
       case "ping":
         return exit(this.reachable(command.host ?? "") ? 0 : 1);
       case "ai":
-        return this.aiAnswer(out);
+        return this.aiAnswer(spec, out);
       default:
         return this.onHost(command, err, out);
     }

@@ -248,12 +248,15 @@ export interface RunLock {
 
 /** Where the AI tools reach the run (spec § analyse, Transport). */
 export interface ToolEndpoint {
-  /** Loopback only, ephemeral port. */
+  /** Loopback only, ephemeral port. A session appends `/<session>`. */
   url: string;
 
   /** Bearer token of this run; a request without it is refused. */
   token: string;
 }
+
+/** Handler of the endpoint. `session`: last path segment, absent on the bare URL. */
+export type ToolHandler = (message: unknown, session?: string) => Promise<unknown | undefined>;
 
 /**
  * Local JSON endpoint the AI tools call. The body is opaque here: the port
@@ -261,7 +264,7 @@ export interface ToolEndpoint {
  */
 export interface ToolServer {
   /** New URL and token at every start. `undefined` from the handler: no reply is due. */
-  start(handle: (message: unknown) => Promise<unknown | undefined>): Promise<ToolEndpoint>;
+  start(handle: ToolHandler): Promise<ToolEndpoint>;
 
   /** Idempotent: stopping a server never started is not an error. */
   stop(): Promise<void>;

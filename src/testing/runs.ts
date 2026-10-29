@@ -120,7 +120,8 @@ export async function simulateRun(runCase: RunCase = {}): Promise<RunOutcome> {
   };
 
   // The scripted AI calls the run's own tools: real dispatch, real guards.
-  sim.tools = (message) => ports.toolServer.handle?.(message) ?? Promise.resolve(undefined);
+  sim.tools = (message, session) =>
+    ports.toolServer.handle?.(message, session) ?? Promise.resolve(undefined);
 
   const request = {
     workspace: "/ws",

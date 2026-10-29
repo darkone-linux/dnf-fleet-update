@@ -35,6 +35,7 @@ import {
   type SuggestionFile,
   type SuggestionFiles,
   type ToolEndpoint,
+  type ToolHandler,
   type ToolServer,
 } from "../engine/ports.ts";
 import type { Event, RunInfo } from "../model/events.ts";
@@ -370,11 +371,11 @@ export class FakeLock implements RunLock {
 
 /** No socket: the test calls the handler the run registered, directly. */
 export class MemoryToolServer implements ToolServer {
-  handle?: (message: unknown) => Promise<unknown | undefined>;
+  handle?: ToolHandler;
   starts = 0;
   stops = 0;
 
-  start(handle: (message: unknown) => Promise<unknown | undefined>): Promise<ToolEndpoint> {
+  start(handle: ToolHandler): Promise<ToolEndpoint> {
     this.handle = handle;
     this.starts += 1;
     return Promise.resolve({ url: "http://127.0.0.1:9/mcp", token: `token-${this.starts}` });

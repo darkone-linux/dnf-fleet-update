@@ -34,8 +34,8 @@ test("the review files a suggestion from a warning, and the report lists it", as
     "## Suggestions\n\n- **Confirm the Nextcloud install is not legacy** — new — `var/deployments/suggestions/nextcloud-legacy-install.md`",
   );
 
-  // The summary session replays the same script first: refused there, filed once.
-  expect(run.feed.filter((line) => line.includes("AI files the suggestion"))).toHaveLength(2);
+  // The summary session replays the same script first: not shown the tool there, filed once.
+  expect(run.feed.filter((line) => line.includes("AI files the suggestion"))).toHaveLength(1);
   expect(text.match(/- Runs: 1/g)).toHaveLength(1);
 });
 
