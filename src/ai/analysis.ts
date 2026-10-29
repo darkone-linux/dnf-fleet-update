@@ -77,7 +77,7 @@ export async function ask(
       id,
       summary,
       prompt,
-      system: systemPrompt(toolLevel(context.params), session),
+      system: systemPrompt(toolLevel(context.params), session, context.params.repair.aiAttempts),
 
       // A repair rebuilds inside its session: `validate` outlasts an answer.
       timeoutSeconds:

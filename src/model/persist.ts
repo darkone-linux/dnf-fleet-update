@@ -33,7 +33,7 @@ export interface AiAction {
   action: string;
   outcome: AiOutcome;
 
-  /** `false`: a check or a commit, not a change (spec § réparation, Essais). */
+  /** `false`: a check, a commit, or an edit of a series already counted (spec § réparation, Essais). */
   spends?: boolean;
   detail?: string;
 }
@@ -47,6 +47,18 @@ export function spentAttempts(state: PersistedState, host: string): number {
   return state.actions.filter(
     (action) => action.host === host && action.outcome !== "refused" && action.spends !== false,
   ).length;
+}
+
+/**
+ * `true` while an edit series of this host is open: its last change is an edit
+ * nothing followed yet. The edits up to the next `validate` make one attempt:
+ * a fix spans files (spec § réparation, J8, Essais).
+ */
+export function editSeriesOpen(state: PersistedState, host: string): boolean {
+  const last = state.actions.findLast(
+    (action) => action.host === host && action.outcome !== "refused",
+  );
+  return last?.action.startsWith("edit ") === true;
 }
 
 /**

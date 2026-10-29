@@ -537,7 +537,11 @@ describe("service_action", () => {
       content: "{ enable = true; }\n",
     });
 
-    expect(result.lines).toEqual(["written, diff:", "+  enable = true;"]);
+    expect(result.lines).toEqual([
+      "written, diff:",
+      "+  enable = true;",
+      "a new attempt: the edits up to the next validate belong to it",
+    ]);
     expect(context.sources.writes).toEqual([
       { path: "/ws/usr/modules/nginx.nix", content: "{ enable = true; }\n" },
     ]);
@@ -565,6 +569,40 @@ describe("service_action", () => {
       { path: "/ws/usr/music.nix", content: "{\n  # $& kept literally\n  $x = 1;\n}\n" },
     ]);
     expect(spentAttempts(context.state(), "gfx")).toBe(1);
+  });
+
+  test("the edits of one fix make one attempt, until validate closes it", async () => {
+    const edit = (path: string) => ({
+      kind: "ai.action" as const,
+      host: "gfx",
+      action: `edit ${path}`,
+      outcome: "done" as const,
+    });
+    const write = (tool: ToolContext, path: string) =>
+      call(tool, "repair", "edit_code", { host: "gfx", path, content: "{}\n" });
+
+    // Every attempt spent, the last one by an edit: its series stays open.
+    const open = tools({ commands: [{ match: ["git"] }] }, [
+      ...UNDER_REPAIR,
+      ...spent("gfx", 2),
+      edit("usr/a.nix"),
+    ]);
+    const result = await write(open.tool, "usr/b.nix");
+    expect(result.lines.at(-1)).toBe("part of the attempt the previous edit opened");
+    expect(spentAttempts(open.context.state(), "gfx")).toBe(3);
+    expect(open.context.state().actions.at(-1)).toMatchObject({ outcome: "done", spends: false });
+
+    // A validate closes the series: the next edit is an attempt of its own.
+    const closed = tools({ commands: [{ match: ["git"] }] }, [
+      ...UNDER_REPAIR,
+      ...spent("gfx", 2),
+      edit("usr/a.nix"),
+      { kind: "ai.action", host: "gfx", action: "validate gfx", outcome: "failed", spends: false },
+    ]);
+    await expect(write(closed.tool, "usr/b.nix")).rejects.toThrow(
+      "3 repair attempts already spent on gfx",
+    );
+    expect(closed.context.sources.writes).toEqual([]);
   });
 
   test("a passage missing or repeated is refused, and costs no attempt", async () => {

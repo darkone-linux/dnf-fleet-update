@@ -28,3 +28,11 @@ test("the review session files suggestions and touches nothing", () => {
   expect(review).toContain("suggest");
   expect(review).not.toContain("service_action");
 });
+
+test("an acting session is told its attempts, and that a fix spans files", () => {
+  const acting = systemPrompt("repair", "build-repair", 6);
+  expect(acting).toContain("You have 6 attempts");
+  expect(acting).toContain("a series of edits up to the");
+  expect(acting.indexOf("attempts")).toBeLessThan(acting.indexOf("Stop once validate passes"));
+  expect(systemPrompt("active", "analysis", 6)).not.toContain("attempts");
+});

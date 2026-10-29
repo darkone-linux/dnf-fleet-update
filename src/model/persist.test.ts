@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import { loadScenario } from "../testing/replay.ts";
 import { type Event, type HostState, STEPS } from "./events.ts";
 import {
+  editSeriesOpen,
   type HostStatus,
   hostStatus,
   initialPersisted,
@@ -160,6 +161,22 @@ test("a commit waits for a validation of the last edit", () => {
     ),
   ).toBe(false);
   expect(after(action("gfx", "edit a.nix"), action("gfx", "validate gfx", "failed"))).toBe(false);
+});
+
+test("edits up to the next validate make one series, closed by any other action", () => {
+  const action = (
+    label: string,
+    outcome: "done" | "failed" | "refused" = "done",
+    host = "gfx",
+  ): Event => ({ kind: "ai.action", host, action: label, outcome, t: 0 });
+  const open = (...events: Event[]) => editSeriesOpen(fold(events), "gfx");
+
+  expect(open()).toBe(false);
+  expect(open(action("edit a.nix"))).toBe(true);
+  expect(open(action("edit a.nix"), action("edit b.nix", "refused"))).toBe(true);
+  expect(open(action("edit a.nix"), action("validate gfx", "failed"))).toBe(false);
+  expect(open(action("edit a.nix"), action("restart nginx.service"))).toBe(false);
+  expect(open(action("edit a.nix"), action("validate nlt", "done", "nlt"))).toBe(true);
 });
 
 test("closed questions are kept as decisions", () => {

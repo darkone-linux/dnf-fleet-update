@@ -11,7 +11,12 @@ import {
   type UnitAction,
   unitAction,
 } from "../../engine/commands/host.ts";
-import { type PersistedHost, spentAttempts, validatedSinceEdit } from "../../model/persist.ts";
+import {
+  editSeriesOpen,
+  type PersistedHost,
+  spentAttempts,
+  validatedSinceEdit,
+} from "../../model/persist.ts";
 import { defineTool, Refused, type RegisteredTool, type ToolContext, ToolError } from "./types.ts";
 
 /** A file the model rewrites whole: past this it is not editing, it is generating. */
@@ -28,10 +33,15 @@ function refuse(context: ToolContext, host: string, action: string, reason: stri
 
 /**
  * What every action tool checks before it changes anything (spec § réparation):
- * the run is not leaving, the host is the one under repair, an attempt is left,
- * and the operator agrees.
+ * the run is not leaving, the host is the one under repair, an attempt is left
+ * unless the change belongs to one already spent, and the operator agrees.
  */
-async function allowed(context: ToolContext, host: PersistedHost, label: string): Promise<void> {
+async function allowed(
+  context: ToolContext,
+  host: PersistedHost,
+  label: string,
+  spends = true,
+): Promise<void> {
   const no = (reason: string): never => refuse(context, host.name, label, reason);
   if (context.halting()) no("the run is stopping: no repair starts now");
 
@@ -39,11 +49,14 @@ async function allowed(context: ToolContext, host: PersistedHost, label: string)
   if (host.state !== "ai-repairing") {
     no(`${host.name} is not under repair right now (state ${host.state})`);
   }
-  const spent = spentAttempts(context.state(), host.name);
   const budget = context.params.repair.aiAttempts;
-  if (spent >= budget) no(`${budget} repair attempts already spent on ${host.name}`);
+  if (spends && spentAttempts(context.state(), host.name) >= budget) {
+    no(`${budget} repair attempts already spent on ${host.name}`);
+  }
 
-  if (!(await context.confirm(`repair-${host.name}-${spent + 1}`, `${label} on ${host.name}?`))) {
+  // One action recorded per question: its rank names the question once.
+  const asked = context.state().actions.filter((action) => action.host === host.name).length;
+  if (!(await context.confirm(`repair-${host.name}-${asked + 1}`, `${label} on ${host.name}?`))) {
     no("the operator declined this action");
   }
 }
@@ -156,7 +169,7 @@ const editCode = defineTool({
   name: "edit_code",
   level: "repair",
   description:
-    "Change a file of the deployment sources: replace one exact passage (old, new), or write the whole file (content) to create or redo it. Only while a host is under repair, only inside the project (and dnf/ in co-development), and never a lock, generated data or the fleet declaration. Returns the diff. Spends one of the host's repair attempts; the host is then rebuilt from it, and it alone.",
+    "Change a file of the deployment sources: replace one exact passage (old, new), or write the whole file (content) to create or redo it. Only while a host is under repair, only inside the project (and dnf/ in co-development), and never a lock, generated data or the fleet declaration. Returns the diff. The first edit after a validate (or a service action, or the start) spends one of the host's repair attempts; the edits that follow it up to the next validate belong to that attempt, so edit every file one fix needs before validating. The host is then rebuilt from it, and it alone.",
   input: z.strictObject({
     host: z
       .string()
@@ -191,7 +204,9 @@ const editCode = defineTool({
         `${args.path}: ${lines} lines, over the ${MAX_LINES} a whole rewrite may carry`,
       );
     }
-    await allowed(context, host, label);
+    // Read before the edit is recorded: it would open the series itself.
+    const spends = !editSeriesOpen(context.state(), host.name);
+    await allowed(context, host, label, spends);
 
     let diff: string[];
     try {
@@ -199,12 +214,20 @@ const editCode = defineTool({
     } catch (error) {
       refuse(context, host.name, label, error instanceof Error ? error.message : String(error));
     }
-    context.record({ host: host.name, action: label, outcome: "done" });
+    context.record({
+      host: host.name,
+      action: label,
+      outcome: "done",
+      ...(spends ? {} : { spends: false }),
+    });
+    const attempt = spends
+      ? "a new attempt: the edits up to the next validate belong to it"
+      : "part of the attempt the previous edit opened";
     return {
       lines:
         diff.length > 0
-          ? ["written, diff:", ...diff]
-          : ["written; the file already read exactly this"],
+          ? ["written, diff:", ...diff, attempt]
+          : ["written; the file already read exactly this", attempt],
     };
   },
 });

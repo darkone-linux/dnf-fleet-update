@@ -4,6 +4,7 @@
 // the same source, so the two can never disagree. English, like every string
 // the tool prints.
 
+import { DEFAULT_REPAIR } from "../model/params.ts";
 import type { PersistedHost, PersistedState } from "../model/persist.ts";
 import { reaches, type ToolLevel } from "./tools/types.ts";
 
@@ -31,8 +32,6 @@ const MAY_ACT = [
   "  edit_code (old and new replace one exact passage), check it with validate, seal it with",
   "  commit. The host is redeployed from what you committed, never from an uncommitted edit.",
   "  A fix that does not hold is edited, validated and committed again: one commit per fix.",
-  "You have three attempts; a check and a commit cost none, and the operator may decline any",
-  "action. Stop as soon as nothing fails.",
 ];
 
 /** Repair of a failed build: one way, the code (spec § réparation, J10). */
@@ -44,8 +43,13 @@ const MAY_FIX_BUILD = [
   "validate rebuilds the host named below; the hosts your commit changes are rebuilt from it",
   "after you. Nothing is built from an uncommitted edit: a fix that does not hold is edited,",
   "validated and committed again, one commit per fix.",
-  "You have three attempts; a check and a commit cost none, and the operator may decline any",
-  "action. Stop once validate passes and the fix is committed.",
+];
+
+/** Acting sessions: what an attempt is, so a fix spanning files is not cut short (spec § Essais). */
+const attemptsRule = (attempts: number) => [
+  `You have ${attempts} attempts. An attempt is a service action, or a series of edits up to the`,
+  "next validate: edit every file one fix needs (its code, its registration, its test), then",
+  "validate once. validate and commit cost none; the operator may decline any action.",
 ];
 
 const CONDUCT = [
@@ -82,10 +86,22 @@ const SUGGEST_SHAPE = [
   "Two sentences at most: the files carry the detail.",
 ];
 
-const ROLE_OF: Record<SessionKind, { may: readonly string[]; shape: readonly string[] }> = {
+interface Role {
+  may: readonly string[];
+
+  /** Acting sessions only: when the session is done, said after its attempts. */
+  stop?: string;
+  shape: readonly string[];
+}
+
+const ROLE_OF: Record<SessionKind, Role> = {
   analysis: { may: READ_ONLY, shape: SHAPE },
-  repair: { may: MAY_ACT, shape: ACT_SHAPE },
-  "build-repair": { may: MAY_FIX_BUILD, shape: ACT_SHAPE },
+  repair: { may: MAY_ACT, stop: "Stop as soon as nothing fails.", shape: ACT_SHAPE },
+  "build-repair": {
+    may: MAY_FIX_BUILD,
+    stop: "Stop once validate passes and the fix is committed.",
+    shape: ACT_SHAPE,
+  },
   suggestions: { may: MAY_SUGGEST, shape: SUGGEST_SHAPE },
 };
 
@@ -95,14 +111,28 @@ const NO_TOOLS = [
   "and say what you would need to be sure.",
 ];
 
-/** `repair`: the only session allowed to touch a host. */
-export function systemPrompt(level: ToolLevel | undefined, kind: SessionKind = "analysis"): string {
+/** `repair`: the only session allowed to touch a host. `attempts`: `repair.aiAttempts`. */
+export function systemPrompt(
+  level: ToolLevel | undefined,
+  kind: SessionKind = "analysis",
+  attempts: number = DEFAULT_REPAIR.aiAttempts,
+): string {
   const tools = level === undefined ? NO_TOOLS : CONDUCT;
   const method = level !== undefined && reaches(level, "active") ? ["", ...METHOD] : [];
-  const { may, shape } = ROLE_OF[kind];
-  return [...ROLE, ...may, "", ...CONTEXT_BOUNDARY, "", ...tools, ...method, "", ...shape].join(
-    "\n",
-  );
+  const { may, stop, shape } = ROLE_OF[kind];
+  const acting = stop === undefined ? [] : [...attemptsRule(attempts), stop];
+  return [
+    ...ROLE,
+    ...may,
+    ...acting,
+    "",
+    ...CONTEXT_BOUNDARY,
+    "",
+    ...tools,
+    ...method,
+    "",
+    ...shape,
+  ].join("\n");
 }
 
 /** Seed of a host: where it stands, why it stopped, what it showed. Bounded. */
