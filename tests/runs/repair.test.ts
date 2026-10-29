@@ -2,6 +2,7 @@
 // one works, and the host rejoins the deployment.
 
 import { expect, test } from "bun:test";
+import { DEFAULT_REPAIR } from "../../src/model/params.ts";
 import { storePath } from "../../src/testing/fleet.ts";
 import { simulateRun } from "../../src/testing/runs.ts";
 import { fixedPath } from "../../src/testing/sim.ts";
@@ -215,22 +216,24 @@ test("a fix that does not fix: attempts run out, the host lands back in error", 
 
   expect(run.statuses["gw-cp"]).toBe("error");
 
-  // Three changes, then the tool refuses: the loop cannot run for ever.
+  // Every attempt spent, then the tool refuses: the loop cannot run for ever.
+  const budget = DEFAULT_REPAIR.aiAttempts;
   const actions = run.recorded?.state?.actions ?? [];
   expect(
     actions.filter((entry) => entry.spends !== false && entry.outcome === "done"),
-  ).toHaveLength(3);
+  ).toHaveLength(budget);
   expect(actions.map((entry) => entry.detail)).toContain(
-    "3 repair attempts already spent on gw-cp",
+    `${budget} repair attempts already spent on gw-cp`,
   );
   expect(run.exitCode).toBe(0);
 
   // One fix, one commit: each new round amends it (spec § Règle de commit).
+  const amended = budget - 1;
   expect(run.sim.commits.filter((commit) => commit.message.startsWith("fix("))).toEqual([
-    { repo: "consumer", message: "fix(outline): start outline after postgresql", amended: 2 },
+    { repo: "consumer", message: "fix(outline): start outline after postgresql", amended },
   ]);
   expect(run.recorded?.report).toContain(
-    "fix(outline): start outline after postgresql (amended 2×)",
+    `fix(outline): start outline after postgresql (amended ${amended}×)`,
   );
 });
 

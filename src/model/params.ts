@@ -155,7 +155,7 @@ export const DEFAULT_DIAGNOSTICS: Diagnostics = { journalLines: 200, excerptLine
 export const DEFAULT_PRESENCE: PresenceBounds = { attempts: 3, onlineFactor: 4, spacingMs: 500 };
 
 /** One restart, no loop: a bounded retry belongs to the signature table. */
-export const DEFAULT_REPAIR: Repair = { settleSeconds: 10, aiAttempts: 3 };
+export const DEFAULT_REPAIR: Repair = { settleSeconds: 10, aiAttempts: 6 };
 
 /**
  * Delay between `activation` (300) and `eval` (1200): long enough to answer,
@@ -164,11 +164,11 @@ export const DEFAULT_REPAIR: Repair = { settleSeconds: 10, aiAttempts: 3 };
 export const DEFAULT_AI: Ai = {
   timeoutSeconds: 300,
 
-  // Builds of several minutes, three attempts: a safety bound, not an expected time.
-  repairTimeoutSeconds: 3600,
+  // Builds of several minutes, six attempts: a safety bound, not an expected time.
+  repairTimeoutSeconds: 7200,
   logLines: 200,
   sourceLines: 400,
-  budgetUsd: 2,
+  budgetUsd: 4,
 };
 
 /** Spec § Délais, seconds. */

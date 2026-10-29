@@ -161,11 +161,17 @@ At `repair` the AI gets a second session on a failed host, in state `AI repair`.
 It may act on services — `systemctl start`, `stop`, `restart`, `reset-failed`,
 on **the units this run saw fall** — and, when that cannot help, edit a file
 of the sources (one exact passage replaced, or the whole file), validate it
-(`just clean`, then a rebuild of **that host**) and commit it as
+(`just clean`, the trees staged, then a rebuild of **that host** from the
+working trees — `dnf/` included in co-development, through
+`--override-input dnf git+file://…`, so an uncommitted framework fix is seen)
+and commit it as
 `fix(<scope>): <subject>`, the scope naming what the fix touches. A `dnf/`
 commit is published: one naming a fleet host is refused. The host is then served once
-more by its own wave. Three attempts per host: an attempt is a *change*, so a
-validation and a commit cost none. Refusals cost none either, a confirmation is
+more by its own wave. Six attempts per host: an attempt is a *change* — a
+service action, or the series of edits up to the next validation, so a fix
+spanning several files costs one — and a validation and a commit cost none.
+`validate` also says when the edits leave the host's derivation unchanged.
+Refusals cost none either, a confirmation is
 asked before each service action and each edit when interactive, and nothing at all
 happens once the run is stopping. Writes never reach `usr/secrets/`,
 `var/generated/`, `etc/config.yaml` or a lock; outside co-development `dnf/` is
@@ -176,7 +182,10 @@ is validated, so what ships is what was built. Fixing a fix **amends** its
 `fix(…)` commit while it is still HEAD — one commit per fix, never the
 `chore(update)` nor a human commit. Repair sessions run one at a time (a commit
 takes the whole tree), and an edit left uncommitted when a session ends is
-discarded, its diff kept in `logs/ai.log`.
+discarded, its diff kept in `logs/ai.log` and as a patch,
+`logs/<host>.<consumer|dnf>.patch`, for `git apply`. Each session sees only the
+tools it may use: an analysis reads, a repair reads and acts, the review reads
+and files.
 
 **A failed build is repaired too**, at the end of the build and before its
 usual decision, while built hosts wait. Hosts broken by the same failure form
@@ -201,14 +210,15 @@ host analysed, then the end-of-run summary, which also rides along — trimmed �
 on the Matrix message. The analysis never replaces a host's raw reason.
 
 At `--ai-analysis active` the run ends with a review of its warnings, grouped
-across every log: a renamed option, a change that would silence a warning, a
-problem worth a look. Each finding is filed as
+across every log, and of what the repair sessions left for a human: a renamed
+option, a change that would silence a warning, a problem worth a look, a limit
+a repair met in its own tools. Each finding is filed as
 `var/deployments/suggestions/<slug>.md` — in the project, and in `dnf/` in
 co-development — and listed under the report's **Suggestions** section, never
 in Matrix. The files outlive the run: a finding met again only moves its
 `Last seen` and `Runs` lines, and writing `Status: ignored` in one silences it.
 The review changes neither the code nor the fleet, and a run without warnings
-asks nothing.
+nor repair asks nothing.
 
 ### Execution
 

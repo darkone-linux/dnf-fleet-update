@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { EventInput } from "../../engine/context.ts";
+import { DEFAULT_REPAIR } from "../../model/params.ts";
 import { spentAttempts } from "../../model/persist.ts";
 import { type CommandScript, type FakeRunOptions, fakeRunContext } from "../../testing/fakes.ts";
 import { toolContext } from "../context.ts";
@@ -525,12 +526,16 @@ describe("service_action", () => {
   });
 
   test("the attempts of a host are spent once and for all", async () => {
-    const { context, tool } = tools({ commands: script() }, [...UNDER_REPAIR, ...spent("gfx", 3)]);
+    const budget = DEFAULT_REPAIR.aiAttempts;
+    const { context, tool } = tools({ commands: script() }, [
+      ...UNDER_REPAIR,
+      ...spent("gfx", budget),
+    ]);
 
     await expect(call(tool, "repair", "service_action", RESTART)).rejects.toThrow(
-      "3 repair attempts already spent on gfx",
+      `${budget} repair attempts already spent on gfx`,
     );
-    expect(spentAttempts(context.state(), "gfx")).toBe(3);
+    expect(spentAttempts(context.state(), "gfx")).toBe(budget);
   });
 
   test("interactive: the operator is asked, and may decline", async () => {
@@ -618,7 +623,8 @@ describe("service_action", () => {
       call(tool, "repair", "edit_code", { host: "gfx", path, content: "{}\n" });
 
     // Every attempt spent, the last one by an edit: its series stays open.
-    const open = tools({ commands: [{ match: ["git"] }] }, [
+    const params = { repair: { ...DEFAULT_REPAIR, aiAttempts: 3 } };
+    const open = tools({ commands: [{ match: ["git"] }], params }, [
       ...UNDER_REPAIR,
       ...spent("gfx", 2),
       edit("usr/a.nix"),
@@ -629,7 +635,7 @@ describe("service_action", () => {
     expect(open.context.state().actions.at(-1)).toMatchObject({ outcome: "done", spends: false });
 
     // A validate closes the series: the next edit is an attempt of its own.
-    const closed = tools({ commands: [{ match: ["git"] }] }, [
+    const closed = tools({ commands: [{ match: ["git"] }], params }, [
       ...UNDER_REPAIR,
       ...spent("gfx", 2),
       edit("usr/a.nix"),
@@ -731,7 +737,7 @@ describe("service_action", () => {
     expect(result.lines[0]).toBe(`builds: ${TOPLEVEL}`);
     expect(context.repaired.get("gfx")).toBe(TOPLEVEL);
 
-    // A check is not a change: the host keeps its three attempts.
+    // A check is not a change: the host keeps its attempts.
     expect(spentAttempts(context.state(), "gfx")).toBe(0);
     expect(context.state().actions.at(-1)).toMatchObject({ outcome: "done", spends: false });
   });
