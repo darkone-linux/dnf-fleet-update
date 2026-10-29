@@ -75,6 +75,15 @@ export interface RepairSubject {
   path?: string;
 }
 
+/** A repair session under way (spec § réparation, J10, Délai). */
+export interface RepairSession {
+  /** Its end cuts a `validate` still building. */
+  signal: AbortSignal;
+
+  /** Last derivation evaluated for its host: an edit that leaves it unchanged reaches nothing. */
+  drv?: string;
+}
+
 export interface RunContext extends EngineContext {
   params: RunParams;
 
@@ -121,8 +130,8 @@ export interface RunContext extends EngineContext {
   /** Toplevel a repair rebuilt, by host: the wave serves it on its next pass. */
   repaired: Map<string, string>;
 
-  /** Repair session under way, by host: its end cuts a `validate` still building. */
-  repairing: Map<string, AbortSignal>;
+  /** Repair session under way, by host. */
+  repairing: Map<string, RepairSession>;
 
   /** Repair subjects of the run, by host: one commit each, amended (spec § Règle de commit). */
   subjects: Map<string, RepairSubject>;

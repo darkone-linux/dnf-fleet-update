@@ -22,17 +22,22 @@ export function selectExpression(hosts: readonly string[]): string {
   );
 }
 
-/** One JSON line per host on stdout, parsed by `parseEvalJob`. */
+/**
+ * One JSON line per host on stdout, parsed by `parseEvalJob`. `overrides`:
+ * flake URL by input name, in place of what `flake.lock` pins.
+ */
 export function evalHosts(
   workspace: string,
   hosts: readonly string[],
   timeouts: Timeouts,
+  overrides: Readonly<Record<string, string>> = {},
 ): CommandSpec {
   return {
     argv: [
       "nix-eval-jobs",
       "--flake",
       `${workspace}#nixosConfigurations`,
+      ...Object.entries(overrides).flatMap(([input, url]) => ["--override-input", input, url]),
       "--select",
       selectExpression(hosts),
       "--workers",

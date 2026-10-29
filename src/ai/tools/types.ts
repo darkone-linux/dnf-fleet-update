@@ -81,8 +81,9 @@ export interface ToolContext {
   onHost(host: string, command: HostCommand): Promise<Excerpt>;
 
   /**
-   * `just clean`, then this host alone re-evaluated and rebuilt. On success the
-   * new toplevel is kept for the redeploy; nothing else on the fleet moves.
+   * `just clean`, then this host alone re-evaluated from the working trees and
+   * rebuilt. On success the new toplevel is kept for the redeploy; nothing else
+   * on the fleet moves.
    */
   rebuild(host: string): Promise<Rebuilt>;
 

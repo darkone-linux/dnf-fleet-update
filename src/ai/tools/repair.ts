@@ -213,7 +213,7 @@ const validate = defineTool({
   name: "validate",
   level: "repair",
   description:
-    "Check an edit: runs the project's own clean-up, then re-evaluates and rebuilds this host alone. Costs no repair attempt, and changes nothing on the fleet. Required before commit: the host is redeployed from what it builds, once committed.",
+    "Check an edit: runs the project's own clean-up, stages the trees, then re-evaluates this host alone from the working trees (dnf/ included in co-development, uncommitted edits and new files seen) and rebuilds it. Says when the edits leave its derivation unchanged. Costs no repair attempt, and changes nothing on the fleet. Required before commit: the host is redeployed from what it builds, once committed.",
   input: z.strictObject({
     host: z.string().describe("host under repair, the only one rebuilt"),
   }),
@@ -227,15 +227,21 @@ const validate = defineTool({
     }
 
     const built = await context.rebuild(host.name);
+
+    // Said first: the build output would otherwise read as a new failure.
+    const unchanged =
+      built.unchanged === true
+        ? [`derivation unchanged: the edits since the last evaluation do not reach ${host.name}`]
+        : [];
     if (built.path === undefined) {
       const detail = built.note ?? "no result";
       context.record({ host: host.name, action: label, outcome: "failed", spends: false, detail });
-      throw new ToolError(
-        `${detail}${built.excerpt === undefined ? "" : `\n${built.excerpt.join("\n")}`}`,
-      );
+      throw new ToolError([...unchanged, detail, ...(built.excerpt ?? [])].join("\n"));
     }
     context.record({ host: host.name, action: label, outcome: "done", spends: false });
-    return { lines: [`builds: ${built.path}`, `${host.name} will be redeployed from it`] };
+    return {
+      lines: [...unchanged, `builds: ${built.path}`, `${host.name} will be redeployed from it`],
+    };
   },
 });
 

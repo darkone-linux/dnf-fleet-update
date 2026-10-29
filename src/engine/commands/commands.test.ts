@@ -411,6 +411,18 @@ describe("build", () => {
     expect(() => selectExpression(['x" ]; builtins.abort "'])).toThrow();
   });
 
+  test("an input overridden is read from its URL, not from the lock", () => {
+    const spec = evalHosts("/etc/nixos", ["hcs"], T, { dnf: "git+file:///etc/nixos/dnf" });
+    expect(spec.argv.slice(0, 6)).toEqual([
+      "nix-eval-jobs",
+      "--flake",
+      "/etc/nixos#nixosConfigurations",
+      "--override-input",
+      "dnf",
+      "git+file:///etc/nixos/dnf",
+    ]);
+  });
+
   test("the derivation of the evaluation, logs as internal-json, GC root kept", () => {
     expect(buildHost(DRV, "/etc/nixos/var/deployments/r/result-gw-ag", T).argv).toEqual([
       "nix",

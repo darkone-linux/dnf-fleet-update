@@ -263,7 +263,7 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
       const built = await rebuildHost(context, target, session);
 
       // Session over meanwhile: its path would be taken by the next one for its own.
-      if (session?.aborted === true) return { note: "repair session ended" };
+      if (session?.signal.aborted === true) return { note: "repair session ended" };
       if (built.path !== undefined) context.repaired.set(host.name, built.path);
       return built;
     },

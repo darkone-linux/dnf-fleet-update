@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import type { EventInput } from "../../engine/context.ts";
 import { spentAttempts } from "../../model/persist.ts";
-import { type FakeRunOptions, fakeRunContext } from "../../testing/fakes.ts";
+import { type CommandScript, type FakeRunOptions, fakeRunContext } from "../../testing/fakes.ts";
 import { toolContext } from "../context.ts";
 import { qualified, TOOLS, toolByName, toolLevel, toolsFor } from "./registry.ts";
 import { type ToolContext, ToolError, type ToolResult } from "./types.ts";
@@ -626,83 +626,97 @@ describe("service_action", () => {
     expect(context.sources.writes).toEqual([]);
   });
 
+  const DRV = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-gfx.drv";
+  const TOPLEVEL = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx";
+
+  /** `validate` end to end: clean, staging, one evaluation, one build. */
+  const rebuilding = (build: Partial<CommandScript> = {}): CommandScript[] => [
+    { match: ["just", "clean"] },
+    { match: ["git"] },
+    {
+      match: (argv) => argv[0] === "nix-eval-jobs",
+      output: [
+        {
+          stream: "stdout",
+          line: JSON.stringify({ attr: "gfx", drvPath: DRV, outputs: { out: TOPLEVEL } }),
+        },
+      ],
+    },
+    {
+      match: (argv) => argv[0] === "nix",
+      output: [{ stream: "stdout", line: TOPLEVEL }],
+      ...build,
+    },
+  ];
+
   test("validate cleans, rebuilds the host alone, and costs no attempt", async () => {
-    const { context, tool } = tools(
-      {
-        commands: [
-          { match: ["just", "clean"] },
-          {
-            match: (argv) => argv[0] === "nix-eval-jobs",
-            output: [
-              {
-                stream: "stdout",
-                line: JSON.stringify({
-                  attr: "gfx",
-                  drvPath: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-gfx.drv",
-                  outputs: { out: "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx" },
-                }),
-              },
-            ],
-          },
-          {
-            match: (argv) => argv[0] === "nix",
-            output: [
-              {
-                stream: "stdout",
-                line: "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx",
-              },
-            ],
-          },
-        ],
-      },
-      UNDER_REPAIR,
-    );
+    const { context, tool } = tools({ commands: rebuilding() }, UNDER_REPAIR);
 
     const result = await call(tool, "repair", "validate", { host: "gfx" });
 
-    expect(result.lines[0]).toBe(
-      "builds: /nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx",
-    );
-    expect(context.repaired.get("gfx")).toBe(
-      "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx",
-    );
+    expect(result.lines[0]).toBe(`builds: ${TOPLEVEL}`);
+    expect(context.repaired.get("gfx")).toBe(TOPLEVEL);
 
     // A check is not a change: the host keeps its three attempts.
     expect(spentAttempts(context.state(), "gfx")).toBe(0);
     expect(context.state().actions.at(-1)).toMatchObject({ outcome: "done", spends: false });
   });
 
-  test("a validation outliving its session is cut, its path never kept", async () => {
-    const session = new AbortController();
+  test("validate evaluates the working trees: dnf/ unlocked, new files staged", async () => {
+    const argv = (codev: boolean) => {
+      const { context, tool } = tools({ codev, commands: rebuilding() }, UNDER_REPAIR);
+      return call(tool, "repair", "validate", { host: "gfx" }).then(() =>
+        context.commands.calls.map((spec) => spec.argv.join(" ")),
+      );
+    };
+
+    // `flake.lock` pins `dnf/` at its commit: without the override, an edit
+    // there was never evaluated.
+    const codev = await argv(true);
+    expect(codev.slice(0, 3)).toEqual([
+      "just clean",
+      "git -C /ws add --all",
+      "git -C /ws/dnf add --all",
+    ]);
+    expect(codev[3]).toContain(
+      "nix-eval-jobs --flake /ws#nixosConfigurations --override-input dnf git+file:///ws/dnf",
+    );
+
+    const consumer = await argv(false);
+    expect(consumer.slice(0, 2)).toEqual(["just clean", "git -C /ws add --all"]);
+    expect(consumer[2]).not.toContain("--override-input");
+  });
+
+  test("validate says when the edits leave the derivation as it was", async () => {
     const { context, tool } = tools(
       {
-        commands: [
-          { match: ["just", "clean"] },
-          {
-            match: (argv) => argv[0] === "nix-eval-jobs",
-            output: [
-              {
-                stream: "stdout",
-                line: JSON.stringify({
-                  attr: "gfx",
-                  drvPath: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-gfx.drv",
-                  outputs: { out: "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx" },
-                }),
-              },
-            ],
-          },
-
-          // The build holds until the session ends, as a timed-out `claude` leaves it.
-          {
-            match: (argv) => argv[0] === "nix",
-            onRun: () => session.abort(),
-            gate: new Promise<void>(() => {}),
-          },
-        ],
+        commands: rebuilding({
+          exitCode: 1,
+          output: [{ stream: "stderr", line: `error: Cannot build '${DRV}'.` }],
+        }),
       },
       UNDER_REPAIR,
     );
-    context.repairing.set("gfx", session.signal);
+    const session = { signal: new AbortController().signal, drv: DRV };
+    context.repairing.set("gfx", session);
+
+    const refusal = call(tool, "repair", "validate", { host: "gfx" });
+
+    await expect(refusal).rejects.toThrow(
+      "derivation unchanged: the edits since the last evaluation do not reach gfx",
+    );
+    expect(session.drv).toBe(DRV);
+  });
+
+  test("a validation outliving its session is cut, its path never kept", async () => {
+    const session = new AbortController();
+
+    // The build holds until the session ends, as a timed-out `claude` leaves it.
+    const { context, tool } = tools(
+      { commands: rebuilding({ onRun: () => session.abort(), gate: new Promise<void>(() => {}) }) },
+      UNDER_REPAIR,
+    );
+    context.repairing.set("gfx", { signal: session.signal });
 
     await expect(call(tool, "repair", "validate", { host: "gfx" })).rejects.toThrow(
       "repair session ended",

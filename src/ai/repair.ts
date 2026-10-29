@@ -47,10 +47,10 @@ async function repairSession(
   if (quiet(context) || persisted === undefined) return;
   const units = persisted.diagnosis?.units ?? [];
 
-  const { state: previous, note } = hosts.get(name);
+  const { state: previous, note, drv } = hosts.get(name);
   hosts.set(name, "ai-repairing", { note });
   const session = new AbortController();
-  context.repairing.set(name, session.signal);
+  context.repairing.set(name, { signal: session.signal, ...(drv === undefined ? {} : { drv }) });
 
   // Actions of this session alone: what a previous round validated is spent.
   const before = context.state().actions.length;
@@ -135,7 +135,8 @@ async function groupSession(
   const notes = new Map(group.hosts.map((host) => [host, hosts.get(host).note]));
   for (const [host, note] of notes) hosts.set(host, "ai-repairing", { note });
   const session = new AbortController();
-  context.repairing.set(name, session.signal);
+  const { drv } = hosts.get(name);
+  context.repairing.set(name, { signal: session.signal, ...(drv === undefined ? {} : { drv }) });
   const before = context.state().actions.length;
   forget(context, name);
   try {
