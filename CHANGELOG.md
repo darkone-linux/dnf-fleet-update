@@ -9,6 +9,21 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-29
+
+### Added
+
+- **ai**: Count the edits of one fix, up to validate, as one repair attempt
+- **ai**: Show each AI session only the tools it may use
+- **ai**: Hand what the repair sessions left undone to the end-of-run review
+- **ai**: Keep a repair left uncommitted as a patch before discarding it
+- **ai**: Double the repair bounds: six attempts, two hours, four dollars
+
+### Fixed
+
+- **ai**: Validate repairs from the working trees, say an unchanged derivation
+- **ai**: Scope repair series and guards to the acting session, harden discard
+
 ## [0.8.0] - 2026-10-29
 
 ### Added
@@ -293,7 +308,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.5...v0.8.0
 [0.7.5]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.3...v0.7.4
