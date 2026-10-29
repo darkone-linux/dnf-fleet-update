@@ -106,7 +106,7 @@ const NO_TOOLS = [
   "and say what you would need to be sure.",
 ];
 
-/** `repair`: the only session allowed to touch a host. `attempts`: `repair.aiAttempts`. */
+/** `repair` and `build-repair` alone may act, told `attempts`: those their host has left. */
 export function systemPrompt(
   level: ToolLevel | undefined,
   kind: SessionKind = "analysis",

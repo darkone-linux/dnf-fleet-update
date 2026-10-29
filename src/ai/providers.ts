@@ -42,12 +42,15 @@ export interface AiCall {
   timeoutSeconds: number;
 }
 
-/** Endpoint of the run, or of one session, and the tool names it publishes. */
+/** Endpoint of the run and the level its options grant: `forSession` narrows them. */
+export interface RunTools {
+  endpoint: ToolEndpoint;
+  level: ToolLevel;
+}
+
+/** Endpoint of one session and the tool names it publishes. */
 export interface AiTools {
   endpoint: ToolEndpoint;
-
-  /** Granted by the options: a session narrows its tools, never raises them. */
-  level: ToolLevel;
 
   /** Qualified names, as `registry.qualified` builds them. */
   names: readonly string[];
@@ -57,12 +60,10 @@ export interface AiTools {
  * Tools of one session: its own path on the endpoint, its own list. `tools/list`
  * and the dispatch read the path, so a session never sees a tool it may not use.
  */
-export function forSession(tools: AiTools, session: SessionKind): AiTools {
-  const url = `${tools.endpoint.url}/${session}`;
+export function forSession(run: RunTools, session: SessionKind): AiTools {
   return {
-    endpoint: { ...tools.endpoint, url },
-    level: tools.level,
-    names: toolsFor(tools.level, session).map(qualified),
+    endpoint: { ...run.endpoint, url: `${run.endpoint.url}/${session}` },
+    names: toolsFor(run.level, session).map(qualified),
   };
 }
 

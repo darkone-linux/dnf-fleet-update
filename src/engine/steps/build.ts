@@ -1,7 +1,6 @@
 // Step 3, build (spec § Étapes, § Exécution): one evaluation, then one build
 // per host as soon as its derivation is known, presence pinged meanwhile.
 
-import { join } from "node:path";
 import type { HostState } from "../../model/events.ts";
 import { BuildFailures, type FailedBuild } from "../build-failures.ts";
 import { handOffBuilds } from "../build-handoff.ts";
@@ -15,7 +14,15 @@ import {
 } from "../commands/host.ts";
 import { buildHost, evalHosts } from "../commands/nix.ts";
 import { gitAddAll, justClean } from "../commands/workspace.ts";
-import { ask, emit, log, type RepairSession, type RunContext, YES_NO } from "../context.ts";
+import {
+  ask,
+  emit,
+  gitTrees,
+  log,
+  type RepairSession,
+  type RunContext,
+  YES_NO,
+} from "../context.ts";
 import { decideFailure, type Hosts } from "../decisions.ts";
 import { describeFailure, errorLines, execute, succeeded } from "../exec.ts";
 import { type SourceSeeder, sourceSeeder } from "../flake-sources.ts";
@@ -519,9 +526,9 @@ async function evaluateOne(
 
   // `flake.lock` pins `dnf/` at a commit: an edit not committed yet is read
   // only through its working tree (spec § réparation, J8, validate).
-  const overrides: Record<string, string> = context.codev
-    ? { dnf: `git+file://${join(context.workspace, "dnf")}` }
-    : {};
+  const dnf = gitTrees(context).find((tree) => tree.repo === "dnf");
+  const overrides: Record<string, string> =
+    dnf === undefined ? {} : { dnf: `git+file://${dnf.path}` };
   const spec = evalHosts(context.workspace, [name], context.params.timeouts, overrides);
   const execution = await execute(context, spec, {
     log: { host: name, phase: "build" },
@@ -542,6 +549,9 @@ async function evaluateOne(
 export interface Rebuilt {
   /** Store path of the new toplevel; absent when something failed. */
   path?: string;
+
+  /** Derivation of `path`, set with it. */
+  drv?: string;
   note?: string;
   excerpt?: string[];
 
@@ -559,24 +569,21 @@ async function stageTrees(
   name: string,
   stop: AbortSignal,
 ): Promise<string | undefined> {
-  const trees = [context.workspace, ...(context.codev ? [join(context.workspace, "dnf")] : [])];
-  for (const tree of trees) {
-    const staged = await execute(context, gitAddAll(tree, context.params.timeouts), {
+  for (const tree of gitTrees(context)) {
+    const staged = await execute(context, gitAddAll(tree.path, context.params.timeouts), {
       log: { host: name, phase: "repair" },
       signal: stop,
     });
     if (stop.aborted) return undefined;
-    if (!succeeded(staged.result)) return `${tree} not staged: ${describeFailure(staged)}`;
+    if (!succeeded(staged.result)) return `${tree.label} not staged: ${describeFailure(staged)}`;
   }
   return undefined;
 }
 
 /**
- * Validation of a repair (spec § réparation, J8): `just clean`, the trees
- * staged, then this host alone re-evaluated from them and rebuilt. Touches no
- * host state — the caller decides what the outcome means — and leaves every
- * other host on the run's own paths. `session`: its end cuts the validation,
- * like a halt (spec § J10, Délai); its derivation moves to the one evaluated.
+ * Validation of a repair (spec § réparation, J8): `just clean`, trees staged,
+ * this host alone re-evaluated from them and rebuilt; no host state touched.
+ * `session`: its end cuts the validation (spec § J10, Délai), its `drv` follows.
  */
 export async function rebuildHost(
   context: RunContext,
@@ -623,7 +630,7 @@ export async function rebuildHost(
       ...unchanged,
     };
   }
-  return { path: built.path ?? job.outPath, ...unchanged };
+  return { path: built.path ?? job.outPath, drv: job.drvPath, ...unchanged };
 }
 
 /** Failed hosts sharing a reason, in fleet order: one decision each. */

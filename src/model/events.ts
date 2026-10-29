@@ -195,7 +195,7 @@ export type Event =
       action: string;
       outcome: AiOutcome;
 
-      /** `false`: a check or a commit, not a change — it costs no repair attempt. */
+      /** `false`: a check, a commit, or an edit of a series already counted — no attempt spent. */
       spends?: boolean;
 
       /** Why it was refused, or how it failed. */

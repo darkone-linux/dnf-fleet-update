@@ -23,18 +23,43 @@ export function gitAddAll(repo: string, timeouts: Timeouts): CommandSpec {
   return { argv: ["git", "-C", repo, "add", "--all"], ...limits(timeouts.commit, timeouts) };
 }
 
-/** `--no-ext-diff`: a difftastic config would hand the model something unreadable. */
-export function gitDiff(repo: string, path: string, timeouts: Timeouts): CommandSpec {
+/** Path known to the index, content not staged: `git diff` shows a created file. */
+export function gitIntentToAdd(repo: string, path: string, timeouts: Timeouts): CommandSpec {
   return {
-    argv: ["git", "-C", repo, "diff", "--no-ext-diff", "--", path],
+    argv: ["git", "-C", repo, "add", "--intent-to-add", "--", path],
     ...limits(timeouts.commit, timeouts),
   };
 }
 
-/** Index against HEAD, binary included: a patch `git apply` takes back, files created too. */
+/**
+ * Worktree against HEAD, whatever `validate` staged. `--no-ext-diff`: a
+ * difftastic config would hand the model something unreadable.
+ */
+export function gitDiff(repo: string, path: string, timeouts: Timeouts): CommandSpec {
+  return {
+    argv: ["git", "-C", repo, "diff", "--no-ext-diff", "--no-color", "HEAD", "--", path],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
+/**
+ * Index against HEAD, binary included: a patch `git apply` takes back, files
+ * created too. Prefixes explicit: `diff.noprefix` would break `-p1`.
+ */
 export function gitStagedPatch(repo: string, timeouts: Timeouts): CommandSpec {
   return {
-    argv: ["git", "-C", repo, "diff", "--cached", "--binary", "--no-ext-diff", "--no-color"],
+    argv: [
+      "git",
+      "-C",
+      repo,
+      "diff",
+      "--cached",
+      "--binary",
+      "--no-ext-diff",
+      "--no-color",
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
+    ],
     ...limits(timeouts.commit, timeouts),
   };
 }

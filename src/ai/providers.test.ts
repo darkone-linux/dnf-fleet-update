@@ -9,7 +9,6 @@ const PROMPT = "why did nginx fail on nlt?";
 
 const TOOLS: AiTools = {
   endpoint: { url: "http://127.0.0.1:4242/mcp", token: "s3cr3t" },
-  level: "passive",
   names: ["mcp__fleet-update__deployment_state", "mcp__fleet-update__host_log"],
 };
 

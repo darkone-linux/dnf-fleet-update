@@ -10,7 +10,15 @@ import { ExitCode } from "../model/exit-codes.ts";
 import { DEFAULT_TIMEOUTS, type RunParams, runMode } from "../model/params.ts";
 import { fail, ok, type Result } from "../model/result.ts";
 import { gitStatus, readGenerated } from "./commands/workspace.ts";
-import { AiGate, type EventInput, emit, log, QuestionQueue, type RunContext } from "./context.ts";
+import {
+  AiGate,
+  type EventInput,
+  emit,
+  gitTrees,
+  log,
+  QuestionQueue,
+  type RunContext,
+} from "./context.ts";
 import { describeFailure, execute, succeeded } from "./exec.ts";
 import { type FleetDefaults, parseNetwork } from "./fleet.ts";
 import { abortedBy, type RunFlow } from "./flow.ts";
@@ -137,18 +145,15 @@ async function fleetDefaults(
 
 /** Consumer, and `dnf/` in codev: only the update may land in the commits. */
 async function cleanTrees(context: RunContext): Promise<boolean> {
-  const repos = [{ name: "consumer", directory: context.workspace }];
-  if (context.codev) repos.push({ name: "dnf/", directory: `${context.workspace}/dnf` });
-
-  for (const { name, directory } of repos) {
-    const status = await execute(context, gitStatus(directory, context.params.timeouts));
+  for (const { label, path } of gitTrees(context)) {
+    const status = await execute(context, gitStatus(path, context.params.timeouts));
     if (!succeeded(status.result)) {
-      log(context, "error", `git status ${name} failed: ${describeFailure(status)}`);
+      log(context, "error", `git status ${label} failed: ${describeFailure(status)}`);
       return false;
     }
     const changes = status.stdout.filter((line) => line.trim() !== "");
     if (changes.length > 0) {
-      log(context, "error", `${name}: uncommitted changes (${changes.length}), commit them first`);
+      log(context, "error", `${label}: uncommitted changes (${changes.length}), commit them first`);
       return false;
     }
   }

@@ -620,7 +620,10 @@ describe("build", () => {
         {
           match: ["claude"],
           onRun: () =>
-            holder.context?.subjects.set("pc-ag", { revs: { consumer: "c1" }, path: fixed }),
+            holder.context?.subjects.set("pc-ag", {
+              revs: { consumer: "c1" },
+              validated: { path: fixed, drv: `${fixed}.drv` },
+            }),
         },
 
         // Its alignment: the fix changed nothing of the failed derivation.
@@ -659,7 +662,7 @@ describe("build", () => {
       "failed",
       "excluded",
     ]);
-    expect(context.subjects.get("pc-ag")?.path).toBeUndefined();
+    expect(context.subjects.get("pc-ag")?.validated).toBeUndefined();
   });
 
   describe("alignment", () => {
@@ -689,7 +692,10 @@ describe("build", () => {
           {
             match: ["claude"],
             onRun: () =>
-              holder.context?.subjects.set("pc-ag", { revs: { consumer: "c1" }, path: "/x" }),
+              holder.context?.subjects.set("pc-ag", {
+                revs: { consumer: "c1" },
+                validated: { path: "/x", drv: "/x.drv" },
+              }),
           },
           evaluation(after),
           { match: ["git"], output: [{ stream: "stdout", line: "c1" }] },

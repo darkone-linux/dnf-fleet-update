@@ -541,8 +541,13 @@ export class SimFleet implements CommandRunner {
       case "status":
         if (this.pending[command.detail as Repo]) out(" M flake.lock");
         return ok();
-      // Only issued right after a write: in this world the tree is dirty from here.
+      // The patch of a discard (`--cached`) changes nothing; any other diff
+      // follows a write: in this world the tree is dirty from here.
       case "diff": {
+        if (spec.argv.includes("--cached")) {
+          out(`diff --git a/${command.detail} b/${command.detail}`);
+          return ok();
+        }
         this.pending[command.detail as Repo] = true;
         this.edited = true;
         out(`+++ b/${spec.argv.at(-1) ?? "file"}`);

@@ -127,13 +127,15 @@ describe("repairHost", () => {
   });
 
   const BUILT = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-hcs";
+  const VALIDATED = { path: BUILT, drv: `${BUILT}.drv` };
 
   test("a fix committed in the session is redeployed, from what was committed", async () => {
     const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
     const { context, hosts } = erroredHost([
       {
         match: ["claude"],
-        onRun: () => holder.context?.subjects.set("hcs", { revs: { consumer: "c1" }, path: BUILT }),
+        onRun: () =>
+          holder.context?.subjects.set("hcs", { revs: { consumer: "c1" }, validated: VALIDATED }),
       },
     ]);
     holder.context = context;
@@ -143,14 +145,17 @@ describe("repairHost", () => {
     expect(hosts.get("hcs").state).toBe("built");
     expect(hosts.get("hcs").path).toBe(BUILT);
 
+    // Its next session starts from the committed derivation, not the first build's.
+    expect(hosts.get("hcs").drv).toBe(VALIDATED.drv);
+
     // Read once: a later round starts without a path to redeploy.
-    expect(context.subjects.get("hcs")?.path).toBeUndefined();
+    expect(context.subjects.get("hcs")?.validated).toBeUndefined();
   });
 
   test("validated but not committed: nothing is redeployed", async () => {
     const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
     const { context, hosts } = erroredHost([
-      { match: ["claude"], onRun: () => holder.context?.repaired.set("hcs", BUILT) },
+      { match: ["claude"], onRun: () => holder.context?.repaired.set("hcs", VALIDATED) },
       stillFailed(["nginx.service"]),
     ]);
     holder.context = context;
@@ -201,7 +206,7 @@ describe("repairHost", () => {
     expect(git.map((spec) => spec.argv.slice(3).join(" "))).toEqual([
       "status --porcelain",
       "add --all",
-      "diff --cached --binary --no-ext-diff --no-color",
+      "diff --cached --binary --no-ext-diff --no-color --src-prefix=a/ --dst-prefix=b/",
       "reset --hard --quiet HEAD",
       "clean -d --force --quiet",
     ]);
@@ -214,6 +219,93 @@ describe("repairHost", () => {
     expect(feed(context.events.events)).toContain(
       `warn hcs: consumer: uncommitted repair edits discarded, kept in /deployments/${context.run.id}/logs/hcs.consumer.patch`,
     );
+  });
+
+  /** The session edits `usr/x.nix`, then `onEdit` runs: the trees are dirty from there. */
+  const editing = (
+    holder: { context?: ReturnType<typeof fakeRunContext> },
+    onEdit = () => {},
+  ): CommandScript => ({
+    match: ["claude"],
+    onRun: () => {
+      holder.context?.events.emit({
+        kind: "ai.action",
+        host: "hcs",
+        action: "edit usr/x.nix",
+        outcome: "done",
+        t: 3,
+      });
+      onEdit();
+    },
+  });
+  const dirtyTree: CommandScript = {
+    match: (argv) => argv.includes("status"),
+    output: [{ stream: "stdout", line: " M usr/x.nix" }],
+  };
+
+  test("an abort during the session still brings the trees back, the patch kept", async () => {
+    const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
+    const { context, hosts } = erroredHost([
+      editing(holder, () => holder.context?.flow.abort("now", "SIGTERM")),
+      dirtyTree,
+      { match: (argv) => argv.includes("add") },
+      { match: (argv) => argv.includes("diff"), output: [{ stream: "stdout", line: "+{ }" }] },
+      { match: (argv) => argv.includes("reset") },
+      { match: (argv) => argv.includes("clean") },
+    ]);
+    holder.context = context;
+
+    await repairHost(context, hosts, "hcs", "tested");
+
+    // Left dirty, the tree would stop the next run at its very first check.
+    expect(context.run.patches.get("hcs.consumer")).toEqual(["+{ }"]);
+    expect(feed(context.events.events)).toContain(
+      `warn hcs: consumer: uncommitted repair edits discarded, kept in /deployments/${context.run.id}/logs/hcs.consumer.patch`,
+    );
+    expect(hosts.get("hcs").state).toBe("error");
+  });
+
+  test("a patch that cannot be kept is said, and the tree still brought back", async () => {
+    const holder: { context?: ReturnType<typeof fakeRunContext> } = {};
+    const { context, hosts } = erroredHost([
+      editing(holder),
+      dirtyTree,
+      {
+        match: (argv) => argv.includes("add"),
+        exitCode: 128,
+        output: [{ stream: "stderr", line: "fatal: Unable to create '/ws/.git/index.lock'" }],
+      },
+      { match: (argv) => argv.includes("reset") },
+      { match: (argv) => argv.includes("clean") },
+      stillFailed(["nginx.service"]),
+    ]);
+    holder.context = context;
+
+    await repairHost(context, hosts, "hcs", "tested");
+
+    expect(context.run.patches.size).toBe(0);
+    const lines = feed(context.events.events);
+    expect(lines).toContain(
+      "warn hcs: consumer: no patch kept: exit 128: fatal: Unable to create '/ws/.git/index.lock'",
+    );
+    expect(lines).toContain("warn hcs: consumer: uncommitted repair edits discarded");
+  });
+
+  test("the session is told the attempts its host has left, not the whole budget", async () => {
+    const { context, hosts } = erroredHost([ANSWER, stillFailed([])]);
+    context.events.emit({
+      kind: "ai.action",
+      host: "hcs",
+      action: "restart nginx.service",
+      outcome: "done",
+      t: 2,
+    });
+
+    await repairHost(context, hosts, "hcs", "tested");
+
+    const argv: readonly string[] = context.commands.calls[0]?.argv ?? [];
+    const left = context.params.repair.aiAttempts - 1;
+    expect(argv[argv.indexOf("--system-prompt") + 1]).toContain(`You have ${left} attempts`);
   });
 
   test("two hosts of a wave take turns: a commit takes the whole tree", async () => {

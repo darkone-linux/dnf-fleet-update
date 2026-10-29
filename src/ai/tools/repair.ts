@@ -11,6 +11,7 @@ import {
   type UnitAction,
   unitAction,
 } from "../../engine/commands/host.ts";
+import type { Excerpt } from "../../engine/ports.ts";
 import {
   editSeriesOpen,
   type PersistedHost,
@@ -39,33 +40,69 @@ function refuse(context: ToolContext, host: string, action: string, reason: stri
 }
 
 /**
- * What every action tool checks before it changes anything (spec § réparation):
- * the run is not leaving, the host is the one under repair, an attempt is left
- * unless the change belongs to one already spent, and the operator agrees.
+ * What every action tool checks first (spec § réparation): the run is not
+ * leaving, and a repair session acts on this very host. Returns where that
+ * session began in `state().actions`.
+ */
+function underRepair(context: ToolContext, host: PersistedHost, label: string): number {
+  if (context.halting()) {
+    refuse(context, host.name, label, "the run is stopping: no repair starts now");
+  }
+
+  // The parcours is structural, not a prompt: only the repair session acts.
+  if (host.state !== "ai-repairing") {
+    refuse(
+      context,
+      host.name,
+      label,
+      `${host.name} is not under repair right now (state ${host.state})`,
+    );
+  }
+
+  // One subject, one tree: a build group acts through the host its session names.
+  const since = context.sessionStart(host.name);
+  if (since === undefined) {
+    return refuse(
+      context,
+      host.name,
+      label,
+      `no repair session acts on ${host.name}: name the host your prompt repairs`,
+    );
+  }
+  return since;
+}
+
+/**
+ * What a change needs before it runs (spec § réparation): `underRepair`, an
+ * attempt left unless it continues its session's edit series, and the
+ * operator's agreement, read again once given. `true`: it spends an attempt.
  */
 async function allowed(
   context: ToolContext,
   host: PersistedHost,
   label: string,
-  spends = true,
-): Promise<void> {
-  const no = (reason: string): never => refuse(context, host.name, label, reason);
-  if (context.halting()) no("the run is stopping: no repair starts now");
+  change: "service" | "edit",
+): Promise<boolean> {
+  const since = underRepair(context, host, label);
 
-  // The parcours is structural, not a prompt: only the repair session acts.
-  if (host.state !== "ai-repairing") {
-    no(`${host.name} is not under repair right now (state ${host.state})`);
-  }
+  // Read before the edit is recorded: it would open the series itself.
+  const spends = change === "service" || !editSeriesOpen(context.state(), host.name, since);
   const budget = context.params.repair.aiAttempts;
   if (spends && spentAttempts(context.state(), host.name) >= budget) {
-    no(`${budget} repair attempts already spent on ${host.name}`);
+    refuse(context, host.name, label, `${budget} repair attempts already spent on ${host.name}`);
   }
 
   // One action recorded per question: its rank names the question once.
   const asked = context.state().actions.filter((action) => action.host === host.name).length;
   if (!(await context.confirm(`repair-${host.name}-${asked + 1}`, `${label} on ${host.name}?`))) {
-    no("the operator declined this action");
+    refuse(context, host.name, label, "the operator declined this action");
   }
+
+  // An answer may come late: the run stopping, the session that asked over.
+  if (underRepair(context, context.host(host.name), label) !== since) {
+    refuse(context, host.name, label, "the repair session that asked has ended");
+  }
+  return spends;
 }
 
 /** Feed line of a call: `restarts nginx.service on nlt`. */
@@ -107,7 +144,7 @@ const serviceAction = defineTool({
         `not failed on ${host.name}: ${stray.join(", ")} (failed units: ${known})`,
       );
     }
-    await allowed(context, host, label);
+    await allowed(context, host, label, "service");
     return act(context, host.name, args, label);
   },
 });
@@ -178,7 +215,7 @@ const editCode = defineTool({
   level: "repair",
   sessions: ACTING,
   description:
-    "Change a file of the deployment sources: replace one exact passage (old, new), or write the whole file (content) to create or redo it. Only while a host is under repair, only inside the project (and dnf/ in co-development), and never a lock, generated data or the fleet declaration. Returns the diff. The first edit after a validate (or a service action, or the start) spends one of the host's repair attempts; the edits that follow it up to the next validate belong to that attempt, so edit every file one fix needs before validating. The host is then rebuilt from it, and it alone.",
+    "Change a file of the deployment sources: replace one exact passage (old, new), or write the whole file (content) to create or redo it. Only while a host is under repair, only inside the project (and dnf/ in co-development), and never a lock, generated data or the fleet declaration. Returns the diff. The first edit after a validate (or a service action, or the start of the session) spends one of the host's repair attempts; the edits that follow it up to the next validate belong to that attempt, so edit every file one fix needs before validating. The host is then rebuilt from it, and it alone.",
   input: z.strictObject({
     host: z
       .string()
@@ -213,11 +250,9 @@ const editCode = defineTool({
         `${args.path}: ${lines} lines, over the ${MAX_LINES} a whole rewrite may carry`,
       );
     }
-    // Read before the edit is recorded: it would open the series itself.
-    const spends = !editSeriesOpen(context.state(), host.name);
-    await allowed(context, host, label, spends);
+    const spends = await allowed(context, host, label, "edit");
 
-    let diff: string[];
+    let diff: Excerpt;
     try {
       diff = await context.writeSource(args.path, content);
     } catch (error) {
@@ -232,11 +267,13 @@ const editCode = defineTool({
     const attempt = spends
       ? "a new attempt: the edits up to the next validate belong to it"
       : "part of the attempt the previous edit opened";
+    const written =
+      diff.lines.length > 0
+        ? ["written, diff:", ...diff.lines]
+        : ["written; the file already read exactly this"];
     return {
-      lines:
-        diff.length > 0
-          ? ["written, diff:", ...diff, attempt]
-          : ["written; the file already read exactly this", attempt],
+      lines: [...written, attempt],
+      ...(diff.dropped > 0 ? { dropped: diff.dropped } : {}),
     };
   },
 });
@@ -254,10 +291,7 @@ const validate = defineTool({
   run: async (context, args) => {
     const host = context.host(args.host);
     const label = `validate ${host.name}`;
-    if (context.halting()) refuse(context, host.name, label, "the run is stopping");
-    if (host.state !== "ai-repairing") {
-      refuse(context, host.name, label, `${host.name} is not under repair right now`);
-    }
+    underRepair(context, host, label);
 
     const built = await context.rebuild(host.name);
 
@@ -299,10 +333,7 @@ const commit = defineTool({
   run: async (context, args) => {
     const host = context.host(args.host);
     const label = `commit ${host.name}`;
-    if (context.halting()) refuse(context, host.name, label, "the run is stopping");
-    if (host.state !== "ai-repairing") {
-      refuse(context, host.name, label, `${host.name} is not under repair right now`);
-    }
+    underRepair(context, host, label);
 
     // Committed is redeployed: an edit nobody built is never sealed.
     if (!validatedSinceEdit(context.state(), host.name)) {

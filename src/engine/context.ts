@@ -1,5 +1,6 @@
 // Run context of the steps: ports, parameters, run clock, questions.
 
+import { join } from "node:path";
 import type { AiAnalyses } from "../ai/analysis.ts";
 import type { AiToolSession } from "../ai/server.ts";
 import type { AiSuggestions } from "../ai/suggestions.ts";
@@ -71,8 +72,14 @@ export interface RepairSubject {
   /** Full revision by tree: a further correction amends it while it is HEAD. */
   revs: Partial<Record<"dnf" | "consumer", string>>;
 
-  /** Toplevel validated when last committed: the only path a redeploy takes, read once. */
-  path?: string;
+  /** Validated when last committed: the only toplevel a redeploy takes, read once. */
+  validated?: Validated;
+}
+
+/** Toplevel a `validate` built, and the derivation it came from. */
+export interface Validated {
+  path: string;
+  drv: string;
 }
 
 /** A repair session under way (spec § réparation, J10, Délai). */
@@ -80,8 +87,27 @@ export interface RepairSession {
   /** Its end cuts a `validate` still building. */
   signal: AbortSignal;
 
+  /** Length of `state().actions` when it opened: earlier actions belong to ended sessions. */
+  since: number;
+
   /** Last derivation evaluated for its host: an edit that leaves it unchanged reaches nothing. */
   drv?: string;
+}
+
+/** A git tree of the workspace. */
+export interface GitTree {
+  repo: "consumer" | "dnf";
+
+  /** As the feed names it. */
+  label: "consumer" | "dnf/";
+  path: string;
+}
+
+/** Trees a run checks, stages and discards: the consumer, then `dnf/` in codev. */
+export function gitTrees(context: Pick<RunContext, "workspace" | "codev">): GitTree[] {
+  const consumer: GitTree = { repo: "consumer", label: "consumer", path: context.workspace };
+  if (!context.codev) return [consumer];
+  return [consumer, { repo: "dnf", label: "dnf/", path: join(context.workspace, "dnf") }];
 }
 
 export interface RunContext extends EngineContext {
@@ -128,7 +154,7 @@ export interface RunContext extends EngineContext {
   suggestions: AiSuggestions;
 
   /** Toplevel a repair rebuilt, by host: the wave serves it on its next pass. */
-  repaired: Map<string, string>;
+  repaired: Map<string, Validated>;
 
   /** Repair session under way, by host. */
   repairing: Map<string, RepairSession>;

@@ -169,7 +169,7 @@ test("edits up to the next validate make one series, closed by any other action"
     outcome: "done" | "failed" | "refused" = "done",
     host = "gfx",
   ): Event => ({ kind: "ai.action", host, action: label, outcome, t: 0 });
-  const open = (...events: Event[]) => editSeriesOpen(fold(events), "gfx");
+  const open = (...events: Event[]) => editSeriesOpen(fold(events), "gfx", 0);
 
   expect(open()).toBe(false);
   expect(open(action("edit a.nix"))).toBe(true);
@@ -177,6 +177,9 @@ test("edits up to the next validate make one series, closed by any other action"
   expect(open(action("edit a.nix"), action("validate gfx", "failed"))).toBe(false);
   expect(open(action("edit a.nix"), action("restart nginx.service"))).toBe(false);
   expect(open(action("edit a.nix"), action("validate nlt", "done", "nlt"))).toBe(true);
+
+  // A session opens its own: the edits of an ended one were discarded with it.
+  expect(editSeriesOpen(fold([action("edit a.nix")]), "gfx", 1)).toBe(false);
 });
 
 test("closed questions are kept as decisions", () => {

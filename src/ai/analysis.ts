@@ -14,7 +14,7 @@ import {
   suggestionsPrompt,
   systemPrompt,
 } from "./prompts.ts";
-import { type AiTools, forSession } from "./providers.ts";
+import { forSession } from "./providers.ts";
 import { askAi } from "./session.ts";
 import { toolLevel } from "./tools/registry.ts";
 import { ACTING, type SessionKind } from "./tools/types.ts";
@@ -51,12 +51,7 @@ export class AiAnalyses {
 
   /** What a repair session said it did and left for a human: read by the review. */
   addRepair(lines: readonly string[], host: string, hosts?: readonly string[]): void {
-    if (lines.length === 0) return;
-    this.repaired.push({
-      host,
-      ...(hosts === undefined ? {} : { hosts: [...hosts] }),
-      lines: [...lines],
-    });
+    if (lines.length > 0) this.repaired.push({ ...entry(lines, host, hosts), host });
   }
 
   repairs(): readonly RepairConclusion[] {
@@ -76,6 +71,9 @@ export interface AiQuestion {
 
   /** Default `analysis`; `repair` and `build-repair` alone are told they may act (spec § réparation). */
   session?: SessionKind;
+
+  /** Acting sessions: attempts their host has left; default the whole budget. */
+  attempts?: number;
 }
 
 /** One session with the tools of the run's level attached, when there are any. */
@@ -85,8 +83,8 @@ export async function ask(
   signal?: AbortSignal,
 ): Promise<string[]> {
   const { id, summary, prompt, session = "analysis" } = question;
-  const { ai } = context.params;
-  const run: AiTools | undefined = await context.tools.start(context, context.state);
+  const { ai, repair } = context.params;
+  const run = await context.tools.start(context, context.state);
   const tools = run === undefined ? undefined : forSession(run, session);
   return askAi(
     context,
@@ -94,7 +92,11 @@ export async function ask(
       id,
       summary,
       prompt,
-      system: systemPrompt(toolLevel(context.params), session, context.params.repair.aiAttempts),
+      system: systemPrompt(
+        toolLevel(context.params),
+        session,
+        question.attempts ?? repair.aiAttempts,
+      ),
 
       // A repair rebuilds inside its session: `validate` outlasts an answer.
       timeoutSeconds: ACTING.includes(session) ? ai.repairTimeoutSeconds : ai.timeoutSeconds,
@@ -177,8 +179,8 @@ export async function analyseGroup(
 
 /**
  * Free question of the operator (`a`). Answered whatever `--ai-analysis` says,
- * with the tools of the current level and no more (spec § Déclencheurs): `none`
- * removes the tools and the automatic analysis, not the conversation.
+ * as an analysis: the reading tools of the current level, no more (spec §
+ * Déclencheurs, § Transport). `none` removes the tools, not the conversation.
  */
 export async function analyseFree(
   context: RunContext,

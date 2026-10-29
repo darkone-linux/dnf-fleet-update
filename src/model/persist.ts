@@ -49,16 +49,22 @@ export function spentAttempts(state: PersistedState, host: string): number {
   ).length;
 }
 
+/** Recorded by `edit_code` as `edit <path>`. */
+export const isEdit = (action: AiAction): boolean => action.action.startsWith("edit ");
+
+/** Recorded by `validate` as `validate <host>`. */
+export const isValidate = (action: AiAction): boolean => action.action.startsWith("validate ");
+
 /**
- * `true` while an edit series of this host is open: its last change is an edit
- * nothing followed yet. The edits up to the next `validate` make one attempt:
- * a fix spans files (spec § réparation, J8, Essais).
+ * `true` while an edit series of this host is open: since `since`, the start
+ * of its session, its last change is an edit. Edits up to the next `validate`
+ * make one attempt (spec § réparation, J8, Les trois outils).
  */
-export function editSeriesOpen(state: PersistedState, host: string): boolean {
-  const last = state.actions.findLast(
-    (action) => action.host === host && action.outcome !== "refused",
-  );
-  return last?.action.startsWith("edit ") === true;
+export function editSeriesOpen(state: PersistedState, host: string, since: number): boolean {
+  const last = state.actions
+    .slice(since)
+    .findLast((action) => action.host === host && action.outcome !== "refused");
+  return last !== undefined && isEdit(last);
 }
 
 /**
@@ -67,8 +73,8 @@ export function editSeriesOpen(state: PersistedState, host: string): boolean {
  */
 export function validatedSinceEdit(state: PersistedState, host: string): boolean {
   const done = state.actions.filter((action) => action.host === host && action.outcome === "done");
-  const edit = done.findLastIndex((action) => action.action.startsWith("edit "));
-  const validate = done.findLastIndex((action) => action.action.startsWith("validate "));
+  const edit = done.findLastIndex(isEdit);
+  const validate = done.findLastIndex(isValidate);
   return edit < validate || edit === -1;
 }
 

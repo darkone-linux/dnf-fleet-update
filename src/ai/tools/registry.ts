@@ -58,10 +58,6 @@ export function toolsFor(level: ToolLevel, session?: SessionKind): RegisteredToo
   );
 }
 
-export function toolByName(
-  level: ToolLevel,
-  name: string,
-  session?: SessionKind,
-): RegisteredTool | undefined {
-  return toolsFor(level, session).find((tool) => tool.name === name);
+export function toolByName(level: ToolLevel, name: string): RegisteredTool | undefined {
+  return toolsFor(level).find((tool) => tool.name === name);
 }

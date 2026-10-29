@@ -10,6 +10,7 @@ import {
   gitCommit,
   gitDiff,
   gitHead,
+  gitIntentToAdd,
   gitStatus,
   realignDnfLock,
 } from "../engine/commands/workspace.ts";
@@ -198,10 +199,14 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
       const written = await context.sources.write(target.value, content);
       if (!written.ok) throw new ToolError(written.error);
 
+      // Best effort: an ignored path stays out of the index, its diff empty.
+      const { timeouts } = context.params;
+      await execute(context, gitIntentToAdd(repo, target.value, timeouts));
+
       // A commit alone never says what the AI believed it was fixing.
-      const diff = await execute(context, gitDiff(repo, target.value, context.params.timeouts));
+      const diff = await execute(context, gitDiff(repo, target.value, timeouts));
       for (const line of diff.stdout) context.run.appendLog(AI_LOG, line);
-      return bounded(diff.stdout, context.params.ai.sourceLines).lines;
+      return bounded(diff.stdout, context.params.ai.sourceLines);
     },
 
     onHost: runOnHost,
@@ -245,7 +250,7 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
 
       // What was validated is what is committed: the commit guard saw no edit since.
       const validated = context.repaired.get(name);
-      if (validated !== undefined) repairs.path = validated;
+      if (validated !== undefined) repairs.validated = validated;
 
       // Committed: what the trees now hold is no longer what the run started from.
       clean.clear();
@@ -264,7 +269,9 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
 
       // Session over meanwhile: its path would be taken by the next one for its own.
       if (session?.signal.aborted === true) return { note: "repair session ended" };
-      if (built.path !== undefined) context.repaired.set(host.name, built.path);
+      if (built.path !== undefined && built.drv !== undefined) {
+        context.repaired.set(host.name, { path: built.path, drv: built.drv });
+      }
       return built;
     },
 
@@ -296,6 +303,7 @@ export function toolContext(context: RunContext, state: () => PersistedState): T
     },
 
     halting: () => context.flow.halt.aborted || context.flow.ending !== undefined,
+    sessionStart: (name) => context.repairing.get(name)?.since,
 
     async confirm(id, question) {
       // Unattended: an action on a service is less than `repairUnits` already

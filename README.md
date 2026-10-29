@@ -168,12 +168,13 @@ and commit it as
 `fix(<scope>): <subject>`, the scope naming what the fix touches. A `dnf/`
 commit is published: one naming a fleet host is refused. The host is then served once
 more by its own wave. Six attempts per host: an attempt is a *change* — a
-service action, or the series of edits up to the next validation, so a fix
-spanning several files costs one — and a validation and a commit cost none.
+service action, or the series of edits up to the next validation (a session
+opens its own), so a fix spanning several files costs one — and a validation
+and a commit cost none; each session is told the attempts its host has left.
 `validate` also says when the edits leave the host's derivation unchanged.
 Refusals cost none either, a confirmation is
 asked before each service action and each edit when interactive, and nothing at all
-happens once the run is stopping. Writes never reach `usr/secrets/`,
+happens once the run is stopping, an answer given meanwhile included. Writes never reach `usr/secrets/`,
 `var/generated/`, `etc/config.yaml` or a lock; outside co-development `dnf/` is
 a store path and is refused.
 
@@ -181,8 +182,8 @@ a store path and is refused.
 is validated, so what ships is what was built. Fixing a fix **amends** its
 `fix(…)` commit while it is still HEAD — one commit per fix, never the
 `chore(update)` nor a human commit. Repair sessions run one at a time (a commit
-takes the whole tree), and an edit left uncommitted when a session ends is
-discarded, its diff kept in `logs/ai.log` and as a patch,
+takes the whole tree), and an edit left uncommitted when a session ends, an
+abort included, is discarded, its diff kept in `logs/ai.log` and as a patch,
 `logs/<host>.<consumer|dnf>.patch`, for `git apply`. Each session sees only the
 tools it may use: an analysis reads, a repair reads and acts, the review reads
 and files.
@@ -190,7 +191,7 @@ and files.
 **A failed build is repaired too**, at the end of the build and before its
 usual decision, while built hosts wait. Hosts broken by the same failure form
 one group: one analysis, then one repair session through the host that built
-the failing derivation. A committed fix rebuilds the group; nothing committed,
+the failing derivation, the only one its tools act on. A committed fix rebuilds the group; nothing committed,
 and the group is excluded or the run stopped as before. A known `stop` or
 `exclude` signature decides alone, and `--build-only` repairs as well.
 

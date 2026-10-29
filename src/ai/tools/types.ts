@@ -79,11 +79,11 @@ export interface ToolContext {
   searchSource(pattern: string, path: string, limit: number): Promise<Excerpt>;
 
   /**
-   * Writes a whole file of the repairable trees and returns its diff, already
-   * in `logs/ai.log`. Throws `ToolError` on a path a human or a generator owns,
-   * and on a tree that was not clean to start with.
+   * Writes a whole file of the repairable trees and returns its diff against
+   * HEAD, tail kept, whole in `logs/ai.log`. Throws `ToolError` on a path a
+   * human or a generator owns, and on a tree that was not clean to start with.
    */
-  writeSource(path: string, content: string): Promise<string[]>;
+  writeSource(path: string, content: string): Promise<Excerpt>;
 
   /** Places the command on the host, as the steps do. Throws `ToolError` on failure. */
   onHost(host: string, command: HostCommand): Promise<Excerpt>;
@@ -115,6 +115,12 @@ export interface ToolContext {
   /** Run on its way out (stop, rollback, abort): a repair is a new operation. */
   halting(): boolean;
 
+  /**
+   * Where the repair session acting on `host` began in `state().actions`;
+   * `undefined`: none acts on it — a build group acts through one host.
+   */
+  sessionStart(host: string): number | undefined;
+
   /** Interactive only: `false` when the operator declined (spec § réparation). */
   confirm(id: string, question: string): Promise<boolean>;
 
@@ -145,7 +151,7 @@ export interface AiTool<A> {
   name: string;
   level: ToolLevel;
 
-  /** Sessions it is published to; absent: every one. A tool shown is a tool that may work. */
+  /** Sessions it is published to, absent: every one — a tool shown is a tool that may work. */
   sessions?: readonly SessionKind[];
 
   /** What the model reads to choose this tool. */

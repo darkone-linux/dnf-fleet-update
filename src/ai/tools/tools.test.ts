@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { EventInput } from "../../engine/context.ts";
-import { DEFAULT_REPAIR } from "../../model/params.ts";
+import { DEFAULT_AI, DEFAULT_REPAIR } from "../../model/params.ts";
 import { spentAttempts } from "../../model/persist.ts";
 import { type CommandScript, type FakeRunOptions, fakeRunContext } from "../../testing/fakes.ts";
 import { toolContext } from "../context.ts";
@@ -20,11 +20,17 @@ const EVENTS: EventInput[] = [
   { kind: "note", message: "unlock not re-tested" },
 ];
 
-/** Seeded through the channel: the tools read the fold a real run would. */
+/**
+ * Seeded through the channel: the tools read the fold a real run would. A host
+ * put under repair gets its session from the start, as `repairHost` opens one.
+ */
 function tools(options: FakeRunOptions = {}, extra: EventInput[] = []) {
   const context = fakeRunContext(options);
   for (const [index, event] of [...EVENTS, ...extra].entries()) {
     context.events.emit({ ...event, t: index * 1000 });
+    if (event.kind === "host.state" && event.state === "ai-repairing") {
+      context.repairing.set(event.host, { signal: new AbortController().signal, since: 0 });
+    }
   }
   return { context, tool: toolContext(context, context.state) };
 }
@@ -101,7 +107,6 @@ describe("registry", () => {
     const run = {
       endpoint: { url: "http://127.0.0.1:9/mcp", token: "t" },
       level: "active" as const,
-      names: [],
     };
     const review = forSession(run, "suggestions");
     expect(review.endpoint).toEqual({ url: "http://127.0.0.1:9/mcp/suggestions", token: "t" });
@@ -590,6 +595,53 @@ describe("service_action", () => {
     expect(context.run.logs.get("ai")).toContain("+  enable = true;");
   });
 
+  test("edit_code: a created file is known to the index before its diff", async () => {
+    const { context, tool } = tools({ commands: [{ match: ["git"] }] }, UNDER_REPAIR);
+
+    await call(tool, "repair", "edit_code", { host: "gfx", path: "usr/new.nix", content: "{}\n" });
+
+    // `git diff` skips an untracked file: the model would read "unchanged".
+    const git = context.commands.calls.map((spec) => spec.argv.slice(3).join(" "));
+    expect(git.slice(-2)).toEqual([
+      "add --intent-to-add -- /ws/usr/new.nix",
+      "diff --no-ext-diff --no-color HEAD -- /ws/usr/new.nix",
+    ]);
+  });
+
+  test("edit_code: a diff past ai.sourceLines says how many lines were cut", async () => {
+    const diff = ["-a", "+b", "-c", "+d"];
+    const { context, tool } = tools(
+      {
+        commands: [
+          {
+            match: (argv) => argv.includes("diff"),
+            output: diff.map((line) => ({ stream: "stdout" as const, line })),
+          },
+          { match: ["git"] },
+        ],
+        params: { ai: { ...DEFAULT_AI, sourceLines: 2 } },
+      },
+      UNDER_REPAIR,
+    );
+
+    const result = await call(tool, "repair", "edit_code", {
+      host: "gfx",
+      path: "usr/x.nix",
+      content: "{}\n",
+    });
+
+    expect(result.dropped).toBe(2);
+    expect(result.lines).toEqual([
+      "written, diff:",
+      "-c",
+      "+d",
+      "a new attempt: the edits up to the next validate belong to it",
+    ]);
+
+    // Whole in the log all the same.
+    expect(context.run.logs.get("ai")).toEqual(expect.arrayContaining(diff));
+  });
+
   test("edit_code replaces one exact passage, the rest of the file untouched", async () => {
     const { context, tool } = tools(
       {
@@ -645,6 +697,58 @@ describe("service_action", () => {
       "3 repair attempts already spent on gfx",
     );
     expect(closed.context.sources.writes).toEqual([]);
+
+    // So does the end of its session: the next one opens its own (spec § Essais).
+    const ended = tools({ commands: [{ match: ["git"] }], params }, [
+      ...UNDER_REPAIR,
+      ...spent("gfx", 2),
+      edit("usr/a.nix"),
+    ]);
+    const since = ended.context.state().actions.length;
+    ended.context.repairing.set("gfx", { signal: new AbortController().signal, since });
+    await expect(write(ended.tool, "usr/b.nix")).rejects.toThrow(
+      "3 repair attempts already spent on gfx",
+    );
+    expect(ended.context.sources.writes).toEqual([]);
+  });
+
+  test("a build group acts through the host its session names, never a sibling", async () => {
+    const { context, tool } = tools({ commands: [{ match: ["git"] }] }, [
+      ...UNDER_REPAIR,
+      { kind: "host.state", host: "hcs", state: "ai-repairing" },
+    ]);
+    context.repairing.delete("hcs");
+
+    const refusal = "no repair session acts on hcs";
+    await expect(
+      call(tool, "repair", "edit_code", { host: "hcs", path: "usr/a.nix", content: "{}\n" }),
+    ).rejects.toThrow(refusal);
+    await expect(call(tool, "repair", "validate", { host: "hcs" })).rejects.toThrow(refusal);
+    await expect(
+      call(tool, "repair", "commit", { host: "hcs", scope: "nginx", subject: "fix it" }),
+    ).rejects.toThrow(refusal);
+    expect(context.sources.writes).toEqual([]);
+    expect(context.commands.calls).toEqual([]);
+  });
+
+  test("an answer that comes once the run is stopping changes nothing", async () => {
+    const { context, tool } = tools(
+      { commands: script(), params: { interactive: true }, answers: { "repair-gfx-1": "apply" } },
+      UNDER_REPAIR,
+    );
+
+    // The operator answers once a stop was asked meanwhile.
+    const answer = context.events.answer.bind(context.events);
+    context.events.answer = (id: string) => {
+      context.flow.stop("stop");
+      return answer(id);
+    };
+
+    await expect(call(tool, "repair", "service_action", RESTART)).rejects.toThrow(
+      "the run is stopping",
+    );
+    expect(context.commands.calls).toEqual([]);
+    expect(spentAttempts(context.state(), "gfx")).toBe(0);
   });
 
   test("a passage missing or repeated is refused, and costs no attempt", async () => {
@@ -735,7 +839,7 @@ describe("service_action", () => {
     const result = await call(tool, "repair", "validate", { host: "gfx" });
 
     expect(result.lines[0]).toBe(`builds: ${TOPLEVEL}`);
-    expect(context.repaired.get("gfx")).toBe(TOPLEVEL);
+    expect(context.repaired.get("gfx")).toEqual({ path: TOPLEVEL, drv: DRV });
 
     // A check is not a change: the host keeps its attempts.
     expect(spentAttempts(context.state(), "gfx")).toBe(0);
@@ -777,7 +881,7 @@ describe("service_action", () => {
       },
       UNDER_REPAIR,
     );
-    const session = { signal: new AbortController().signal, drv: DRV };
+    const session = { signal: new AbortController().signal, since: 0, drv: DRV };
     context.repairing.set("gfx", session);
 
     const refusal = call(tool, "repair", "validate", { host: "gfx" });
@@ -796,7 +900,7 @@ describe("service_action", () => {
       { commands: rebuilding({ onRun: () => session.abort(), gate: new Promise<void>(() => {}) }) },
       UNDER_REPAIR,
     );
-    context.repairing.set("gfx", { signal: session.signal });
+    context.repairing.set("gfx", { signal: session.signal, since: 0 });
 
     await expect(call(tool, "repair", "validate", { host: "gfx" })).rejects.toThrow(
       "repair session ended",
@@ -887,6 +991,7 @@ describe("service_action", () => {
     { kind: "ai.action", host: "gfx", action: "validate gfx", outcome: "done", spends: false },
   ];
   const BUILT = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-nixos-system-gfx";
+  const BUILT_DRV = `${BUILT}.drv`;
 
   /** Consumer alone: dirty, HEAD read as `head`, committed as `rev`. */
   const consumerCommit = (head: string, rev: string) => [
@@ -930,7 +1035,7 @@ describe("service_action", () => {
       ...VALIDATED,
     ]);
     context.subjects.set("gfx", { revs: { consumer: "c1" } });
-    context.repaired.set("gfx", BUILT);
+    context.repaired.set("gfx", { path: BUILT, drv: BUILT_DRV });
 
     const result = await call(tool, "repair", "commit", FIX);
 
@@ -949,7 +1054,10 @@ describe("service_action", () => {
     ]);
 
     // What was validated is what is now committed: the only path a redeploy takes.
-    expect(context.subjects.get("gfx")).toEqual({ revs: { consumer: "c2" }, path: BUILT });
+    expect(context.subjects.get("gfx")).toEqual({
+      revs: { consumer: "c2" },
+      validated: { path: BUILT, drv: BUILT_DRV },
+    });
   });
 
   test("another repair committed on top: a new commit, said in the report", async () => {
