@@ -1,7 +1,8 @@
 // Prompt response shape: OpenTUI renders concise Markdown.
 
 import { expect, test } from "bun:test";
-import { systemPrompt } from "./prompts.ts";
+import { initialPersisted } from "../model/persist.ts";
+import { suggestionsPrompt, systemPrompt } from "./prompts.ts";
 
 test("analysis and repair system prompts request concise Markdown", () => {
   expect(systemPrompt(undefined)).toContain("Markdown");
@@ -35,4 +36,12 @@ test("an acting session is told its attempts, and that a fix spans files", () =>
   expect(acting).toContain("a series of edits up to the");
   expect(acting.indexOf("attempts")).toBeLessThan(acting.indexOf("Stop once validate passes"));
   expect(systemPrompt("active", "analysis", 6)).not.toContain("attempts");
+});
+
+test("the review reads what each repair session concluded, group named", () => {
+  const prompt = suggestionsPrompt(initialPersisted(), [
+    { host: "ms-a2", hosts: ["ms-a2", "nlt"], lines: ["Left for a human: register it."] },
+  ]);
+  expect(prompt).toContain("### Repair of ms-a2, nlt\nLeft for a human: register it.");
+  expect(suggestionsPrompt(initialPersisted())).not.toContain("repair sessions");
 });

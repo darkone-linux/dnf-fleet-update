@@ -57,7 +57,7 @@ async function repairSession(
   forget(context, name);
   try {
     const analysis = context.analyses.all().findLast((entry) => entry.host === name);
-    await ask(context, {
+    const answer = await ask(context, {
       id: `repair-${name}`,
       summary: `repairing ${name}`,
       prompt: repairPrompt(
@@ -68,6 +68,7 @@ async function repairSession(
       ),
       session: "repair",
     });
+    context.analyses.addRepair(answer, name);
 
     // Session over: a validation still building ends with it (spec § J10, Délai).
     session.abort();
@@ -141,7 +142,7 @@ async function groupSession(
   forget(context, name);
   try {
     const analysis = context.analyses.all().findLast((entry) => entry.host === name);
-    await ask(context, {
+    const answer = await ask(context, {
       id: `repair-${name}`,
       summary: `repairing the build of ${group.hosts.join(", ")}`,
       prompt: buildRepairPrompt(
@@ -153,6 +154,7 @@ async function groupSession(
       ),
       session: "build-repair",
     });
+    context.analyses.addRepair(answer, name, group.hosts);
 
     // Session over: a validation still building ends with it (spec § J10, Délai).
     session.abort();

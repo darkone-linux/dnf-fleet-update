@@ -9,6 +9,7 @@ import {
   buildPrompt,
   freePrompt,
   hostPrompt,
+  type RepairConclusion,
   runPrompt,
   suggestionsPrompt,
   systemPrompt,
@@ -29,21 +30,37 @@ export interface Analysis {
   lines: string[];
 }
 
+const entry = (lines: readonly string[], host?: string, hosts?: readonly string[]): Analysis => ({
+  ...(host === undefined ? {} : { host }),
+  ...(hosts === undefined ? {} : { hosts: [...hosts] }),
+  lines: [...lines],
+});
+
 /** Collected by the run, like the known errors it met. */
 export class AiAnalyses {
   private readonly entries: Analysis[] = [];
+  private readonly repaired: RepairConclusion[] = [];
 
   add(lines: readonly string[], host?: string, hosts?: readonly string[]): void {
+    if (lines.length > 0) this.entries.push(entry(lines, host, hosts));
+  }
+
+  all(): readonly Analysis[] {
+    return this.entries;
+  }
+
+  /** What a repair session said it did and left for a human: read by the review. */
+  addRepair(lines: readonly string[], host: string, hosts?: readonly string[]): void {
     if (lines.length === 0) return;
-    this.entries.push({
-      ...(host === undefined ? {} : { host }),
+    this.repaired.push({
+      host,
       ...(hosts === undefined ? {} : { hosts: [...hosts] }),
       lines: [...lines],
     });
   }
 
-  all(): readonly Analysis[] {
-    return this.entries;
+  repairs(): readonly RepairConclusion[] {
+    return this.repaired;
   }
 }
 
@@ -192,23 +209,24 @@ export async function analyseRun(context: RunContext): Promise<void> {
 }
 
 /**
- * End of run, `--ai-analysis active`: the warnings reviewed for improvements,
- * filed as suggestions (spec § Suggestions d'amélioration). Nothing to review,
- * nothing paid for.
+ * End of run, `--ai-analysis active`: the warnings, and what the repairs left
+ * undone, reviewed for improvements filed as suggestions (spec § Suggestions
+ * d'amélioration). Nothing to review, nothing paid for.
  */
 export async function reviewRun(context: RunContext): Promise<void> {
   if (context.params.aiAnalysis !== "active" || quiet(context)) return;
   const groups = await runWarnings(context.run.logNames(), (name, lines) =>
     context.run.readLog(name, lines),
   );
-  if (groups.length === 0) return;
+  const repairs = context.analyses.repairs();
+  if (groups.length === 0 && repairs.length === 0) return;
 
   context.suggestions.reviewing = true;
   try {
     await ask(context, {
       id: "suggestions",
       summary: "reviewing the run for improvements",
-      prompt: suggestionsPrompt(context.state(), context.params.aiContext),
+      prompt: suggestionsPrompt(context.state(), repairs, context.params.aiContext),
       session: "suggestions",
     });
   } finally {

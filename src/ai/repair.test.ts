@@ -83,7 +83,14 @@ describe("repairHost", () => {
     const argv: readonly string[] = context.commands.calls[0]?.argv ?? [];
     expect(argv[argv.indexOf("--system-prompt") + 1]).toContain("You may act");
     expect(argv).toContain("mcp__fleet-update__service_action");
+    expect(argv).not.toContain("mcp__fleet-update__suggest");
+    expect(argv[argv.indexOf("--mcp-config") + 1]).toContain("/mcp/repair");
     expect(context.commands.calls[0]?.stdin).toContain("Failed units: nginx.service");
+
+    // Kept for the end-of-run review: what is left for a human is said only there.
+    expect(context.analyses.repairs()).toEqual([
+      { host: "hcs", lines: ["Restarted nginx, it holds."] },
+    ]);
   });
 
   test("the session has its own bound: a validate inside it builds for minutes", async () => {

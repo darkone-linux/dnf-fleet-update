@@ -154,6 +154,20 @@ describe("reviewRun", () => {
     }
   });
 
+  test("what a repair left for a human is reviewed too, warnings or not", async () => {
+    const context = fakeRunContext({ commands: [ANSWER], params: { aiAnalysis: "active" } });
+    context.analyses.addRepair(
+      ["validate ignored dnf/: nothing committed. **For a human**: redo the edit."],
+      "ms-a2",
+    );
+    await reviewRun(context);
+
+    const call = context.commands.calls[0];
+    expect(call?.stdin).toContain("### Repair of ms-a2");
+    expect(call?.stdin).toContain("validate ignored dnf/: nothing committed.");
+    expect(call?.stdin).toContain("a limit");
+  });
+
   test("no warning in the logs: no session, nothing paid for", async () => {
     const context = fakeRunContext({ commands: [ANSWER], params: { aiAnalysis: "active" } });
     context.run.appendLog({ phase: "ai" }, "warning: the AI's own words do not count");

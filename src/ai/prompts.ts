@@ -73,6 +73,7 @@ const SHAPE = [
 const ACT_SHAPE = [
   "Use concise Markdown paragraphs, short headings, bullet lists, and bold for emphasis.",
   "Say what you did, what it changed, and what is left for a human. Four sentences at most.",
+  "The end-of-run review reads this answer: a limit you met in your tools belongs in it.",
 ];
 
 const SUGGEST_SHAPE = [
@@ -278,11 +279,34 @@ export function buildRepairPrompt(
   ].join("\n");
 }
 
+/** What the repair sessions said: a limit they met is only ever written there. */
+function repairSeed(repairs: readonly RepairConclusion[]): string[] {
+  if (repairs.length === 0) return [];
+  const blocks = repairs.flatMap((repair) => [
+    "",
+    `### Repair of ${repair.hosts?.join(", ") ?? repair.host}`,
+    ...repair.lines,
+  ]);
+  return ["", "What the repair sessions of this run concluded:", ...blocks];
+}
+
+/** One repair session's answer, as `AiAnalyses.repairs` keeps it. */
+export interface RepairConclusion {
+  host: string;
+  hosts?: readonly string[];
+  lines: readonly string[];
+}
+
 /**
- * End-of-run review of the warnings (spec § Suggestions d'amélioration): what
- * the files already hold first, so nothing is filed twice.
+ * End-of-run review of the warnings and of what the repairs left undone
+ * (spec § Suggestions d'amélioration): what the files already hold first, so
+ * nothing is filed twice.
  */
-export function suggestionsPrompt(state: PersistedState, context?: string): string {
+export function suggestionsPrompt(
+  state: PersistedState,
+  repairs: readonly RepairConclusion[] = [],
+  context?: string,
+): string {
   const scope = state.run?.codev
     ? ["Scope: the project and the framework under dnf/."]
     : [
@@ -292,9 +316,16 @@ export function suggestionsPrompt(state: PersistedState, context?: string): stri
   return [
     ...runSeed(state),
     ...contextSeed(context),
+    ...repairSeed(repairs),
     "",
     "Review the warnings of this run for improvements worth a change: an option renamed or",
     "deprecated, a change that would silence a warning, a problem worth investigating.",
+    ...(repairs.length > 0
+      ? [
+          "Review too what the repair sessions above left for a human: a fix not done, a limit",
+          "they met in their own tools (filed for the fleet-update maintainers, even out of scope).",
+        ]
+      : []),
     "1. known_suggestions: what is filed already. Never file a known finding under a new",
     "   slug: call suggest with its own slug when it shows up again, ignored ones included.",
     "2. run_warnings, then search_code and read_code: find where each warning comes from.",
