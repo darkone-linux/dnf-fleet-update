@@ -9,6 +9,26 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-29
+
+### Added
+
+- **ai**: Repairs commit before redeploying, amend a fix, run one at a time
+- **ai**: Analyse failed builds once per group, before their decision
+- **ai**: Repair a failed build once per group, through its own build
+- **engine**: Align the fleet on HEAD once a build repair is committed
+- **engine**: Realign the waves after a repair commit, serve hosts again
+- **report**: Say whether the fleet is aligned after a repair commit
+
+### Fixed
+
+- **ai**: Repair sessions get their own bound, validate ends with its session
+- **report**: Give hosts an unreachable step left behind their reason
+
+### Documentation
+
+- **deploy**: Repair a failed build, align the fleet on a repair commit
+
 ## [0.7.5] - 2026-10-24
 
 ### Fixed
@@ -273,7 +293,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.5...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.5...v0.8.0
 [0.7.5]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.7.2...v0.7.3
