@@ -346,8 +346,11 @@ test("a build fix that does not validate: nothing committed, the group decided a
   expect(run.statuses).toMatchObject({ "pc-ag": "excluded", "lt-cp": "excluded", hcs: "deployed" });
   expect(run.sim.commits).toEqual([]);
 
-  // Uncommitted: the tree back to HEAD, nothing aligned, no repair to report.
-  expect(run.feed).toContain("warn pc-ag: dnf/: uncommitted repair edits discarded");
+  // Uncommitted: the tree back to HEAD, its patch kept, nothing aligned, no repair to report.
+  const discarded = "warn pc-ag: dnf/: uncommitted repair edits discarded, kept in ";
+  expect(
+    run.feed.some((line) => line.startsWith(discarded) && line.endsWith("/logs/pc-ag.dnf.patch")),
+  ).toBe(true);
   expect(run.feed.some((line) => line.includes("aligning"))).toBe(false);
   expect(run.recorded?.report).not.toContain("Repaired by commit");
   const commit = run.recorded?.state?.actions.find((entry) => entry.action.startsWith("commit"));

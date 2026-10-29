@@ -179,6 +179,7 @@ export class RecordingChannel implements EventChannel {
 export class MemoryRunStore implements RunStore {
   readonly events: Event[] = [];
   readonly logs = new Map<string, string[]>();
+  readonly patches = new Map<string, string[]>();
   state: PersistedState | undefined;
   stateWrites = 0;
   report: string | undefined;
@@ -197,6 +198,12 @@ export class MemoryRunStore implements RunStore {
   appendLog(name: LogName, line: string): void {
     const key = logFileName(name);
     this.logs.set(key, [...(this.logs.get(key) ?? []), line]);
+  }
+
+  writePatch(host: string, tree: string, lines: readonly string[]): string {
+    const key = logFileName({ host, phase: tree });
+    this.patches.set(key, [...lines]);
+    return `/deployments/${this.id}/logs/${key}.patch`;
   }
 
   writeReport(markdown: string): void {

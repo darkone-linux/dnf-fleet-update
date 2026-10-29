@@ -51,6 +51,12 @@ class RunDirectory implements RunStore {
     appendFileSync(join(this.dir, "logs", `${logFileName(name)}.log`), `${line}\n`);
   }
 
+  writePatch(host: string, tree: string, lines: readonly string[]): string {
+    const path = join(this.dir, "logs", `${logFileName({ host, phase: tree })}.patch`);
+    writeFileSync(path, lines.map((line) => `${line}\n`).join(""));
+    return path;
+  }
+
   writeReport(markdown: string): void {
     writeFileSync(join(this.dir, "report.md"), markdown);
   }

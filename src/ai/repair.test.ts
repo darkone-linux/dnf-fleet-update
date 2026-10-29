@@ -181,6 +181,14 @@ describe("repairHost", () => {
         match: (argv) => argv.includes("status"),
         output: [{ stream: "stdout", line: " M usr/x.nix" }],
       },
+      { match: (argv) => argv.includes("add") },
+      {
+        match: (argv) => argv.includes("diff"),
+        output: [
+          { stream: "stdout", line: "diff --git a/usr/x.nix b/usr/x.nix" },
+          { stream: "stdout", line: "+{ }" },
+        ],
+      },
       { match: (argv) => argv.includes("reset") },
       { match: (argv) => argv.includes("clean") },
       stillFailed(["nginx.service"]),
@@ -192,11 +200,19 @@ describe("repairHost", () => {
     const git = context.commands.calls.filter((spec) => spec.argv[0] === "git");
     expect(git.map((spec) => spec.argv.slice(3).join(" "))).toEqual([
       "status --porcelain",
+      "add --all",
+      "diff --cached --binary --no-ext-diff --no-color",
       "reset --hard --quiet HEAD",
       "clean -d --force --quiet",
     ]);
+
+    // Discarded, not lost: the human finishing the fix applies it back.
+    expect(context.run.patches.get("hcs.consumer")).toEqual([
+      "diff --git a/usr/x.nix b/usr/x.nix",
+      "+{ }",
+    ]);
     expect(feed(context.events.events)).toContain(
-      "warn hcs: consumer: uncommitted repair edits discarded",
+      `warn hcs: consumer: uncommitted repair edits discarded, kept in /deployments/${context.run.id}/logs/hcs.consumer.patch`,
     );
   });
 

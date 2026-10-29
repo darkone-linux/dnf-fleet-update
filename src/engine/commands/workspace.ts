@@ -31,6 +31,14 @@ export function gitDiff(repo: string, path: string, timeouts: Timeouts): Command
   };
 }
 
+/** Index against HEAD, binary included: a patch `git apply` takes back, files created too. */
+export function gitStagedPatch(repo: string, timeouts: Timeouts): CommandSpec {
+  return {
+    argv: ["git", "-C", repo, "diff", "--cached", "--binary", "--no-ext-diff", "--no-color"],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
 /** `amend`: a repair fix that did not hold is corrected in its own commit. */
 export function gitCommit(
   repo: string,

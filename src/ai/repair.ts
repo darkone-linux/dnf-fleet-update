@@ -6,7 +6,13 @@
 
 import { join } from "node:path";
 import { readFailedUnits } from "../engine/collect.ts";
-import { gitCleanUntracked, gitDiscard, gitStatus } from "../engine/commands/workspace.ts";
+import {
+  gitAddAll,
+  gitCleanUntracked,
+  gitDiscard,
+  gitStagedPatch,
+  gitStatus,
+} from "../engine/commands/workspace.ts";
 import { emit, log, type RunContext } from "../engine/context.ts";
 import { execute, succeeded } from "../engine/exec.ts";
 import type { HostTable } from "../engine/hosts.ts";
@@ -182,9 +188,32 @@ function forget(context: RunContext, name: string): void {
 }
 
 /**
+ * Patch of a tree's uncommitted repair, `logs/<host>.<tree>.patch`: the human
+ * finishing the fix starts from it (`git apply`). Its path, or `undefined`.
+ */
+async function keepPatch(
+  context: RunContext,
+  name: string,
+  tree: { file: string; path: string },
+): Promise<string | undefined> {
+  const { timeouts } = context.params;
+
+  // Staged first: a file the repair created is part of the patch.
+  const staged = await execute(context, gitAddAll(tree.path, timeouts));
+  if (!succeeded(staged.result)) return undefined;
+  const patch = await execute(context, gitStagedPatch(tree.path, timeouts));
+  if (!succeeded(patch.result) || patch.stdout.length === 0) return undefined;
+  try {
+    return context.run.writePatch(name, tree.file, patch.stdout);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Trees back to HEAD after a session that edited or validated (spec § Règle de
  * commit): an uncommitted edit is no fix, and a dirty tree stops the next run.
- * The diff of every edit stays in `logs/ai.log`.
+ * The diff of every edit stays in `logs/ai.log`, the whole in a patch.
  */
 async function discardUncommitted(context: RunContext, name: string, since: number): Promise<void> {
   const touched = context
@@ -200,18 +229,22 @@ async function discardUncommitted(context: RunContext, name: string, since: numb
 
   const { timeouts } = context.params;
   const trees = [
-    { label: "consumer", path: context.workspace },
-    ...(context.codev ? [{ label: "dnf/", path: join(context.workspace, "dnf") }] : []),
+    { label: "consumer", file: "consumer", path: context.workspace },
+    ...(context.codev
+      ? [{ label: "dnf/", file: "dnf", path: join(context.workspace, "dnf") }]
+      : []),
   ];
   for (const tree of trees) {
     const status = await execute(context, gitStatus(tree.path, timeouts));
     if (!succeeded(status.result) || status.stdout.length === 0) continue;
+    const kept = await keepPatch(context, name, tree);
 
     // Clean before the run's first edit (`edit_code` checks it): untracked is ours.
     const reset = await execute(context, gitDiscard(tree.path, timeouts));
     const removed = await execute(context, gitCleanUntracked(tree.path, timeouts));
     if (succeeded(reset.result) && succeeded(removed.result)) {
-      log(context, "warn", `${tree.label}: uncommitted repair edits discarded`, name);
+      const where = kept === undefined ? "" : `, kept in ${kept}`;
+      log(context, "warn", `${tree.label}: uncommitted repair edits discarded${where}`, name);
     } else {
       log(context, "error", `${tree.label}: uncommitted repair edits left, tree dirty`, name);
     }

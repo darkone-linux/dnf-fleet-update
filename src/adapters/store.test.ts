@@ -78,6 +78,19 @@ describe("DirectoryStore", () => {
     expect(run.outLink("gw-ag")).toBe(join(dir, "gcroots", "gw-ag"));
   });
 
+  test("a patch replaces the last one, next to the logs and never listed as one", () => {
+    const run = store().create("full");
+    const dir = join(temp, `deployments-${count}`, run.id);
+
+    run.writePatch("ms-a2", "dnf", ["old"]);
+    const path = run.writePatch("ms-a2", "dnf", ["diff --git a/x b/x", "+y"]);
+
+    expect(path).toBe(join(dir, "logs", "ms-a2.dnf.patch"));
+    expect(readFileSync(path, "utf8")).toBe("diff --git a/x b/x\n+y\n");
+    expect(run.logNames()).toEqual([]);
+    expect(() => run.writePatch("..", "dnf", [])).toThrow("unsafe log name");
+  });
+
   test("names that could leave the run directory throw", () => {
     const run = store().create("full");
 

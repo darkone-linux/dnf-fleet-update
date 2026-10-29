@@ -124,6 +124,12 @@ export interface RunStore {
 
   /** Throws on a name outside `RUN_FILE_NAME` (`logFileName`): names come validated. */
   appendLog(name: LogName, line: string): void;
+
+  /**
+   * `logs/<host>.<tree>.patch`, replaced: an uncommitted repair a human may
+   * take back. Returns its path; throws like `appendLog` on a name.
+   */
+  writePatch(host: string, tree: string, lines: readonly string[]): string;
   writeReport(markdown: string): void;
 
   /** `nix build --out-link` target: GC root of the host path while the run directory lives. */
