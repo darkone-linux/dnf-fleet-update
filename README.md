@@ -363,13 +363,14 @@ hook and by CI. From the DNF co-development workspace:
 
 ```bash
 just changelog                  # preview the next CHANGELOG entry
-just release [auto|patch|minor|major|X.Y.Z]
+just release [auto|patch|minor|major|X.Y.Z] [--yes]
 ```
 
-`just release` runs the CI gate, bumps `package.json`, writes the CHANGELOG
-entry, tags and pushes; the tag workflow checks it and publishes the GitHub
-release with that entry as notes. The workspace release train does the same
-when this repository changed, then pins the tag in the framework package.
+`just release` runs the CI and audit gates, bumps `package.json`, writes the
+CHANGELOG entry, tags and pushes; the tag workflow checks it and publishes the
+GitHub release with that entry as notes. It asks for confirmation first; without
+a terminal, pass `--yes`. The workspace release train does the same when this
+repository changed, then pins the tag in the framework package.
 
 ## License
 

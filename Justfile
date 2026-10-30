@@ -118,16 +118,17 @@ bump level="auto" *args: _workspace
     bash {{ dnfScripts }}/bump.sh \
         --config {{ dnfScripts }}/cliff.toml --level {{ level }} {{ args }}
 
-# Gate, bump, push branch and tag; GitHub publishes the release (release.yml)
+# Gates, bump, push branch and tag; GitHub publishes the release (release.yml): just release [level] [--yes]
 [group('release')]
-release level="auto": _workspace
+release level="auto" *args: _workspace
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Same gate as CI: a red release.yml after the tag is pushed means a
+    # Same gates as CI: a red release.yml after the tag is pushed means a
     # published tag without a release.
     just ci
-    just bump {{ level }}
+    just audit
+    just bump {{ level }} {{ args }}
     version="v$(jq -r .version package.json)"
     git push
     git push origin "$version"

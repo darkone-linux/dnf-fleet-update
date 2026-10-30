@@ -225,7 +225,8 @@ in the same release train.
 - `just changelog`: preview, writes nothing.
 - `just bump [auto|patch|minor|major|X.Y.Z]`: version, CHANGELOG entry,
   `chore(release): vX.Y.Z` commit, annotated tag. No push.
-- `just release [level]`: `just ci`, bump, push branch and tag.
+- `just release [level] [--yes]`: `just ci`, `just audit`, bump, push branch and
+  tag. `--yes` answers the bump's confirmation: required without a terminal.
 - Workspace train (`just release` at its root, `dnf/just/codev/release.just`):
   gates `ci` + `audit`, releases this repo when it moved since its last tag,
   then pins the tag in the framework package (`just pkg-update fleet-update <version>`).
