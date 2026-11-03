@@ -7,9 +7,10 @@ import { limits } from "./limits.ts";
 
 export type GeneratedFile = "hosts.nix" | "network.nix" | "matrix.nix";
 
-export function gitStatus(repo: string, timeouts: Timeouts): CommandSpec {
+/** `path`: that subtree only; an ignored one shows nothing. */
+export function gitStatus(repo: string, timeouts: Timeouts, path?: string): CommandSpec {
   return {
-    argv: ["git", "-C", repo, "status", "--porcelain"],
+    argv: ["git", "-C", repo, "status", "--porcelain", ...(path === undefined ? [] : ["--", path])],
     ...limits(timeouts.commit, timeouts),
   };
 }
@@ -18,9 +19,12 @@ export function gitHead(repo: string, timeouts: Timeouts): CommandSpec {
   return { argv: ["git", "-C", repo, "rev-parse", "HEAD"], ...limits(timeouts.commit, timeouts) };
 }
 
-/** Clean tree checked beforehand: only the update lands in the commit. */
-export function gitAddAll(repo: string, timeouts: Timeouts): CommandSpec {
-  return { argv: ["git", "-C", repo, "add", "--all"], ...limits(timeouts.commit, timeouts) };
+/** Clean tree checked beforehand: only the update lands in the commit. `path`: that subtree only. */
+export function gitAddAll(repo: string, timeouts: Timeouts, path?: string): CommandSpec {
+  return {
+    argv: ["git", "-C", repo, "add", "--all", ...(path === undefined ? [] : ["--", path])],
+    ...limits(timeouts.commit, timeouts),
+  };
 }
 
 /** Path known to the index, content not staged: `git diff` shows a created file. */
@@ -73,6 +77,19 @@ export function gitCommit(
 ): CommandSpec {
   return {
     argv: ["git", "-C", repo, "commit", ...(amend ? ["--amend"] : []), "-m", message],
+    ...limits(timeouts.commit, timeouts),
+  };
+}
+
+/** `git commit -- <path>`: whatever else the index holds stays out of this commit. */
+export function gitCommitPath(
+  repo: string,
+  path: string,
+  message: string,
+  timeouts: Timeouts,
+): CommandSpec {
+  return {
+    argv: ["git", "-C", repo, "commit", "-m", message, "--", path],
     ...limits(timeouts.commit, timeouts),
   };
 }

@@ -7,7 +7,8 @@ import type { HostState } from "../model/events.ts";
 import type { RunParams } from "../model/params.ts";
 import { type CommandScript, fakeRunContext, feed } from "../testing/fakes.ts";
 import { fleetSelection } from "../testing/fleet.ts";
-import { analyseFree, analyseHost, analyseRun, reviewRun } from "./analysis.ts";
+import { analyseFree, analyseHost, analyseRun, commitSuggestions, reviewRun } from "./analysis.ts";
+import type { SuggestionEntry } from "./suggestions.ts";
 
 /** An answer the scripted tool streams back on stdout. */
 const ANSWER: CommandScript = {
@@ -124,6 +125,38 @@ describe("analyseRun", () => {
   });
 });
 
+/** One suggestion the review filed this run. */
+const FILED: SuggestionEntry = {
+  slug: "nginx-option",
+  title: "Nginx option",
+  status: "open",
+  runs: 1,
+  fresh: true,
+};
+const DIR = "var/deployments/suggestions";
+const OLD = "a".repeat(40);
+const NEW = "b".repeat(40);
+
+const head = (rev: string): CommandScript => ({
+  match: ["git", "-C", "/ws", "rev-parse"],
+  output: [{ stream: "stdout", line: rev }],
+  once: true,
+});
+
+/** A versioned suggestions directory, HEAD at `before` until the commit moves it. */
+function versioned(before: string, after: string, commitExit = 0): CommandScript[] {
+  return [
+    {
+      match: ["git", "-C", "/ws", "status", "--porcelain", "--", DIR],
+      output: [{ stream: "stdout", line: `?? ${DIR}/nginx-option.md` }],
+    },
+    head(before),
+    { match: ["git", "-C", "/ws", "add", "--all", "--", DIR] },
+    { match: ["git", "-C", "/ws", "commit"], exitCode: commitExit },
+    head(after),
+  ];
+}
+
 describe("reviewRun", () => {
   /** A run whose logs hold one warning, under `--ai-analysis active`. */
   function warned(params: Partial<RunParams> = { aiAnalysis: "active" }) {
@@ -174,6 +207,91 @@ describe("reviewRun", () => {
     await reviewRun(context);
 
     expect(context.commands.calls).toEqual([]);
+  });
+
+  test("what the review filed is committed once it is over", async () => {
+    const context = fakeRunContext({
+      commands: [ANSWER, ...versioned(OLD, NEW)],
+      params: { aiAnalysis: "active" },
+    });
+    context.run.appendLog({ host: "gfx", phase: "test" }, "warning: not applying UID change");
+
+    // Filed by the session: the scripted answer calls no tool.
+    context.suggestions.add(FILED);
+    await reviewRun(context);
+
+    expect(context.state().commits.map((commit) => commit.message)).toEqual([
+      "chore(deployments): suggestions of run 20260917T020000Z-full",
+    ]);
+  });
+});
+
+describe("commitSuggestions", () => {
+  /** The fleet aligned on `aligned`, one suggestion filed. */
+  function filed(commands: CommandScript[], aligned = OLD) {
+    const context = fakeRunContext({ commands });
+    context.events.emit({ kind: "revision", repo: "consumer", rev: aligned, t: 0 });
+    context.suggestions.add(FILED);
+    return context;
+  }
+
+  test("a versioned directory: committed alone, the fleet still aligned for --resume", async () => {
+    const context = filed(versioned(OLD, NEW));
+    await commitSuggestions(context);
+
+    // The path is the contract: whatever else the index holds stays out.
+    const commit = context.commands.calls.find((call) => call.argv[3] === "commit");
+    expect(commit?.argv).toEqual([
+      "git",
+      "-C",
+      "/ws",
+      "commit",
+      "-m",
+      "chore(deployments): suggestions of run 20260917T020000Z-full",
+      "--",
+      DIR,
+    ]);
+    expect(context.state().commits).toEqual([
+      {
+        repo: "consumer",
+        rev: NEW,
+        message: "chore(deployments): suggestions of run 20260917T020000Z-full",
+      },
+    ]);
+    expect(context.state().revisions.consumer).toBe(NEW);
+  });
+
+  test("a fleet not aligned on HEAD is not said aligned by this commit", async () => {
+    const context = filed(versioned(OLD, NEW), "c".repeat(40));
+    await commitSuggestions(context);
+
+    expect(context.state().commits.map((commit) => commit.rev)).toEqual([NEW]);
+    expect(context.state().revisions.consumer).toBe("c".repeat(40));
+  });
+
+  test("an ignored directory shows nothing: nothing is committed", async () => {
+    const context = filed([{ match: ["git", "-C", "/ws", "status"] }]);
+    await commitSuggestions(context);
+
+    expect(context.commands.calls).toHaveLength(1);
+    expect(context.state().commits).toEqual([]);
+  });
+
+  test("nothing filed by the run: git is not even asked", async () => {
+    const context = fakeRunContext();
+    await commitSuggestions(context);
+
+    expect(context.commands.calls).toEqual([]);
+  });
+
+  test("a refused commit is a warning, never a failure", async () => {
+    const context = filed(versioned(OLD, NEW, 1));
+    await commitSuggestions(context);
+
+    expect(context.state().commits).toEqual([]);
+    expect(feed(context.events.events)).toEqual([
+      expect.stringMatching(/^warn var\/deployments\/suggestions: not committed \(.*\), commit it/),
+    ]);
   });
 });
 

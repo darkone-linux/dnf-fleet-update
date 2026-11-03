@@ -218,6 +218,8 @@ a repair met in its own tools. Each finding is filed as
 co-development — and listed under the report's **Suggestions** section, never
 in Matrix. The files outlive the run: a finding met again only moves its
 `Last seen` and `Runs` lines, and writing `Status: ignored` in one silences it.
+A project that versions `var/deployments/suggestions/` gets them committed
+after the review, that directory alone: the next run still finds a clean tree.
 The review changes neither the code nor the fleet, and a run without warnings
 nor repair asks nothing.
 

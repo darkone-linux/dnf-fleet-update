@@ -3,7 +3,9 @@
 // Never blocks a deployment: an analysis that fails, times out or spends its
 // budget leaves the host exactly where it was, and the run goes on.
 
-import type { RunContext } from "../engine/context.ts";
+import { gitAddAll, gitCommitPath, gitHead, gitStatus } from "../engine/commands/workspace.ts";
+import { emit, log, type RunContext } from "../engine/context.ts";
+import { describeFailure, type ExecOptions, execute, succeeded } from "../engine/exec.ts";
 import type { HostTable } from "../engine/hosts.ts";
 import {
   buildPrompt,
@@ -16,6 +18,7 @@ import {
 } from "./prompts.ts";
 import { forSession } from "./providers.ts";
 import { askAi } from "./session.ts";
+import { SUGGESTIONS_DIR } from "./suggestions.ts";
 import { toolLevel } from "./tools/registry.ts";
 import { ACTING, type SessionKind } from "./tools/types.ts";
 import { runWarnings } from "./warnings.ts";
@@ -233,5 +236,59 @@ export async function reviewRun(context: RunContext): Promise<void> {
     });
   } finally {
     context.suggestions.reviewing = false;
+  }
+  await commitSuggestions(context);
+}
+
+/** Commit of the suggestion files a run wrote: one per run, its id in the subject. */
+export const suggestionsMessage = (runId: string): string =>
+  `chore(deployments): suggestions of run ${runId}`;
+
+/** Past an abort `now`: a tree left dirty would stop the next run. */
+const CLEANUP: ExecOptions = { signal: null };
+
+/**
+ * Suggestion files the review wrote, committed when the consumer versions them
+ * (spec § analyse, Fichiers de suggestion): the next run demands a clean tree.
+ * Ignored directory: `git status` shows nothing, nothing to commit.
+ */
+export async function commitSuggestions(context: RunContext): Promise<void> {
+  if (context.suggestions.all().length === 0) return;
+  const { workspace } = context;
+  const { timeouts } = context.params;
+  const notCommitted = (why: string) =>
+    log(
+      context,
+      "warn",
+      `${SUGGESTIONS_DIR}: not committed (${why}), commit it before the next run`,
+    );
+
+  const status = await execute(context, gitStatus(workspace, timeouts, SUGGESTIONS_DIR), CLEANUP);
+  if (!succeeded(status.result)) return notCommitted(describeFailure(status));
+  if (status.stdout.every((line) => line.trim() === "")) return;
+
+  const before = await execute(context, gitHead(workspace, timeouts), CLEANUP);
+  const message = suggestionsMessage(context.run.id);
+  for (const spec of [
+    gitAddAll(workspace, timeouts, SUGGESTIONS_DIR),
+    gitCommitPath(workspace, SUGGESTIONS_DIR, message, timeouts),
+  ]) {
+    const execution = await execute(context, spec, CLEANUP);
+    if (!succeeded(execution.result)) return notCommitted(describeFailure(execution));
+  }
+  const after = await execute(context, gitHead(workspace, timeouts), CLEANUP);
+  const rev = after.stdout[0]?.trim();
+  if (!succeeded(after.result) || !rev) {
+    log(context, "warn", `${SUGGESTIONS_DIR}: committed, revision not read`);
+    return;
+  }
+  emit(context, { kind: "commit", repo: "consumer", rev, message });
+  log(context, "ok", `commit consumer ${message}`);
+
+  // Configuration unchanged: a fleet aligned on the previous HEAD is on this one
+  // too, and `--resume` keeps what it built.
+  const previous = before.stdout[0]?.trim();
+  if (previous !== undefined && context.state().revisions.consumer === previous) {
+    emit(context, { kind: "revision", repo: "consumer", rev });
   }
 }
