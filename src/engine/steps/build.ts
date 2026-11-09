@@ -31,6 +31,7 @@ import type { KnownError } from "../known-errors.ts";
 import {
   errorSummary,
   failedDerivation,
+  missedFetch,
   parseEvalJob,
   parseNixLog,
   STORE_PATH,
@@ -80,6 +81,9 @@ interface Built {
   /** Derivation that failed by itself, behind the reason: it fails the same anywhere. */
   derivation?: string;
 
+  /** `derivation` is a fetch the builder's network missed: elsewhere it may pass. */
+  fetchMissed?: boolean;
+
   /** Failure taken from another host's build: no trace of its own. */
   inherited?: boolean;
   durationMs: number;
@@ -101,7 +105,7 @@ async function runBuild(
 
   // First derivation failed by itself: the cause, not the `dependency failed`
   // chain nix then reports up to the toplevel (spec § Erreurs et réparations).
-  let cause: { drv: string; note: string; lines: string[] } | undefined;
+  let cause: { drv: string; note: string; lines: string[]; fetchMissed: boolean } | undefined;
   const output = (line: string) =>
     emit(context, { kind: "host.output", host: name, phase: "build", line });
 
@@ -127,8 +131,11 @@ async function runBuild(
           lastErrorLines = entry.message.split("\n");
           const drv = failedDerivation(entry.message);
           if (cause === undefined && drv !== undefined) {
-            cause = { drv, note: lastError, lines: lastErrorLines };
-            record({ drv, note: lastError, excerpt: lastErrorLines });
+            const fetchMissed = missedFetch(entry.message);
+            cause = { drv, note: lastError, lines: lastErrorLines, fetchMissed };
+
+            // A missed fetch says nothing of the other hosts: a FOD sits in every closure.
+            if (!fetchMissed) record({ drv, note: lastError, excerpt: lastErrorLines });
           }
           for (const text of lastErrorLines) output(text);
           return;
@@ -148,6 +155,7 @@ async function runBuild(
     excerpt: cause?.lines ?? lastErrorLines ?? errorLines(execution),
     ...(execution.known === undefined ? {} : { known: execution.known }),
     ...(cause === undefined ? {} : { derivation: cause.drv }),
+    ...(cause?.fetchMissed ? { fetchMissed: true } : {}),
     durationMs,
   };
 }
@@ -197,7 +205,8 @@ async function delegate(
   if (signal.aborted || built.note === undefined) return built;
 
   // The derivation failed, not the delegation: the same build fails here too.
-  if (built.derivation !== undefined) return built;
+  // A missed fetch excepted: the builder's network failed, not the derivation.
+  if (built.derivation !== undefined && built.fetchMissed !== true) return built;
   return give(built.note);
 }
 

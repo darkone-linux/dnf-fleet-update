@@ -164,6 +164,26 @@ export function failedDerivation(message: string): string | undefined {
   return CANNOT_BUILD.exec(lines[0] ?? "")?.[1];
 }
 
+// Curl's words for a network that did not answer, as Nix and git print them.
+// A 404 or a hash mismatch is not one: it fails the same anywhere.
+const UNREACHABLE =
+  "Could not resolve|Couldn't resolve|Couldn't connect|Failed to connect|Timeout was reached|Connection timed out|Network is unreachable|Temporary failure in name resolution";
+const UNREACHABLE_FETCH = new RegExp(`unable to (?:download|access) '[^']+':.*(?:${UNREACHABLE})`);
+
+/** nixpkgs `fetchurl`: every mirror tried, curl said why. */
+const NO_MIRROR = /cannot download \S+ from any mirror/;
+const CURL_UNREACHABLE = /curl: \((?:6|7|28)\)/;
+
+/**
+ * A fetch the builder's network missed, from one nix `error`: the environment
+ * failed, not the derivation, another machine may succeed (spec § Erreurs et
+ * réparations, téléchargement manqué).
+ */
+export function missedFetch(message: string): boolean {
+  const text = stripAnsi(message);
+  return UNREACHABLE_FETCH.test(text) || (NO_MIRROR.test(text) && CURL_UNREACHABLE.test(text));
+}
+
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, "g");
 
 export function stripAnsi(text: string): string {

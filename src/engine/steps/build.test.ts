@@ -418,6 +418,41 @@ describe("build", () => {
     expect(hosts.get("pc-ag").builder).toBe("deployer");
   });
 
+  test("a fetch the builder's network missed: built here instead, never inherited", async () => {
+    // Fixed-output source in every closure, missed by a builder without DNS.
+    const tarball = "/nix/store/y84saga4qsmk7xrprd0qv8rgdqjk67g1-bash-5.3.tar.gz.drv";
+    const { context, hosts, presence } = setup(
+      [
+        evaluation(NAMES.map(evalLine)),
+        {
+          match: (argv: readonly string[]) => argv[1] === "--query",
+          output: [{ stream: "stdout", line: tarball }],
+        },
+        {
+          match: remote("srv-ag", `${storePath("pc-ag", ".drv")}^*`),
+          exitCode: 1,
+          output: [
+            cannotBuild(tarball, "builder failed with exit code 1", [
+              "       > error: unable to download 'https://ftpmirror.gnu.org/bash/bash-5.3.tar.gz': Could not resolve hostname (6) Could not resolve host: ftpmirror.gnu.org",
+            ]),
+          ],
+        },
+        { match: anywhere("ssh-ng://") },
+        { match: anywhere(".drv^*") },
+      ],
+      { delegated: true },
+    );
+
+    await build(context, hosts, presence);
+    await presence.stop();
+
+    const said = feed(context.events.events);
+    expect(said).toContain(`warn pc-ag: builder srv-ag: Cannot build '${tarball}'., building here`);
+    expect(said.filter((line) => line.includes("already failed"))).toEqual([]);
+    expect(hosts.get("pc-ag")).toMatchObject({ state: "built", builder: "deployer" });
+    expect(hosts.get("gw-ag").state).toBe("built");
+  });
+
   test("auto-build host offline: nothing delegated to it, built here, warned", async () => {
     const { context, hosts, presence } = setup(
       [

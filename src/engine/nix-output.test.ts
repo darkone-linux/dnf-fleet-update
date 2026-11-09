@@ -5,6 +5,7 @@ import {
   errorSummary,
   failedDerivation,
   GITHUB_REF,
+  missedFetch,
   parseCopyPath,
   parseEvalJob,
   parseLockedSources,
@@ -192,6 +193,56 @@ describe("failedDerivation", () => {
     expect(failedDerivation(message("2 dependencies failed"))).toBeUndefined();
     expect(failedDerivation(message("builder failed due to signal 9 (Killed)"))).toBeUndefined();
     expect(failedDerivation("error: builder for 'x.drv' failed with exit code 1")).toBeUndefined();
+  });
+});
+
+describe("missedFetch", () => {
+  // As recorded on a builder without DNS (2026-11-09), builtin `fetchurl`.
+  const builtin = (reason: string) =>
+    [
+      `error: Cannot build '${DRV}'.`,
+      "       Reason: builder failed with exit code 1.",
+      "       Last 4 log lines:",
+      "       > error:",
+      `       >        … writing file "${OUT}"`,
+      "       >",
+      `       >        error: unable to download 'https://ftpmirror.gnu.org/bash/bash-5.3.tar.gz': ${reason}`,
+    ].join("\n");
+
+  test("a network that did not answer: builtin fetcher, git, nixpkgs fetchurl", () => {
+    expect(
+      missedFetch(
+        builtin("Could not resolve hostname (6) Could not resolve host: ftpmirror.gnu.org"),
+      ),
+    ).toBe(true);
+    expect(
+      missedFetch(builtin("Timeout was reached (28) Connection timed out after 30001 ms")),
+    ).toBe(true);
+    expect(
+      missedFetch(
+        "> fatal: unable to access 'https://github.com/a/b/': Could not resolve host: github.com",
+      ),
+    ).toBe(true);
+    expect(
+      missedFetch(
+        "> curl: (6) Could not resolve host: ftp.gnu.org\n> error: cannot download bash-5.3.tar.gz from any mirror",
+      ),
+    ).toBe(true);
+  });
+
+  test("an answer that fails the same anywhere, or no fetch at all: not missed", () => {
+    expect(missedFetch(builtin("HTTP error 404 (curl error: HTTP response code said error)"))).toBe(
+      false,
+    );
+    expect(
+      missedFetch(
+        "> curl: (22) The requested URL returned error: 404\n> error: cannot download x.tar.gz from any mirror",
+      ),
+    ).toBe(false);
+    expect(missedFetch("error: hash mismatch in fixed-output derivation")).toBe(false);
+    expect(missedFetch("> FAILED tests/test_net.py - Temporary failure in name resolution")).toBe(
+      false,
+    );
   });
 });
 
