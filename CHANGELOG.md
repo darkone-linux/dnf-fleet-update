@@ -9,6 +9,12 @@ breaking changes** — command-line options, exit codes, the event stream
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-11-13
+
+### Fixed
+
+- **engine**: Fall back on a missed fetch, never fail other hosts with it
+
 ## [0.8.3] - 2026-11-03
 
 ### Added
@@ -324,7 +330,8 @@ breaking changes** — command-line options, exit codes, the event stream
 - **release**: Framework packaging contract and release train
 - **testing**: Whole runs on the simulated fleet in AGENTS.md
 
-[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.4...HEAD
+[0.8.4]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/darkone-linux/dnf-fleet-update/compare/v0.8.0...v0.8.1
